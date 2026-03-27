@@ -1,0 +1,7 @@
+services:
+  wms-scanner:
+    build: .
+    container_name: scanner-app
+    restart: always
+    ports:
+      - "80"
