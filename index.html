@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WMS · Scanner de Salidas</title>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:        #0d0f14;
+      --surface:   #151820;
+      --border:    #252a36;
+      --accent:    #00e5a0;
+      --accent2:   #0090ff;
+      --warn:      #f59e0b;
+      --danger:    #ff4d6a;
+      --text:      #e8eaf0;
+      --muted:     #6b7280;
+      --row-even:  #181c26;
+      --row-hover: #1e2435;
+    }
+    body { font-family: 'IBM Plex Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
+
+    header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+    .logo { display: flex; align-items: center; gap: 10px; font-family: 'IBM Plex Mono', monospace; font-size: 1.05rem; font-weight: 600; letter-spacing: .04em; color: var(--accent); }
+    .logo-icon { width: 30px; height: 30px; background: var(--accent); border-radius: 6px; display: grid; place-items: center; }
+    .logo-icon svg { width: 18px; height: 18px; fill: #0d0f14; }
+    .badge { font-family: 'IBM Plex Mono', monospace; font-size: .68rem; background: color-mix(in srgb, var(--accent2) 15%, transparent); color: var(--accent2); border: 1px solid color-mix(in srgb, var(--accent2) 35%, transparent); padding: 3px 9px; border-radius: 20px; letter-spacing: .06em; }
+
+    main { flex: 1; padding: 24px 20px 40px; max-width: 960px; margin: 0 auto; width: 100%; }
+
+    /* FOLIO BAR */
+    .folio-bar { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 18px; margin-bottom: 20px; flex-wrap: wrap; }
+    .folio-bar label { font-size: .78rem; color: var(--muted); letter-spacing: .07em; text-transform: uppercase; white-space: nowrap; }
+    .folio-input-wrap { flex: 1; min-width: 160px; position: relative; }
+    .folio-input-wrap input { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: 'IBM Plex Mono', monospace; font-size: .9rem; padding: 8px 36px 8px 12px; outline: none; transition: border-color .2s, box-shadow .2s; }
+    .folio-input-wrap input:focus { border-color: var(--accent); }
+    .folio-input-wrap input.folio-filled { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent); }
+    .folio-input-wrap input::placeholder { color: var(--muted); }
+    .folio-qr-icon { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; transition: color .2s; }
+    .folio-input-wrap input.folio-filled + .folio-qr-icon { color: var(--accent); }
+    .folio-badge { display: none; align-items: center; gap: 6px; background: color-mix(in srgb, var(--accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); border-radius: 20px; padding: 4px 12px; font-family: 'IBM Plex Mono', monospace; font-size: .8rem; color: var(--accent); white-space: nowrap; }
+    .folio-badge.visible { display: flex; animation: popIn .3s cubic-bezier(.34,1.56,.64,1); }
+    @keyframes popIn { from{opacity:0;transform:scale(.8)} to{opacity:1;transform:scale(1)} }
+    .folio-badge button { background: none; border: none; color: var(--accent); cursor: pointer; font-size: 1rem; line-height: 1; padding: 0 0 0 4px; opacity: .6; }
+    .folio-badge button:hover { opacity: 1; }
+
+    /* MODO TOGGLE */
+    .mode-toggle { display: flex; gap: 8px; margin-bottom: 14px; }
+    .mode-btn { flex: 1; padding: 9px 12px; border-radius: 8px; font-family: 'IBM Plex Sans', sans-serif; font-size: .82rem; font-weight: 600; cursor: pointer; border: 1px solid var(--border); background: transparent; color: var(--muted); transition: all .18s; text-align: center; }
+    .mode-btn.active-placa  { background: color-mix(in srgb, var(--accent) 12%, transparent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); color: var(--accent); }
+    .mode-btn.active-folio { background: color-mix(in srgb, var(--warn) 12%, transparent);   border-color: color-mix(in srgb, var(--warn) 40%, transparent);   color: var(--warn); }
+
+    /* SCANNER */
+    .scanner-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 22px; }
+    .scanner-card h2 { font-size: .78rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 14px; }
+    .scan-area { position: relative; background: #000; border-radius: 10px; overflow: hidden; min-height: 220px; display: flex; align-items: center; justify-content: center; }
+    #reader { width: 100%; border-radius: 10px; overflow: hidden; }
+    #reader img, #reader__dashboard_section_swaplink, #reader__status_span, #reader__camera_permission_button, #reader__filescan_input, #reader__dashboard_section_fileselection { display: none !important; }
+    .scan-overlay { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; pointer-events: none; }
+
+    .scan-overlay.mode-folio .scan-frame::before,
+    .scan-overlay.mode-folio .scan-frame::after,
+    .scan-overlay.mode-folio .scan-frame span::before,
+    .scan-overlay.mode-folio .scan-frame span::after { border-color: var(--warn); }
+    .scan-overlay.mode-folio .scan-line { background: linear-gradient(90deg, transparent, var(--warn), transparent); }
+
+    .mode-label { font-family: 'IBM Plex Mono', monospace; font-size: .7rem; background: rgba(0,0,0,.6); border: 1px solid rgba(255,255,255,.1); color: var(--accent); padding: 4px 12px; border-radius: 20px; letter-spacing: .06em; }
+    .mode-label.folio { color: var(--warn); }
+
+    .scan-frame { width: 160px; height: 160px; position: relative; }
+    .scan-frame::before, .scan-frame::after, .scan-frame span::before, .scan-frame span::after { content: ''; position: absolute; width: 24px; height: 24px; border-color: var(--accent); border-style: solid; }
+    .scan-frame::before  { top:0; left:0;   border-width:3px 0 0 3px; border-radius:4px 0 0 0; }
+    .scan-frame::after   { top:0; right:0;  border-width:3px 3px 0 0; border-radius:0 4px 0 0; }
+    .scan-frame span::before { bottom:0; left:0;  border-width:0 0 3px 3px; border-radius:0 0 0 4px; }
+    .scan-frame span::after  { bottom:0; right:0; border-width:0 3px 3px 0; border-radius:0 0 4px 0; }
+    .scan-line { position: absolute; left:6px; right:6px; height:2px; background: linear-gradient(90deg, transparent, var(--accent), transparent); animation: scan 2s ease-in-out infinite; }
+    @keyframes scan { 0%{top:10px;opacity:1} 50%{top:145px;opacity:1} 100%{top:10px;opacity:1} }
+    .scan-hint { font-family: 'IBM Plex Mono', monospace; font-size: .72rem; color: rgba(255,255,255,.5); letter-spacing: .04em; }
+    .scan-idle { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: var(--muted); font-size: .85rem; padding: 40px 20px; text-align:center; }
+    .scan-idle svg { opacity: .3; }
+
+    .status-line { margin-top: 12px; font-family: 'IBM Plex Mono', monospace; font-size: .78rem; min-height: 22px; display: flex; align-items: center; gap: 8px; color: var(--muted); }
+    .status-dot { width:7px; height:7px; border-radius:50%; background:var(--muted); transition:background .3s; }
+    .status-dot.active { background:var(--accent); box-shadow:0 0 8px var(--accent); animation:pulse 1.2s infinite; }
+    .status-dot.folio  { background:var(--warn);   box-shadow:0 0 8px var(--warn);   animation:pulse 1.2s infinite; }
+    .status-dot.error  { background:var(--danger); }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+    .btn-row { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+    .btn { display: inline-flex; align-items: center; gap: 7px; padding: 10px 18px; border-radius: 8px; font-family: 'IBM Plex Sans', sans-serif; font-size: .85rem; font-weight: 600; cursor: pointer; border: none; transition: all .18s; letter-spacing: .02em; }
+    .btn-primary  { background: var(--accent); color: #0d0f14; }
+    .btn-primary:hover { background: #00ffb3; transform: translateY(-1px); box-shadow: 0 4px 18px color-mix(in srgb, var(--accent) 40%, transparent); }
+    .btn-stop     { background: color-mix(in srgb, var(--danger) 15%, transparent); color: var(--danger); border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent); }
+    .btn-stop:hover { background: color-mix(in srgb, var(--danger) 25%, transparent); }
+    .btn-secondary { background: color-mix(in srgb, var(--accent2) 12%, transparent); color: var(--accent2); border: 1px solid color-mix(in srgb, var(--accent2) 30%, transparent); }
+    .btn-secondary:hover { background: color-mix(in srgb, var(--accent2) 22%, transparent); }
+    .btn-ghost    { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+    .btn-ghost:hover { color: var(--text); border-color: var(--muted); }
+    .btn:disabled { opacity: .4; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
+
+    /* SIMULADOR */
+    .sim-card { background: color-mix(in srgb, var(--accent2) 6%, var(--surface)); border: 1px dashed color-mix(in srgb, var(--accent2) 30%, transparent); border-radius: 10px; padding: 14px 18px; margin-bottom: 22px; }
+    .sim-title { font-size: .75rem; color: var(--accent2); letter-spacing: .08em; text-transform: uppercase; margin-bottom: 10px; }
+    .sim-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+    .sim-row label { font-size: .75rem; color: var(--muted); white-space: nowrap; min-width: 50px; }
+    .sim-row input { flex: 1; min-width: 180px; background: var(--bg); border: 1px solid color-mix(in srgb, var(--accent2) 25%, transparent); border-radius: 6px; color: var(--text); font-family: 'IBM Plex Mono', monospace; font-size: .85rem; padding: 8px 12px; outline: none; }
+    .sim-row input:focus { border-color: var(--accent2); }
+    .sim-note { font-size: .7rem; color: var(--muted); margin-top: 4px; }
+
+    /* TABLA */
+    .table-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+    .table-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--border); gap: 10px; flex-wrap: wrap; }
+    .table-title { font-size: .78rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+    .count-badge { background: var(--accent); color: #0d0f14; font-family: 'IBM Plex Mono', monospace; font-size: .7rem; font-weight: 700; padding: 2px 8px; border-radius: 20px; }
+    .table-actions { display: flex; gap: 8px; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+    thead th { background: var(--bg); padding: 10px 16px; text-align: left; font-family: 'IBM Plex Mono', monospace; font-size: .7rem; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); white-space: nowrap; border-bottom: 1px solid var(--border); }
+    tbody tr { border-bottom: 1px solid var(--border); transition: background .15s; }
+    tbody tr:nth-child(even) { background: var(--row-even); }
+    tbody tr:hover { background: var(--row-hover); }
+    tbody tr.new-row { animation: rowIn .4s ease; }
+    @keyframes rowIn { from{opacity:0;transform:translateX(-8px);background:color-mix(in srgb,var(--accent) 10%,transparent)} to{opacity:1;transform:translateX(0)} }
+    td { padding: 10px 16px; vertical-align: middle; }
+    .td-idx  { font-family:'IBM Plex Mono',monospace; font-size:.75rem; color:var(--muted); width:40px; }
+    .td-sku  { font-family:'IBM Plex Mono',monospace; font-weight:600; color:var(--accent); }
+    .td-lote { font-family:'IBM Plex Mono',monospace; color:var(--accent2); }
+    .td-time { font-family:'IBM Plex Mono',monospace; font-size:.72rem; color:var(--muted); white-space:nowrap; }
+    .td-del button { background:none; border:none; color:var(--muted); cursor:pointer; padding:4px 6px; border-radius:4px; transition:color .15s,background .15s; font-size:1rem; line-height:1; }
+    .td-del button:hover { color:var(--danger); background:color-mix(in srgb,var(--danger) 12%,transparent); }
+    .empty-state { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; padding:50px 20px; color:var(--muted); font-size:.85rem; }
+    .empty-state svg { opacity:.25; }
+
+    #toast { position:fixed; bottom:28px; left:50%; transform:translateX(-50%) translateY(80px); font-family:'IBM Plex Mono',monospace; font-size:.82rem; font-weight:600; padding:10px 22px; border-radius:30px; transition:transform .3s cubic-bezier(.34,1.56,.64,1); z-index:999; white-space:nowrap; }
+    #toast.show { transform:translateX(-50%) translateY(0); }
+    #toast.success  { background:var(--accent);  color:#0d0f14; box-shadow:0 8px 30px color-mix(in srgb,var(--accent) 40%,transparent); }
+    #toast.folio-ok { background:var(--warn);    color:#0d0f14; box-shadow:0 8px 30px color-mix(in srgb,var(--warn) 40%,transparent); }
+    #toast.error    { background:var(--danger);  color:#fff;    box-shadow:0 8px 30px color-mix(in srgb,var(--danger) 40%,transparent); }
+
+    .json-preview { display:none; background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:14px; font-family:'IBM Plex Mono',monospace; font-size:.75rem; color:var(--accent); white-space:pre; overflow-x:auto; max-height:200px; overflow-y:auto; margin-top:14px; }
+    @media(max-width:600px){ header{padding:12px 16px} main{padding:16px 12px 32px} .btn{padding:9px 14px;font-size:.8rem} }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 24 24"><path d="M3 3h7v7H3V3zm11 0h7v7h-7V3zm0 11h7v7h-7v-7zM3 14h7v7H3v-7zm2-9v3h3V5H5zm11 0v3h3V5h-3zm0 11v3h3v-3h-3zM5 16v3h3v-3H5z"/></svg>
+    </div>
+    WMS · SCANNER
+  </div>
+  <span class="badge">SALIDAS v2.0</span>
+</header>
+
+<main>
+
+  <!-- FOLIO BAR -->
+  <div class="folio-bar">
+    <label>Folio SO</label>
+    <div class="folio-input-wrap">
+      <input id="folioInput" type="text" placeholder="Escanea QR de IF o escribe manualmente" />
+      <svg class="folio-qr-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+        <rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>
+      </svg>
+    </div>
+    <div class="folio-badge" id="folioBadge">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+      <span id="folioBadgeText">–</span>
+      <button onclick="clearFolio()" title="Limpiar">✕</button>
+    </div>
+    <label>Responsable</label>
+    <div class="folio-input-wrap">
+      <input id="respInput" type="text" placeholder="Nombre / ID" />
+    </div>
+  </div>
+
+  <!-- MODO TOGGLE -->
+  <div class="mode-toggle">
+    <button class="mode-btn active-placa" id="btnModeplaca" onclick="setMode('placa')">
+      📦 Escanear placa &nbsp;·&nbsp; SKU · Lote · Ubicación
+    </button>
+    <button class="mode-btn" id="btnModeFolio" onclick="setMode('folio')">
+      📋 Capturar Folio &nbsp;·&nbsp; QR de IF / SO
+    </button>
+  </div>
+
+  <!-- SCANNER -->
+  <div class="scanner-card">
+    <h2 id="scanCardTitle">Escáner QR — Modo: placas</h2>
+    <div class="scan-area" id="scanArea">
+      <div id="reader"></div>
+      <div class="scan-overlay" id="scanOverlay" style="display:none;">
+        <div class="mode-label" id="modeLabel">MODO: placa</div>
+        <div class="scan-frame"><span></span><div class="scan-line"></div></div>
+        <p class="scan-hint" id="scanHint">Apunta al QR de la placa</p>
+      </div>
+      <div class="scan-idle" id="scanIdle">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+          <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+          <rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>
+        </svg>
+        Cámara inactiva — presiona <strong style="color:var(--accent);margin:0 4px;">Capturar QR</strong> para iniciar
+      </div>
+    </div>
+    <div class="status-line">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="statusText">Listo para escanear</span>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="btnStart" onclick="startScanner()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+        Capturar QR
+      </button>
+      <button class="btn btn-stop" id="btnStop" onclick="stopScanner()" disabled>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+        Detener
+      </button>
+    </div>
+  </div>
+
+  <!-- SIMULADOR -->
+  <div class="sim-card">
+    <div class="sim-title">🧪 Simulador (pruebas sin cámara)</div>
+    <div class="sim-row">
+      <label>placa</label>
+      <input id="simplaca" type="text" placeholder="SKU001 L-2025-04 A1-B2-C3" />
+      <button class="btn btn-secondary" onclick="simulateplaca()">Simular placa</button>
+    </div>
+    <div class="sim-row">
+      <label>Folio</label>
+      <input id="simFolio" type="text" placeholder="SO13512" />
+      <button class="btn btn-secondary" onclick="simulateFolio()">Simular folio</button>
+    </div>
+    <p class="sim-note">El escáner detecta el tipo automáticamente: 1 token = folio, 3+ tokens = placa. Los botones de modo fuerzan el comportamiento.</p>
+  </div>
+
+  <!-- TABLA -->
+  <div class="table-card">
+    <div class="table-header">
+      <div class="table-title">
+        Registros capturados
+        <span class="count-badge" id="rowCount">0</span>
+      </div>
+      <div class="table-actions">
+        <button class="btn btn-secondary" id="btnExport" onclick="exportJSON()" disabled>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Exportar JSON
+        </button>
+        <button class="btn btn-ghost" onclick="clearTable()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+          Limpiar
+        </button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th><th>SKU</th><th>Lote</th><th>Ubicación</th><th>Hora</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="tableBody">
+          <tr id="emptyRow"><td colspan="6">
+            <div class="empty-state">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/>
+              </svg>
+              Sin registros. Escanea o simula un QR de placa para comenzar.
+            </div>
+          </td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div id="jsonPreview" class="json-preview"></div>
+  </div>
+
+</main>
+
+<div id="toast"></div>
+
+<script>
+  let scanner  = null;
+  let scanning = false;
+  let scanMode = 'placa';   // 'placa' | 'folio'
+  let records  = [];
+  let lastCode = '';
+  let lastTime = 0;
+
+  // ── MODO ──────────────────────────────────────────────────
+  function setMode(mode) {
+    scanMode = mode;
+    document.getElementById('btnModeplaca').className  = 'mode-btn' + (mode === 'placa'  ? ' active-placa'  : '');
+    document.getElementById('btnModeFolio').className = 'mode-btn' + (mode === 'folio' ? ' active-folio' : '');
+
+    const overlay = document.getElementById('scanOverlay');
+    const label   = document.getElementById('modeLabel');
+    const hint    = document.getElementById('scanHint');
+    const title   = document.getElementById('scanCardTitle');
+
+    if (mode === 'folio') {
+      overlay.classList.add('mode-folio');
+      label.className   = 'mode-label folio';
+      label.textContent = 'MODO: FOLIO';
+      hint.textContent  = 'Apunta al QR de la IF / SO';
+      title.textContent = 'Escáner QR — Modo: Folio SO';
+      if (scanning) setStatus('Esperando QR de folio...', 'folio');
+    } else {
+      overlay.classList.remove('mode-folio');
+      label.className   = 'mode-label';
+      label.textContent = 'MODO: placa';
+      hint.textContent  = 'Apunta al QR de la placa';
+      title.textContent = 'Escáner QR — Modo: placas';
+      if (scanning) setStatus('Cámara activa — apunta al QR', 'active');
+    }
+  }
+
+  // ── PARSEO ────────────────────────────────────────────────
+  /**
+   * Reglas de detección automática:
+   *   - 1 token  → folio (SO13512, IF13562, cualquier ID sin espacios)
+   *   - 3+ tokens → placa (SKU LOTE UBICACION)
+   *
+   * Si el modo está forzado a 'folio', trata TODO como folio.
+   * Si el modo está forzado a 'placa',  requiere 3+ tokens.
+   */
+  function parseQR(raw) {
+    if (!raw) return null;
+    const clean = raw.trim();
+    const parts = clean.split(/\s+/);
+
+    if (scanMode === 'folio') {
+      return { tipo: 'folio', valor: clean };
+    }
+    if (scanMode === 'placa') {
+      if (parts.length < 3) return null;
+      return { tipo: 'placa', sku: parts[0], lote: parts[1], ubicacion: parts.slice(2).join(' ') };
+    }
+    // auto (fallback por si se agrega en el futuro)
+    if (parts.length >= 3) return { tipo: 'placa', sku: parts[0], lote: parts[1], ubicacion: parts.slice(2).join(' ') };
+    if (parts.length === 1) return { tipo: 'folio', valor: clean };
+    return null;
+  }
+
+  // ── RESULTADO ─────────────────────────────────────────────
+  function handleScan(text) {
+    const now = Date.now();
+    if (text === lastCode && now - lastTime < 2000) return;
+    lastCode = text; lastTime = now;
+
+    const result = parseQR(text);
+    if (!result) {
+      showToast('QR no reconocido (formato inválido)', 'error');
+      return;
+    }
+    if (result.tipo === 'folio') {
+      setFolio(result.valor);
+      setMode('placa');                // vuelve a modo placa automáticamente
+    } else {
+      addRecord(result);
+    }
+  }
+
+  // ── FOLIO ─────────────────────────────────────────────────
+  function setFolio(valor) {
+    const inp = document.getElementById('folioInput');
+    inp.value = valor;
+    inp.classList.add('folio-filled');
+    document.getElementById('folioBadgeText').textContent = valor;
+    document.getElementById('folioBadge').classList.add('visible');
+    showToast('📋 Folio: ' + valor, 'folio-ok');
+    setStatus('Folio capturado: ' + valor, '');
+  }
+  function clearFolio() {
+    document.getElementById('folioInput').value = '';
+    document.getElementById('folioInput').classList.remove('folio-filled');
+    document.getElementById('folioBadge').classList.remove('visible');
+  }
+
+  // ── TABLA ─────────────────────────────────────────────────
+  function addRecord(item) {
+    item.hora = new Date().toLocaleTimeString('es-MX', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+    item.timestamp = new Date().toISOString();
+    records.push(item);
+    const idx = records.length;
+
+    document.getElementById('emptyRow')?.remove();
+    const tr = document.createElement('tr');
+    tr.className = 'new-row';
+    tr.innerHTML = `
+      <td class="td-idx">${idx}</td>
+      <td class="td-sku">${esc(item.sku)}</td>
+      <td class="td-lote">${esc(item.lote)}</td>
+      <td>${esc(item.ubicacion)}</td>
+      <td class="td-time">${item.hora}</td>
+      <td class="td-del"><button onclick="deleteRow(this,${idx-1})">✕</button></td>
+    `;
+    document.getElementById('tableBody').insertBefore(tr, document.getElementById('tableBody').firstChild);
+    document.getElementById('rowCount').textContent = records.filter(r=>r).length;
+    document.getElementById('btnExport').disabled = false;
+    showToast('✓ ' + item.sku + ' · ' + item.lote, 'success');
+    setStatus('placa registrada: ' + item.sku, 'active');
+  }
+
+  function deleteRow(btn, idx) {
+    records[idx] = null;
+    btn.closest('tr').remove();
+    const n = records.filter(r=>r).length;
+    document.getElementById('rowCount').textContent = n;
+    if (n === 0) { document.getElementById('btnExport').disabled = true; renderEmpty(); }
+  }
+  function clearTable() {
+    if (!records.some(r=>r)) return;
+    if (!confirm('¿Limpiar todos los registros?')) return;
+    records = [];
+    document.getElementById('rowCount').textContent = '0';
+    document.getElementById('btnExport').disabled = true;
+    document.getElementById('jsonPreview').style.display = 'none';
+    renderEmpty();
+  }
+  function renderEmpty() {
+    document.getElementById('tableBody').innerHTML = `
+      <tr id="emptyRow"><td colspan="6"><div class="empty-state">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/>
+        </svg>
+        Sin registros.
+      </div></td></tr>`;
+  }
+
+  // ── ESCÁNER ───────────────────────────────────────────────
+  function startScanner() {
+    if (scanning) return;
+    document.getElementById('reader').innerHTML = '';
+    scanner = new Html5Qrcode('reader');
+    scanner.start(
+      { facingMode: 'environment' },
+      { fps: 10, qrbox: { width: 220, height: 220 }, aspectRatio: 1.0 },
+      handleScan, () => {}
+    ).then(() => {
+      scanning = true;
+      document.getElementById('scanIdle').style.display   = 'none';
+      document.getElementById('scanOverlay').style.display = 'flex';
+      document.getElementById('btnStart').disabled = true;
+      document.getElementById('btnStop').disabled  = false;
+      setStatus(scanMode === 'folio' ? 'Esperando QR de folio...' : 'Cámara activa — apunta al QR',
+                scanMode === 'folio' ? 'folio' : 'active');
+    }).catch(() => {
+      setStatus('Sin acceso a cámara — usa el Simulador', 'error');
+      showToast('No se pudo acceder a la cámara', 'error');
+    });
+  }
+  function stopScanner() {
+    if (!scanner || !scanning) return;
+    scanner.stop().then(() => {
+      scanning = false;
+      document.getElementById('scanIdle').style.display    = 'flex';
+      document.getElementById('scanOverlay').style.display = 'none';
+      document.getElementById('btnStart').disabled = false;
+      document.getElementById('btnStop').disabled  = true;
+      document.getElementById('reader').innerHTML  = '';
+      setStatus('Escáner detenido', '');
+    });
+  }
+
+  // ── SIMULADORES ───────────────────────────────────────────
+  function simulateplaca() {
+    const v = document.getElementById('simplaca').value.trim() || 'SKU001 L-2025-04 A1-B2-C3';
+    const prev = scanMode; scanMode = 'placa';
+    const r = parseQR(v); scanMode = prev;
+    if (r && r.tipo === 'placa') { addRecord(r); document.getElementById('simplaca').value = ''; }
+    else showToast('Formato inválido: SKU LOTE UBICACION', 'error');
+  }
+  function simulateFolio() {
+    const v = document.getElementById('simFolio').value.trim() || 'SO13512';
+    setFolio(v);
+    document.getElementById('simFolio').value = '';
+  }
+  document.getElementById('simplaca').addEventListener('keydown',  e => { if(e.key==='Enter') simulateplaca(); });
+  document.getElementById('simFolio').addEventListener('keydown', e => { if(e.key==='Enter') simulateFolio(); });
+
+  // ── EXPORT ────────────────────────────────────────────────
+  function exportJSON() {
+    const active = records.filter(r=>r);
+    if (!active.length) return;
+    const payload = {
+      folio:       document.getElementById('folioInput').value || 'SIN-FOLIO',
+      responsable: document.getElementById('respInput').value  || 'SIN-NOMBRE',
+      fecha:       new Date().toLocaleDateString('es-MX'),
+      totalItems:  active.length,
+      items:       active
+    };
+    const json = JSON.stringify(payload, null, 2);
+    const preview = document.getElementById('jsonPreview');
+    preview.textContent = json;
+    preview.style.display = preview.style.display === 'block' ? 'none' : 'block';
+    const a = Object.assign(document.createElement('a'), {
+      href: URL.createObjectURL(new Blob([json], {type:'application/json'})),
+      download: payload.folio.replace(/\s/g,'_') + '_salida.json'
+    });
+    a.click();
+    showToast('JSON exportado (' + active.length + ' items)', 'success');
+  }
+
+  // ── HELPERS ───────────────────────────────────────────────
+  function setStatus(msg, type) {
+    document.getElementById('statusText').textContent = msg;
+    document.getElementById('statusDot').className = 'status-dot' + (type ? ' '+type : '');
+  }
+  let toastTimer;
+  function showToast(msg, type='success') {
+    clearTimeout(toastTimer);
+    const t = document.getElementById('toast');
+    t.textContent = msg; t.className = type;
+    requestAnimationFrame(() => t.classList.add('show'));
+    toastTimer = setTimeout(() => t.classList.remove('show'), 2800);
+  }
+  function esc(s) { return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+</script>
+</body>
+</html>
