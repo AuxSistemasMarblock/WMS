@@ -58,6 +58,7 @@
     .scanner-card h2 { font-size: .78rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 14px; }
     .scan-area { position: relative; background: #000; border-radius: 10px; overflow: hidden; min-height: 220px; display: flex; align-items: center; justify-content: center; }
     #reader { width: 100%; border-radius: 10px; overflow: hidden; }
+    #reader video { width: 100% !important; height: auto !important; object-fit: cover; }
     #reader img, #reader__dashboard_section_swaplink, #reader__status_span, #reader__camera_permission_button, #reader__filescan_input, #reader__dashboard_section_fileselection { display: none !important; }
     .scan-overlay { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; pointer-events: none; }
 
@@ -437,22 +438,32 @@
   }
 
   // ── ESCÁNER ───────────────────────────────────────────────
-  function startScanner() {
+  async function startScanner() {
     if (scanning) return;
     document.getElementById('reader').innerHTML = '';
     scanner = new Html5Qrcode('reader');
 
-    scanner.start(
-      { facingMode: 'environment' },          // ← sin advanced aquí
-      {
-        fps: 15,
-        qrbox: { width: 150, height: 150 },
-        aspectRatio: 1.7778,
-        experimentalFeatures: {
-          useBarCodeDetectorIfSupported: true
-        }
+    const config = {
+      fps: 10,
+      // caja dinámica: 80% del lado más corto, máx 280px
+      qrbox: (w, h) => {
+        const size = Math.min(Math.min(w, h) * 0.8, 280);
+        return { width: size, height: size };
       },
-      handleScan, () => {}
+      aspectRatio: 1.7778,
+      experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+      videoConstraints: {
+        facingMode: { ideal: 'environment' },
+        width:  { ideal: 3840, min: 1280 },
+        height: { ideal: 2160, min: 720  }
+      }
+    };
+
+    scanner.start(
+      { facingMode: 'environment' },
+      config,
+      handleScan,
+      () => {}
     ).then(() => {
       scanning = true;
       document.getElementById('scanIdle').style.display    = 'none';
@@ -461,10 +472,8 @@
       document.getElementById('btnStop').disabled  = false;
       setStatus(scanMode === 'folio' ? 'Esperando QR de folio...' : 'Cámara activa — apunta al QR',
                 scanMode === 'folio' ? 'folio' : 'active');
-
-      // Aplicar zoom y focus DESPUÉS de que la cámara ya está corriendo
-      applyZoom(2.0);
-
+      // activar autoenfoque continuo después de que la cámara esté lista
+      setTimeout(applyFocus, 900);
     }).catch(err => {
       console.warn('Error cámara:', err);
       setStatus('Sin acceso a cámara — usa el Simulador', 'error');
@@ -472,46 +481,21 @@
     });
   }
 
-  // Aplica zoom y autoenfoque sobre el track activo, silenciosamente si no se soporta
-  async function applyZoom(level) {
+  // Autoenfoque continuo al objeto más cercano (silencioso si no aplica)
+  async function applyFocus() {
     try {
-      const track = scanner?.getRunningTrackCameraCapabilities
-        ? null   // versión nueva de html5-qrcode — usar su API
-        : null;
-
-      // Buscar el video track activo directamente del DOM
       const video = document.querySelector('#reader video');
-      if (!video || !video.srcObject) return;
-
-      const videoTrack = video.srcObject.getVideoTracks()[0];
-      if (!videoTrack) return;
-
-      const capabilities = videoTrack.getCapabilities?.() || {};
-
-      const constraints = {};
-
-      // Zoom — solo si el dispositivo lo soporta
-      if (capabilities.zoom) {
-        const minZ = capabilities.zoom.min || 1;
-        const maxZ = capabilities.zoom.max || 1;
-        constraints.zoom = Math.min(level, maxZ);
-        constraints.zoom = Math.max(constraints.zoom, minZ);
-      }
-
-      // Autoenfoque continuo
-      if (capabilities.focusMode?.includes('continuous')) {
-        constraints.focusMode = 'continuous';
-      }
-
-      if (Object.keys(constraints).length > 0) {
-        await videoTrack.applyConstraints({ advanced: [constraints] });
-        console.log('Zoom/focus aplicado:', constraints);
-      }
-    } catch (e) {
-      // Silencioso — si no soporta, simplemente no aplica
-      console.warn('Zoom no soportado en este dispositivo:', e.message);
-    }
+      if (!video?.srcObject) return;
+      const track = video.srcObject.getVideoTracks()[0];
+      if (!track) return;
+      const caps = track.getCapabilities?.() || {};
+      const c = {};
+      if (caps.focusMode?.includes('continuous')) c.focusMode = 'continuous';
+      if (caps.focusDistance) c.focusDistance = caps.focusDistance.min;
+      if (Object.keys(c).length) await track.applyConstraints({ advanced: [c] });
+    } catch(e) { /* silencioso — el dispositivo no soporta estas constraints */ }
   }
+
   function stopScanner() {
     if (!scanner || !scanning) return;
     scanner.stop().then(() => {
