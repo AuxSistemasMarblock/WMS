@@ -442,8 +442,23 @@
     document.getElementById('reader').innerHTML = '';
     scanner = new Html5Qrcode('reader');
     scanner.start(
-      { facingMode: 'environment' },
-      { fps: 10, qrbox: { width: 220, height: 220 }, aspectRatio: 1.0 },
+      {
+        facingMode: 'environment',
+        advanced: [
+          { zoom: 2.0 },                    // zoom óptico x2 si el dispositivo lo soporta
+          { focusMode: 'continuous' },      // autoenfoque continuo
+          { torch: false }
+        ]
+      },
+      {
+        fps: 15,                            // más frames = más intentos de lectura
+        qrbox: { width: 150, height: 150 }, // área más pequeña = enfoca más rápido
+        aspectRatio: 1.7778,                // 16:9 para aprovechar la cámara completa
+        experimentalFeatures: {
+          useBarCodeDetectorIfSupported: true  // usa API nativa del navegador si existe (más rápido)
+        },
+        rememberLastUsedCamera: true
+      },
       handleScan, () => {}
     ).then(() => {
       scanning = true;
