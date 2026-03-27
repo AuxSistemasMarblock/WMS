@@ -441,37 +441,76 @@
     if (scanning) return;
     document.getElementById('reader').innerHTML = '';
     scanner = new Html5Qrcode('reader');
+
     scanner.start(
+      { facingMode: 'environment' },          // ← sin advanced aquí
       {
-        facingMode: 'environment',
-        advanced: [
-          { zoom: 2.0 },                    // zoom óptico x2 si el dispositivo lo soporta
-          { focusMode: 'continuous' },      // autoenfoque continuo
-          { torch: false }
-        ]
-      },
-      {
-        fps: 15,                            // más frames = más intentos de lectura
-        qrbox: { width: 150, height: 150 }, // área más pequeña = enfoca más rápido
-        aspectRatio: 1.7778,                // 16:9 para aprovechar la cámara completa
+        fps: 15,
+        qrbox: { width: 150, height: 150 },
+        aspectRatio: 1.7778,
         experimentalFeatures: {
-          useBarCodeDetectorIfSupported: true  // usa API nativa del navegador si existe (más rápido)
-        },
-        rememberLastUsedCamera: true
+          useBarCodeDetectorIfSupported: true
+        }
       },
       handleScan, () => {}
     ).then(() => {
       scanning = true;
-      document.getElementById('scanIdle').style.display   = 'none';
+      document.getElementById('scanIdle').style.display    = 'none';
       document.getElementById('scanOverlay').style.display = 'flex';
       document.getElementById('btnStart').disabled = true;
       document.getElementById('btnStop').disabled  = false;
       setStatus(scanMode === 'folio' ? 'Esperando QR de folio...' : 'Cámara activa — apunta al QR',
                 scanMode === 'folio' ? 'folio' : 'active');
-    }).catch(() => {
+
+      // Aplicar zoom y focus DESPUÉS de que la cámara ya está corriendo
+      applyZoom(2.0);
+
+    }).catch(err => {
+      console.warn('Error cámara:', err);
       setStatus('Sin acceso a cámara — usa el Simulador', 'error');
       showToast('No se pudo acceder a la cámara', 'error');
     });
+  }
+
+  // Aplica zoom y autoenfoque sobre el track activo, silenciosamente si no se soporta
+  async function applyZoom(level) {
+    try {
+      const track = scanner?.getRunningTrackCameraCapabilities
+        ? null   // versión nueva de html5-qrcode — usar su API
+        : null;
+
+      // Buscar el video track activo directamente del DOM
+      const video = document.querySelector('#reader video');
+      if (!video || !video.srcObject) return;
+
+      const videoTrack = video.srcObject.getVideoTracks()[0];
+      if (!videoTrack) return;
+
+      const capabilities = videoTrack.getCapabilities?.() || {};
+
+      const constraints = {};
+
+      // Zoom — solo si el dispositivo lo soporta
+      if (capabilities.zoom) {
+        const minZ = capabilities.zoom.min || 1;
+        const maxZ = capabilities.zoom.max || 1;
+        constraints.zoom = Math.min(level, maxZ);
+        constraints.zoom = Math.max(constraints.zoom, minZ);
+      }
+
+      // Autoenfoque continuo
+      if (capabilities.focusMode?.includes('continuous')) {
+        constraints.focusMode = 'continuous';
+      }
+
+      if (Object.keys(constraints).length > 0) {
+        await videoTrack.applyConstraints({ advanced: [constraints] });
+        console.log('Zoom/focus aplicado:', constraints);
+      }
+    } catch (e) {
+      // Silencioso — si no soporta, simplemente no aplica
+      console.warn('Zoom no soportado en este dispositivo:', e.message);
+    }
   }
   function stopScanner() {
     if (!scanner || !scanning) return;
