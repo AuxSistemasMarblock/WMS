@@ -86,6 +86,9 @@ function clearTable() {
     records = [];
     updateRowCount();
     renderEmpty();
+    
+    // Desbloquea el botón para permitir nuevos envíos
+    unlockForResend();
 }
 
 /**
