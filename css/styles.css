@@ -1,0 +1,795 @@
+/**
+ * WMS · Estilos Globales
+ * Diseño responsivo y profesional para SCanner de Salidas
+ */
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'IBM Plex Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ─────────────────────────────────────────────────────────
+   HEADER
+   ───────────────────────────────────────────────────────── */
+
+header {
+    background: var(--accent2);
+    border-bottom: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 1.05rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: #fff;
+}
+
+.logo img {
+    height: 30px;
+    width: auto;
+    border-radius: 6px;
+    padding: 2px;
+}
+
+.logo-icon {
+    width: 30px;
+    height: 30px;
+    background: var(--accent);
+    border-radius: 6px;
+    display: grid;
+    place-items: center;
+}
+
+.logo-icon svg {
+    width: 18px;
+    height: 18px;
+    fill: #0d0f14;
+}
+
+.badge {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.68rem;
+    background: rgba(255, 255, 255, 0.2);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    padding: 3px 9px;
+    border-radius: 20px;
+    letter-spacing: 0.06em;
+}
+
+/* ─────────────────────────────────────────────────────────
+   MAIN
+   ───────────────────────────────────────────────────────── */
+
+main {
+    flex: 1;
+    padding: 24px 20px 40px;
+    max-width: 960px;
+    margin: 0 auto;
+    width: 100%;
+}
+
+/* ─────────────────────────────────────────────────────────
+   FOLIO BAR
+   ───────────────────────────────────────────────────────── */
+
+.folio-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.folio-bar label {
+    font-size: 0.78rem;
+    color: var(--muted);
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.folio-input-wrap {
+    flex: 1;
+    min-width: 160px;
+    position: relative;
+}
+
+.folio-input-wrap input {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.9rem;
+    padding: 8px 36px 8px 12px;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.folio-input-wrap input:focus {
+    border-color: var(--accent);
+}
+
+.folio-input-wrap input.folio-filled {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.folio-input-wrap input::placeholder {
+    color: var(--muted);
+}
+
+.folio-qr-icon {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--muted);
+    pointer-events: none;
+    transition: color 0.2s;
+}
+
+.folio-input-wrap input.folio-filled+.folio-qr-icon {
+    color: var(--accent);
+}
+
+.folio-badge {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--accent);
+    white-space: nowrap;
+}
+
+.folio-badge.visible {
+    display: flex;
+    animation: popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes popIn {
+    from {
+        opacity: 0;
+        transform: scale(0.8);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.folio-badge button {
+    background: none;
+    border: none;
+    color: var(--accent);
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+    padding: 0 0 0 4px;
+    opacity: 0.6;
+}
+
+.folio-badge button:hover {
+    opacity: 1;
+}
+
+/* ─────────────────────────────────────────────────────────
+   MODO TOGGLE
+   ───────────────────────────────────────────────────────── */
+
+.mode-toggle {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.mode-btn {
+    flex: 1;
+    padding: 9px 12px;
+    border-radius: 8px;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    transition: all 0.18s;
+    text-align: center;
+}
+
+.mode-btn.active-placa {
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+    color: var(--accent);
+}
+
+.mode-btn.active-folio {
+    background: color-mix(in srgb, var(--warn) 12%, transparent);
+    border-color: color-mix(in srgb, var(--warn) 40%, transparent);
+    color: var(--warn);
+}
+
+/* ─────────────────────────────────────────────────────────
+   SCANNER
+   ───────────────────────────────────────────────────────── */
+
+.scanner-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 22px;
+}
+
+.scanner-card h2 {
+    font-size: 0.78rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 14px;
+}
+
+.scan-area {
+    position: relative;
+    background: #000;
+    border-radius: 10px;
+    overflow: hidden;
+    min-height: 220px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#reader {
+    width: 100%;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+#reader video {
+    width: 100% !important;
+    height: auto !important;
+    object-fit: cover;
+}
+
+#reader img,
+#reader__dashboard_section_swaplink,
+#reader__status_span,
+#reader__camera_permission_button,
+#reader__filescan_input,
+#reader__dashboard_section_fileselection {
+    display: none !important;
+}
+
+.scan-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    pointer-events: none;
+}
+
+.scan-overlay.mode-folio .scan-frame::before,
+.scan-overlay.mode-folio .scan-frame::after,
+.scan-overlay.mode-folio .scan-frame span::before,
+.scan-overlay.mode-folio .scan-frame span::after {
+    border-color: var(--warn);
+}
+
+.scan-overlay.mode-folio .scan-line {
+    background: linear-gradient(90deg, transparent, var(--warn), transparent);
+}
+
+.mode-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    background: rgba(0, 0, 0, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--accent);
+    padding: 4px 12px;
+    border-radius: 20px;
+    letter-spacing: 0.06em;
+}
+
+.mode-label.folio {
+    color: var(--warn);
+}
+
+.scan-frame {
+    width: 160px;
+    height: 160px;
+    position: relative;
+}
+
+.scan-frame::before,
+.scan-frame::after,
+.scan-frame span::before,
+.scan-frame span::after {
+    content: '';
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    border-color: var(--accent);
+    border-style: solid;
+}
+
+.scan-frame::before {
+    top: 0;
+    left: 0;
+    border-width: 3px 0 0 3px;
+    border-radius: 4px 0 0 0;
+}
+
+.scan-frame::after {
+    top: 0;
+    right: 0;
+    border-width: 3px 3px 0 0;
+    border-radius: 0 4px 0 0;
+}
+
+.scan-frame span::before {
+    bottom: 0;
+    left: 0;
+    border-width: 0 0 3px 3px;
+    border-radius: 0 0 0 4px;
+}
+
+.scan-frame span::after {
+    bottom: 0;
+    right: 0;
+    border-width: 0 3px 3px 0;
+    border-radius: 0 0 4px 0;
+}
+
+.scan-line {
+    position: absolute;
+    left: 6px;
+    right: 6px;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    animation: scan 2s ease-in-out infinite;
+}
+
+@keyframes scan {
+    0% {
+        top: 10px;
+        opacity: 1;
+    }
+
+    50% {
+        top: 145px;
+        opacity: 1;
+    }
+
+    100% {
+        top: 10px;
+        opacity: 1;
+    }
+}
+
+.scan-hint {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.72rem;
+    color: rgba(255, 255, 255, 0.5);
+    letter-spacing: 0.04em;
+}
+
+.scan-idle {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: var(--muted);
+    font-size: 0.85rem;
+    padding: 40px 20px;
+    text-align: center;
+}
+
+.scan-idle svg {
+    opacity: 0.3;
+}
+
+.status-line {
+    margin-top: 12px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.78rem;
+    min-height: 22px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--muted);
+}
+
+.status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--muted);
+    transition: background 0.3s;
+}
+
+.status-dot.active {
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+    animation: pulse 1.2s infinite;
+}
+
+.status-dot.folio {
+    background: var(--warn);
+    box-shadow: 0 0 8px var(--warn);
+    animation: pulse 1.2s infinite;
+}
+
+.status-dot.error {
+    background: var(--danger);
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.4;
+    }
+}
+
+/* ─────────────────────────────────────────────────────────
+   BOTONES
+   ───────────────────────────────────────────────────────── */
+
+.btn-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 14px;
+    flex-wrap: wrap;
+}
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: background 0.15s ease, color 0.15s ease;
+    letter-spacing: 0.02em;
+}
+
+.btn-primary {
+    background: var(--accent);
+    color: #fff;
+}
+
+.btn-primary:hover,
+.btn-primary:focus {
+    background: #e6a300;
+    color: #fff;
+    outline: none;
+    box-shadow: none;
+    border: none;
+}
+
+.btn-stop {
+    background: color-mix(in srgb, var(--danger) 15%, transparent);
+    color: var(--danger);
+    border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
+}
+
+.btn-stop:hover,
+.btn-stop:focus {
+    background: var(--danger);
+    color: #fff;
+    border: 1px solid var(--danger);
+    outline: none;
+    box-shadow: none;
+}
+
+.btn-secondary {
+    background: color-mix(in srgb, var(--accent2) 12%, transparent);
+    color: var(--accent2);
+    border: 1px solid color-mix(in srgb, var(--accent2) 30%, transparent);
+}
+
+.btn-secondary:hover,
+.btn-secondary:focus {
+    background: var(--accent2);
+    color: #fff;
+    border: 1px solid var(--accent2);
+    outline: none;
+    box-shadow: none;
+}
+
+.btn-ghost {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--border);
+}
+
+.btn-ghost:hover,
+.btn-ghost:focus {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+    outline: none;
+    box-shadow: none;
+}
+
+.btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+/* ─────────────────────────────────────────────────────────
+   TABLA
+   ───────────────────────────────────────────────────────── */
+
+.table-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.table-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.table-title {
+    font-size: 0.78rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.count-badge {
+    background: var(--accent);
+    color: #0d0f14;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 20px;
+}
+
+.table-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.table-wrap {
+    overflow-x: auto;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+thead th {
+    background: var(--bg);
+    padding: 10px 16px;
+    text-align: left;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    white-space: nowrap;
+    border-bottom: 1px solid var(--border);
+}
+
+tbody tr {
+    border-bottom: 1px solid var(--border);
+    transition: background 0.15s;
+}
+
+tbody tr:nth-child(even) {
+    background: var(--row-even);
+}
+
+tbody tr:hover {
+    background: var(--row-hover);
+}
+
+tbody tr.new-row {
+    animation: rowIn 0.4s ease;
+}
+
+@keyframes rowIn {
+    from {
+        opacity: 0;
+        transform: translateX(-8px);
+        background: color-mix(in srgb, var(--accent) 10%, transparent);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+td {
+    padding: 10px 16px;
+    vertical-align: middle;
+}
+
+.td-idx {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--muted);
+    width: 40px;
+}
+
+.td-sku {
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 600;
+    color: var(--accent);
+}
+
+.td-lote {
+    font-family: 'IBM Plex Mono', monospace;
+    color: var(--accent2);
+}
+
+.td-time {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--muted);
+    white-space: nowrap;
+}
+
+.td-del button {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: 4px;
+    transition: color 0.15s, background 0.15s;
+    font-size: 1rem;
+    line-height: 1;
+}
+
+.td-del button:hover {
+    color: var(--danger);
+    background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 50px 20px;
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
+.empty-state svg {
+    opacity: 0.25;
+}
+
+/* ─────────────────────────────────────────────────────────
+   TOAST / NOTIFICACIONES
+   ───────────────────────────────────────────────────────── */
+
+#toast {
+    position: fixed;
+    bottom: 28px;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.82rem;
+    font-weight: 600;
+    padding: 10px 22px;
+    border-radius: 30px;
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    z-index: 999;
+    white-space: nowrap;
+}
+
+#toast.show {
+    transform: translateX(-50%) translateY(0);
+}
+
+#toast.success {
+    background: var(--accent);
+    color: #0d0f14;
+    box-shadow: 0 8px 30px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+#toast.folio-ok {
+    background: var(--warn);
+    color: #0d0f14;
+    box-shadow: 0 8px 30px color-mix(in srgb, var(--warn) 40%, transparent);
+}
+
+#toast.error {
+    background: var(--danger);
+    color: #fff;
+    box-shadow: 0 8px 30px color-mix(in srgb, var(--danger) 40%, transparent);
+}
+
+/* ─────────────────────────────────────────────────────────
+   RESPONSIVE
+   ───────────────────────────────────────────────────────── */
+
+@media (max-width: 600px) {
+    header {
+        padding: 12px 16px;
+    }
+
+    main {
+        padding: 16px 12px 32px;
+    }
+
+    .btn {
+        padding: 9px 14px;
+        font-size: 0.8rem;
+    }
+}

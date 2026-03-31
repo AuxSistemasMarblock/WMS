@@ -1,6 +1,9 @@
 FROM nginx:alpine
-# Copia tu archivo al directorio de contenido de Nginx
+
+# Copia la estructura del proyecto
 COPY index.html /usr/share/nginx/html/index.html
-# Copia la carpeta de imágenes
+COPY css/ /usr/share/nginx/html/css/
+COPY js/ /usr/share/nginx/html/js/
 COPY images/ /usr/share/nginx/html/images/
+
 EXPOSE 80
