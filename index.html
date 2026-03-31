@@ -9,25 +9,25 @@
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --bg:        #0d0f14;
-      --surface:   #151820;
-      --border:    #252a36;
-      --accent:    #00e5a0;
-      --accent2:   #0090ff;
-      --warn:      #f59e0b;
+      --bg:        #fff;        /* fondo principal blanco */
+      --surface:   #f5f5f5;    /* tarjetas y paneles gris muy claro */
+      --border:    #e0e0e0;    /* bordes gris claro */
+      --accent:    #ffb800;    /* amarillo Marblock */
+      --accent2:   #004a99;    /* azul fuerte Marblock */
+      --warn:      #ffb800;    /* amarillo */
       --danger:    #ff4d6a;
-      --text:      #e8eaf0;
-      --muted:     #6b7280;
-      --row-even:  #181c26;
-      --row-hover: #1e2435;
+      --text:      #222;       /* texto principal gris oscuro */
+      --muted:     #666;       /* texto secundario gris medio */
+      --row-even:  #e6f0ff;    /* filas alternas azul muy claro */
+      --row-hover: #fffbf0;    /* hover suave amarillo muy claro */
     }
     body { font-family: 'IBM Plex Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
 
-    header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
-    .logo { display: flex; align-items: center; gap: 10px; font-family: 'IBM Plex Mono', monospace; font-size: 1.05rem; font-weight: 600; letter-spacing: .04em; color: var(--accent); }
+    header { background: var(--accent2); border-bottom: none; box-shadow: 0 2px 8px rgba(0,0,0,0.1); padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+    .logo { display: flex; align-items: center; gap: 10px; font-family: 'IBM Plex Mono', monospace; font-size: 1.05rem; font-weight: 600; letter-spacing: .04em; color: #fff; }
     .logo-icon { width: 30px; height: 30px; background: var(--accent); border-radius: 6px; display: grid; place-items: center; }
     .logo-icon svg { width: 18px; height: 18px; fill: #0d0f14; }
-    .badge { font-family: 'IBM Plex Mono', monospace; font-size: .68rem; background: color-mix(in srgb, var(--accent2) 15%, transparent); color: var(--accent2); border: 1px solid color-mix(in srgb, var(--accent2) 35%, transparent); padding: 3px 9px; border-radius: 20px; letter-spacing: .06em; }
+    .badge { font-family: 'IBM Plex Mono', monospace; font-size: .68rem; background: rgba(255,255,255,0.2); color: #fff; border: 1px solid rgba(255,255,255,0.3); padding: 3px 9px; border-radius: 20px; letter-spacing: .06em; }
 
     main { flex: 1; padding: 24px 20px 40px; max-width: 960px; margin: 0 auto; width: 100%; }
 
@@ -91,15 +91,15 @@
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
 
     .btn-row { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
-    .btn { display: inline-flex; align-items: center; gap: 7px; padding: 10px 18px; border-radius: 8px; font-family: 'IBM Plex Sans', sans-serif; font-size: .85rem; font-weight: 600; cursor: pointer; border: none; transition: all .18s; letter-spacing: .02em; }
-    .btn-primary  { background: var(--accent); color: #0d0f14; }
-    .btn-primary:hover { background: #00ffb3; transform: translateY(-1px); box-shadow: 0 4px 18px color-mix(in srgb, var(--accent) 40%, transparent); }
+    .btn { display: inline-flex; align-items: center; gap: 7px; padding: 10px 18px; border-radius: 8px; font-family: 'IBM Plex Sans', sans-serif; font-size: .85rem; font-weight: 600; cursor: pointer; border: none; transition: background 0.15s ease, color 0.15s ease; letter-spacing: .02em; }
+    .btn-primary  { background: var(--accent); color: #fff; }
+    .btn-primary:hover, .btn-primary:focus { background: #e6a300; color: #fff; outline: none; box-shadow: none; border: none; }
     .btn-stop     { background: color-mix(in srgb, var(--danger) 15%, transparent); color: var(--danger); border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent); }
-    .btn-stop:hover { background: color-mix(in srgb, var(--danger) 25%, transparent); }
+    .btn-stop:hover, .btn-stop:focus { background: var(--danger); color: #fff; border: 1px solid var(--danger); outline: none; box-shadow: none; }
     .btn-secondary { background: color-mix(in srgb, var(--accent2) 12%, transparent); color: var(--accent2); border: 1px solid color-mix(in srgb, var(--accent2) 30%, transparent); }
-    .btn-secondary:hover { background: color-mix(in srgb, var(--accent2) 22%, transparent); }
+    .btn-secondary:hover, .btn-secondary:focus { background: var(--accent2); color: #fff; border: 1px solid var(--accent2); outline: none; box-shadow: none; }
     .btn-ghost    { background: transparent; color: var(--muted); border: 1px solid var(--border); }
-    .btn-ghost:hover { color: var(--text); border-color: var(--muted); }
+    .btn-ghost:hover, .btn-ghost:focus { background: var(--accent); color: #fff; border-color: var(--accent); outline: none; box-shadow: none; }
     .btn:disabled { opacity: .4; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
 
     /* SIMULADOR */
@@ -149,9 +149,8 @@
 
 <header>
   <div class="logo">
-    <div class="logo-icon">
-      <svg viewBox="0 0 24 24"><path d="M3 3h7v7H3V3zm11 0h7v7h-7V3zm0 11h7v7h-7v-7zM3 14h7v7H3v-7zm2-9v3h3V5H5zm11 0v3h3V5h-3zm0 11v3h3v-3h-3zM5 16v3h3v-3H5z"/></svg>
-    </div>
+    <img src="./images/logo.png" alt="Logo Empresa" style="height:30px; width:auto; border-radius:6px; padding:2px;"/>
+    <!-- <div class="logo-icon"> ...SVG... </div> -->
     WMS · SCANNER
   </div>
   <span class="badge">SALIDAS v2.0</span>
