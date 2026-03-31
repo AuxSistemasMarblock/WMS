@@ -163,7 +163,7 @@
   <div class="folio-bar">
     <label>Folio SO</label>
     <div class="folio-input-wrap">
-      <input id="folioInput" type="text" placeholder="Escanea QR de IF o escribe manualmente" />
+      <input id="folioInput" type="text" placeholder="Escanea QR de IF" />
       <svg class="folio-qr-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
         <rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>
@@ -176,17 +176,17 @@
     </div>
     <label>Responsable</label>
     <div class="folio-input-wrap">
-      <input id="respInput" type="text" placeholder="Nombre / ID" />
+      <input id="respInput" type="text" placeholder="Nombre completo" />
     </div>
   </div>
 
   <!-- MODO TOGGLE -->
   <div class="mode-toggle">
     <button class="mode-btn active-placa" id="btnModeplaca" onclick="setMode('placa')">
-      📦 Escanear placa &nbsp;·&nbsp; SKU · Lote · Ubicación
+      📦 Escanear placa
     </button>
     <button class="mode-btn" id="btnModeFolio" onclick="setMode('folio')">
-      📋 Capturar Folio &nbsp;·&nbsp; QR de IF / SO
+      📋 Capturar Folio &nbsp;·&nbsp; QR de IF
     </button>
   </div>
 
@@ -224,21 +224,7 @@
     </div>
   </div>
 
-  <!-- SIMULADOR -->
-  <div class="sim-card">
-    <div class="sim-title">🧪 Simulador (pruebas sin cámara)</div>
-    <div class="sim-row">
-      <label>placa</label>
-      <input id="simplaca" type="text" placeholder="SKU001 L-2025-04 A1-B2-C3" />
-      <button class="btn btn-secondary" onclick="simulateplaca()">Simular placa</button>
-    </div>
-    <div class="sim-row">
-      <label>Folio</label>
-      <input id="simFolio" type="text" placeholder="SO13512" />
-      <button class="btn btn-secondary" onclick="simulateFolio()">Simular folio</button>
-    </div>
-    <p class="sim-note">El escáner detecta el tipo automáticamente: 1 token = folio, 3+ tokens = placa. Los botones de modo fuerzan el comportamiento.</p>
-  </div>
+
 
   <!-- TABLA -->
   <div class="table-card">
@@ -248,9 +234,9 @@
         <span class="count-badge" id="rowCount">0</span>
       </div>
       <div class="table-actions">
-        <button class="btn btn-secondary" id="btnExport" onclick="exportJSON()" disabled>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          Exportar JSON
+        <button class="btn btn-primary" id="btnCompletar" onclick="completarRegistro()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="20 6 9 17 4 12"/></svg>
+          Completar registro
         </button>
         <button class="btn btn-ghost" onclick="clearTable()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
@@ -273,13 +259,13 @@
                 <polyline points="14 2 14 8 20 8"/>
                 <line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/>
               </svg>
-              Sin registros. Escanea o simula un QR de placa para comenzar.
+              Sin registros. Escanea un QR de placa para comenzar.
             </div>
           </td></tr>
         </tbody>
       </table>
     </div>
-    <div id="jsonPreview" class="json-preview"></div>
+    <!-- jsonPreview eliminado para producción -->
   </div>
 
 </main>
@@ -287,50 +273,43 @@
 <div id="toast"></div>
 
 <script>
-  let scanner  = null;
+
+  let scanner = null;
   let scanning = false;
-  let scanMode = 'placa';   // 'placa' | 'folio'
-  let records  = [];
+  let scanMode = 'placa'; // 'placa' | 'folio'
+  let records = [];
   let lastCode = '';
   let lastTime = 0;
 
   // ── MODO ──────────────────────────────────────────────────
   function setMode(mode) {
     scanMode = mode;
-    document.getElementById('btnModeplaca').className  = 'mode-btn' + (mode === 'placa'  ? ' active-placa'  : '');
+    document.getElementById('btnModeplaca').className = 'mode-btn' + (mode === 'placa' ? ' active-placa' : '');
     document.getElementById('btnModeFolio').className = 'mode-btn' + (mode === 'folio' ? ' active-folio' : '');
 
     const overlay = document.getElementById('scanOverlay');
-    const label   = document.getElementById('modeLabel');
-    const hint    = document.getElementById('scanHint');
-    const title   = document.getElementById('scanCardTitle');
+    const label = document.getElementById('modeLabel');
+    const hint = document.getElementById('scanHint');
+    const title = document.getElementById('scanCardTitle');
 
     if (mode === 'folio') {
       overlay.classList.add('mode-folio');
-      label.className   = 'mode-label folio';
+      label.className = 'mode-label folio';
       label.textContent = 'MODO: FOLIO';
-      hint.textContent  = 'Apunta al QR de la IF / SO';
-      title.textContent = 'Escáner QR — Modo: Folio SO';
+      hint.textContent = 'Apunta al QR de la IF';
+      title.textContent = 'Escáner QR — Modo: Folio IF';
       if (scanning) setStatus('Esperando QR de folio...', 'folio');
     } else {
       overlay.classList.remove('mode-folio');
-      label.className   = 'mode-label';
+      label.className = 'mode-label';
       label.textContent = 'MODO: placa';
-      hint.textContent  = 'Apunta al QR de la placa';
+      hint.textContent = 'Apunta al QR de la placa';
       title.textContent = 'Escáner QR — Modo: placas';
       if (scanning) setStatus('Cámara activa — apunta al QR', 'active');
     }
   }
 
   // ── PARSEO ────────────────────────────────────────────────
-  /**
-   * Reglas de detección automática:
-   *   - 1 token  → folio (SO13512, IF13562, cualquier ID sin espacios)
-   *   - 3+ tokens → placa (SKU LOTE UBICACION)
-   *
-   * Si el modo está forzado a 'folio', trata TODO como folio.
-   * Si el modo está forzado a 'placa',  requiere 3+ tokens.
-   */
   function parseQR(raw) {
     if (!raw) return null;
     const clean = raw.trim();
@@ -347,6 +326,49 @@
     if (parts.length >= 3) return { tipo: 'placa', sku: parts[0], lote: parts[1], ubicacion: parts.slice(2).join(' ') };
     if (parts.length === 1) return { tipo: 'folio', valor: clean };
     return null;
+  }
+
+  // ── TABLA ─────────────────────────────────────────────────
+  function addRecord(item) {
+    // Validar campos obligatorios
+    const folio = document.getElementById('folioInput').value.trim();
+    const responsable = document.getElementById('respInput').value.trim();
+    if (!folio) {
+      showToast('El campo Folio SO es obligatorio', 'error');
+      document.getElementById('folioInput').focus();
+      return;
+    }
+    if (!responsable) {
+      showToast('El campo Responsable es obligatorio', 'error');
+      document.getElementById('respInput').focus();
+      return;
+    }
+    item.hora = new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    item.timestamp = new Date().toISOString();
+    records.push(item);
+    const idx = records.length;
+
+    document.getElementById('emptyRow')?.remove();
+    const tr = document.createElement('tr');
+    tr.className = 'new-row';
+    tr.innerHTML = `
+      <td class="td-idx">${idx}</td>
+      <td class="td-sku">${esc(item.sku)}</td>
+      <td class="td-lote">${esc(item.lote)}</td>
+      <td>${esc(item.ubicacion)}</td>
+      <td class="td-time">${item.hora}</td>
+      <td class="td-del"><button onclick="deleteRow(this,${idx-1})">✕</button></td>
+    `;
+    document.getElementById('tableBody').insertBefore(tr, document.getElementById('tableBody').firstChild);
+    document.getElementById('rowCount').textContent = records.filter(r => r).length;
+    showToast('✓ ' + item.sku + ' · ' + item.lote, 'success');
+    setStatus('placa registrada: ' + item.sku, 'active');
+    // Ya no se envía automáticamente, ahora es manual con el botón Completar registro
+  }
+
+  // Botón Completar registro
+  function completarRegistro() {
+    exportJSON();
   }
 
   // ── RESULTADO ─────────────────────────────────────────────
@@ -386,6 +408,19 @@
 
   // ── TABLA ─────────────────────────────────────────────────
   function addRecord(item) {
+    // Validar campos obligatorios
+    const folio = document.getElementById('folioInput').value.trim();
+    const responsable = document.getElementById('respInput').value.trim();
+    if (!folio) {
+      showToast('El campo Folio SO es obligatorio', 'error');
+      document.getElementById('folioInput').focus();
+      return;
+    }
+    if (!responsable) {
+      showToast('El campo Responsable es obligatorio', 'error');
+      document.getElementById('respInput').focus();
+      return;
+    }
     item.hora = new Date().toLocaleTimeString('es-MX', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
     item.timestamp = new Date().toISOString();
     records.push(item);
@@ -404,9 +439,10 @@
     `;
     document.getElementById('tableBody').insertBefore(tr, document.getElementById('tableBody').firstChild);
     document.getElementById('rowCount').textContent = records.filter(r=>r).length;
-    document.getElementById('btnExport').disabled = false;
     showToast('✓ ' + item.sku + ' · ' + item.lote, 'success');
     setStatus('placa registrada: ' + item.sku, 'active');
+    // Enviar automáticamente al completar registro
+    exportJSON();
   }
 
   function deleteRow(btn, idx) {
@@ -509,22 +545,6 @@
     });
   }
 
-  // ── SIMULADORES ───────────────────────────────────────────
-  function simulateplaca() {
-    const v = document.getElementById('simplaca').value.trim() || 'SKU001 L-2025-04 A1-B2-C3';
-    const prev = scanMode; scanMode = 'placa';
-    const r = parseQR(v); scanMode = prev;
-    if (r && r.tipo === 'placa') { addRecord(r); document.getElementById('simplaca').value = ''; }
-    else showToast('Formato inválido: SKU LOTE UBICACION', 'error');
-  }
-  function simulateFolio() {
-    const v = document.getElementById('simFolio').value.trim() || 'SO13512';
-    setFolio(v);
-    document.getElementById('simFolio').value = '';
-  }
-  document.getElementById('simplaca').addEventListener('keydown',  e => { if(e.key==='Enter') simulateplaca(); });
-  document.getElementById('simFolio').addEventListener('keydown', e => { if(e.key==='Enter') simulateFolio(); });
-
   // ── EXPORT ────────────────────────────────────────────────
   const WEBHOOK_URL = 'https://n8nmrb.marblock.shop/webhook/5f3d84df-0d66-4ea8-a9dd-285f7e6f7dc0';
 
@@ -532,22 +552,22 @@
     const active = records.filter(r => r);
     if (!active.length) return;
 
+    const folio = document.getElementById('folioInput').value.trim();
+    const responsable = document.getElementById('respInput').value.trim();
+    if (!folio || !responsable) {
+      showToast('Folio SO y Responsable son obligatorios', 'error');
+      return;
+    }
+
     const payload = {
-      folio:       document.getElementById('folioInput').value || 'SIN-FOLIO',
-      responsable: document.getElementById('respInput').value  || 'SIN-NOMBRE',
-      fecha:       new Date().toLocaleDateString('es-MX'),
-      fechaISO:    new Date().toISOString(),
-      totalItems:  active.length,
-      items:       active
+      folio: folio,
+      responsable: responsable,
+      fecha: new Date().toLocaleDateString('es-MX'),
+      fechaISO: new Date().toISOString(),
+      totalItems: active.length,
+      items: active
     };
 
-    // 1️⃣ Mostrar preview JSON
-    const json = JSON.stringify(payload, null, 2);
-    const preview = document.getElementById('jsonPreview');
-    preview.textContent = json;
-    preview.style.display = preview.style.display === 'block' ? 'none' : 'block';
-
-    // 2️⃣ Enviar al webhook
     try {
       showToast('Enviando a n8n...', 'folio-ok');
       const res = await fetch(WEBHOOK_URL, {
@@ -566,7 +586,7 @@
       showToast('Error al enviar — descargando local', 'error');
       // Fallback: descarga el JSON si el webhook falla
       const a = Object.assign(document.createElement('a'), {
-        href: URL.createObjectURL(new Blob([json], { type: 'application/json' })),
+        href: URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })),
         download: payload.folio.replace(/\s/g, '_') + '_salida.json'
       });
       a.click();
