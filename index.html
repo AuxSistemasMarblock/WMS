@@ -363,7 +363,6 @@
     document.getElementById('rowCount').textContent = records.filter(r => r).length;
     showToast('✓ ' + item.sku + ' · ' + item.lote, 'success');
     setStatus('placa registrada: ' + item.sku, 'active');
-    // Ya no se envía automáticamente, ahora es manual con el botón Completar registro
   }
 
   // Botón Completar registro
@@ -441,8 +440,6 @@
     document.getElementById('rowCount').textContent = records.filter(r=>r).length;
     showToast('✓ ' + item.sku + ' · ' + item.lote, 'success');
     setStatus('placa registrada: ' + item.sku, 'active');
-    // Enviar automáticamente al completar registro
-    exportJSON();
   }
 
   function deleteRow(btn, idx) {
