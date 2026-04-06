@@ -776,7 +776,216 @@ td {
 }
 
 /* ─────────────────────────────────────────────────────────
-   RESPONSIVE
+   PANTALLA DE LOGIN
+   ───────────────────────────────────────────────────────── */
+
+.login-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    background: linear-gradient(135deg, var(--accent2) 0%, var(--accent) 100%);
+    padding: 20px;
+}
+
+.login-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 40px;
+    width: 100%;
+    max-width: 400px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.login-header {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.login-header img {
+    margin-bottom: 16px;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.login-header h1 {
+    font-size: 1.8rem;
+    font-weight: 700;
+    margin-bottom: 4px;
+    color: var(--text);
+}
+
+.login-header p {
+    font-size: 0.85rem;
+    color: var(--muted);
+    font-weight: 500;
+}
+
+.login-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.form-group label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: 0.02em;
+}
+
+.form-group input {
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 0.9rem;
+    transition: border-color 0.15s, background 0.15s;
+}
+
+.form-group input:focus {
+    outline: none;
+    border-color: var(--accent);
+    background: var(--surface);
+}
+
+.login-footer {
+    text-align: center;
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+}
+
+.login-footer p {
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin: 4px 0;
+}
+
+/* ─────────────────────────────────────────────────────────
+   HEADER CON INFO DE USUARIO
+   ───────────────────────────────────────────────────────── */
+
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.user-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.user-details {
+    text-align: right;
+}
+
+.user-name {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #fff;
+}
+
+.user-meta {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.7);
+    font-family: 'IBM Plex Mono', monospace;
+}
+
+/* ─────────────────────────────────────────────────────────
+   SELECT DINÁMICO DE IFs
+   ───────────────────────────────────────────────────────── */
+
+#ifSelect {
+    padding: 10px 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: border-color 0.15s;
+}
+
+#ifSelect:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+#ifSelect option {
+    background: var(--surface);
+    color: var(--text);
+    padding: 8px;
+}
+
+/* ─────────────────────────────────────────────────────────
+   CANVAS DE FIRMA (Para próxima fase)
+   ───────────────────────────────────────────────────────── */
+
+.signature-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.signature-modal.active {
+    display: flex;
+}
+
+.signature-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    max-width: 500px;
+    width: 100%;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.signature-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 16px;
+    color: var(--text);
+}
+
+.signature-canvas {
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    display: block;
+    background: var(--bg);
+    cursor: crosshair;
+    margin-bottom: 14px;
+}
+
+.signature-actions {
+    display: flex;
+    gap: 10px;
+}
+
+/* ─────────────────────────────────────────────────────────
+   RESPONSIVE - Actualizado para login
    ───────────────────────────────────────────────────────── */
 
 @media (max-width: 600px) {
@@ -791,5 +1000,22 @@ td {
     .btn {
         padding: 9px 14px;
         font-size: 0.8rem;
+    }
+
+    .login-card {
+        padding: 32px 20px;
+    }
+
+    .header-right {
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .user-details {
+        text-align: center;
+    }
+
+    .user-meta {
+        font-size: 0.7rem;
     }
 }

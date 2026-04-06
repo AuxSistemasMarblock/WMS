@@ -8,8 +8,8 @@
   <!-- Favicon -->
   <link rel="icon" href="images/logo_ico.png" type="image/png" />
 
-  <!-- Bibliotecas externas -->
-  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <!-- Librería de firma electrónica -->
+  <script src="https://cdn.jsdelivr.net/npm/signature_pad@3.0.0/signature_pad.umd.js"></script>
 
   <!-- Fuentes -->
   <link
@@ -23,35 +23,94 @@
 </head>
 <body>
 
+<!-- PANTALLA DE LOGIN -->
+<div id="loginContainer" class="login-container">
+  <div class="login-card">
+    <div class="login-header">
+      <img src="images/logo.png" alt="Logo Empresa" style="height:40px; width:auto; border-radius:8px;"/>
+      <h1>WMS Scanner</h1>
+      <p>Sistema de Gestión de Almacén</p>
+    </div>
+
+    <form id="loginForm" onsubmit="handleLogin(event)" class="login-form">
+      <div class="form-group">
+        <label for="loginEmail">Email</label>
+        <input
+          id="loginEmail"
+          type="email"
+          placeholder="usuario@marblock.com"
+          required
+        />
+      </div>
+
+      <div class="form-group">
+        <label for="loginPassword">Contraseña</label>
+        <input
+          id="loginPassword"
+          type="password"
+          placeholder="••••••••"
+          required
+        />
+      </div>
+
+      <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">
+        Iniciar sesión
+      </button>
+    </form>
+
+    <div class="login-footer">
+      <p>Sistema seguro de autenticación</p>
+      <p style="font-size: 0.85rem; color: var(--gray-6);">v2.0 con firmas electrónicas</p>
+    </div>
+  </div>
+</div>
+
+<!-- APLICACIÓN PRINCIPAL (OCULTA HASTA LOGIN) -->
+<div id="mainApp" style="display: none;">
+
 <header>
   <div class="logo">
     <img src="images/logo.png" alt="Logo Empresa" style="height:30px; width:auto; border-radius:6px; padding:2px;"/>
-    <!-- <div class="logo-icon"> ...SVG... </div> -->
     WMS · SCANNER
+  </div>
+  <div class="header-right">
+    <div class="user-info">
+      <div class="user-details">
+        <div class="user-name" id="currentUserName">Usuario</div>
+        <div class="user-meta">
+          <span id="currentUserLocation">Ubicación</span> •
+          <span id="currentUserRole">Rol</span>
+        </div>
+      </div>
+      <button class="btn btn-ghost" onclick="handleLogout()" title="Cerrar sesión">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 13l4 4m0-4l-4 4M16 3v8"/></svg>
+        Logout
+      </button>
+    </div>
   </div>
   <span class="badge">SALIDAS v2.0</span>
 </header>
 
 <main>
 
-  <!-- FOLIO BAR -->
+  <!-- FOLIO BAR - Dinámico desde NetSuite -->
   <div class="folio-bar">
-    <label>Folio SO</label>
+    <label>Instrucción de Fabricación (IF)</label>
     <div class="folio-input-wrap">
-      <input id="folioInput" type="text" placeholder="Escanea QR de IF" />
-      <svg class="folio-qr-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
-        <rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>
-      </svg>
+      <select id="ifSelect" onchange="handleIFSelect(event)" style="width: 100%;">
+        <option value="">-- Selecciona una IF --</option>
+      </select>
+      <button class="btn btn-ghost" onclick="reloadIFs()" title="Recargar IFs desde NetSuite">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+        </svg>
+      </button>
     </div>
-    <div class="folio-badge" id="folioBadge">
+    <div class="folio-badge" id="ifBadge" style="display: none;">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-      <span id="folioBadgeText">–</span>
-      <button onclick="clearFolio()" title="Limpiar">✕</button>
-    </div>
-    <label>Responsable</label>
-    <div class="folio-input-wrap">
-      <input id="respInput" type="text" placeholder="Nombre completo" />
+      <span id="ifBadgeText">–</span>
+      <button onclick="clearIF()" title="Limpiar">✕</button>
     </div>
   </div>
 
@@ -109,7 +168,7 @@
         <span class="count-badge" id="rowCount">0</span>
       </div>
       <div class="table-actions">
-        <button class="btn btn-primary" id="btnCompletar" onclick="completarRegistro()">
+        <button class="btn btn-primary" id="btnCompletar" onclick="startSignatureCapture()">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="20 6 9 17 4 12"/></svg>
           Completar registro
         </button>
@@ -143,16 +202,37 @@
     <!-- jsonPreview eliminado para producción -->
   </div>
 
-<div id="toast"></div>
+<!-- MODAL DE FIRMA ELECTRÓNICA -->
+<div class="signature-modal" id="signatureModal">
+  <div class="signature-card">
+    <h3 class="signature-title" id="signatureTitle">Obtener firma</h3>
+    <canvas id="signatureCanvas" class="signature-canvas" width="450" height="200"></canvas>
+    <div class="signature-actions">
+      <button class="btn btn-ghost" onclick="clearSignature()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6h16zM10 11v6M14 11v6"/></svg>
+        Limpiar
+      </button>
+      <button class="btn btn-primary" onclick="submitSignature()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="20 6 9 17 4 12"/></svg>
+        Confirmar firma
+      </button>
+    </div>
+  </div>
+</div>
+
+</div><!-- cierre de mainApp -->
 
 <!-- Scripts modulares -->
 <script src="js/utils.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/netsuite-client.js"></script>
+<script src="js/signatures.js"></script>
 <script src="js/qr-parser.js"></script>
 <script src="js/webhook.js"></script>
 <script src="js/table.js"></script>
 <script src="js/scanner.js"></script>
 <script src="js/app.js"></script>
-</body>
-</html>
 </body>
 </html>
