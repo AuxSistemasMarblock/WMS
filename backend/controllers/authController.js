@@ -2,6 +2,9 @@ const jwt = require('jsonwebtoken');
 const bcryptjs = require('bcryptjs');
 const supabase = require('../config/supabase');
 
+/**
+ * Login: Autentica usuario con email y contraseña
+ */
 const login = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -11,34 +14,41 @@ const login = async (req, res) => {
     }
 
     // Buscar usuario en Supabase
-    const { data: usuarios, error: queryError } = await supabase
+    const { data: usuario, error: queryError } = await supabase
       .from('usuarios')
-      .select('*, ubicaciones(id, nombre, netsuite_id, codigo)')
+      .select('*')
       .eq('email', email.toLowerCase())
       .single();
 
-    if (queryError || !usuarios) {
+    if (queryError || !usuario) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    // Validar contraseña
-    const passwordMatch = await bcryptjs.compare(password, usuarios.password_hash);
+    // Validar contraseña contra hash bcrypt
+    const passwordMatch = await bcryptjs.compare(password, usuario.password_hash);
     if (!passwordMatch) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    if (!usuarios.activo) {
+    if (!usuario.activo) {
       return res.status(403).json({ error: 'User is inactive' });
     }
 
-    // Generar JWT
+    // Obtener ubicacion del usuario
+    const { data: ubicacion } = await supabase
+      .from('ubicaciones')
+      .select('id, nombre')
+      .eq('id', usuario.ubicacion_id)
+      .single();
+
+    // Generar JWT token
     const token = jwt.sign(
       {
-        id: usuarios.id,
-        email: usuarios.email,
-        nombre: usuarios.nombre_completo,
-        ubicacion: usuarios.ubicaciones,
-        cargo: usuarios.cargo
+        id: usuario.id,
+        email: usuario.email,
+        nombre: usuario.nombre_completo,
+        cargo: usuario.cargo,
+        ubicacion_id: usuario.ubicacion_id
       },
       process.env.JWT_SECRET,
       { expiresIn: '24h' }
@@ -47,26 +57,86 @@ const login = async (req, res) => {
     res.json({
       token,
       user: {
-        id: usuarios.id,
-        nombre: usuarios.nombre_completo,
-        email: usuarios.email,
-        cargo: usuarios.cargo,
-        ubicacion: usuarios.ubicaciones
+        id: usuario.id,
+        nombre: usuario.nombre_completo,
+        email: usuario.email,
+        cargo: usuario.cargo,
+        ubicacion: ubicacion || { id: usuario.ubicacion_id, nombre: 'Unknown' }
       }
     });
   } catch (error) {
     console.error('Login error:', error);
-    res.status(500).json({ error: 'Login failed', details: error.message });
+    res.status(500).json({ error: 'Login failed' });
   }
 };
 
+/**
+ * Register: Crea nuevo usuario con hash bcrypt automático
+ */
+const register = async (req, res) => {
+  try {
+    const { email, password, nombre_completo, ubicacion_id, cargo } = req.body;
+
+    // Validar campos requeridos
+    if (!email || !password || !nombre_completo || !ubicacion_id || !cargo) {
+      return res.status(400).json({ error: 'All fields are required' });
+    }
+
+    // Validar que ubicacion existe
+    const { data: ubicacion, error: ubError } = await supabase
+      .from('ubicaciones')
+      .select('id')
+      .eq('id', ubicacion_id)
+      .single();
+
+    if (ubError || !ubicacion) {
+      return res.status(400).json({ error: 'Invalid location ID' });
+    }
+
+    // Generar hash bcrypt de la contraseña
+    const password_hash = await bcryptjs.hash(password, 10);
+
+    // Insertar usuario en Supabase
+    const { data: newUser, error: insertError } = await supabase
+      .from('usuarios')
+      .insert([
+        {
+          email: email.toLowerCase(),
+          password_hash,
+          nombre_completo,
+          ubicacion_id,
+          cargo,
+          activo: true
+        }
+      ])
+      .select('id, email, nombre_completo, cargo')
+      .single();
+
+    if (insertError) {
+      console.error('Insert error:', insertError);
+      return res.status(400).json({ error: insertError.message });
+    }
+
+    res.status(201).json({
+      message: 'User created successfully',
+      user: newUser
+    });
+  } catch (error) {
+    console.error('Register error:', error);
+    res.status(500).json({ error: 'Registration failed' });
+  }
+};
+
+/**
+ * Get user: Obtiene usuario actual desde token JWT
+ */
 const getUser = async (req, res) => {
   try {
     const userId = req.user.id;
 
     const { data: usuario, error } = await supabase
       .from('usuarios')
-      .select('*, ubicaciones(id, nombre, netsuite_id, codigo)')
+      .select('*')
       .eq('id', userId)
       .single();
 
@@ -74,13 +144,20 @@ const getUser = async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
+    // Obtener ubicacion
+    const { data: ubicacion } = await supabase
+      .from('ubicaciones')
+      .select('id, nombre')
+      .eq('id', usuario.ubicacion_id)
+      .single();
+
     res.json({
       user: {
         id: usuario.id,
         nombre: usuario.nombre_completo,
         email: usuario.email,
         cargo: usuario.cargo,
-        ubicacion: usuario.ubicaciones
+        ubicacion: ubicacion || { id: usuario.ubicacion_id, nombre: 'Unknown' }
       }
     });
   } catch (error) {
@@ -89,9 +166,31 @@ const getUser = async (req, res) => {
   }
 };
 
+/**
+ * Logout: Invalida sesión en cliente
+ */
 const logout = (req, res) => {
-  // JWT es stateless, logout solo ocurre en cliente
   res.json({ message: 'Logged out successfully' });
 };
 
-module.exports = { login, getUser, logout };
+/**
+ * Generate hash: Genera hash bcrypt (SOLO PARA TESTING)
+ */
+const generateHash = async (req, res) => {
+  try {
+    const { password } = req.body;
+    if (!password) {
+      return res.status(400).json({ error: 'Password is required' });
+    }
+    const hash = await bcryptjs.hash(password, 10);
+    res.json({
+      password,
+      hash,
+      length: hash.length
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+module.exports = { login, register, getUser, logout, generateHash };

@@ -10,22 +10,7 @@ let records = [];
  * @returns {boolean} True si son válidos
  */
 function validateRequiredFields() {
-    const folio = document.getElementById('folioInput').value.trim();
-    const responsable = document.getElementById('respInput').value.trim();
-
-    if (!folio) {
-        showToast('El campo Folio SO es obligatorio', 'error');
-        document.getElementById('folioInput').focus();
-        return false;
-    }
-
-    if (!responsable) {
-        showToast('El campo Responsable es obligatorio', 'error');
-        document.getElementById('respInput').focus();
-        return false;
-    }
-
-    return true;
+    return true; // Sin validaciones, agregar directo
 }
 
 /**

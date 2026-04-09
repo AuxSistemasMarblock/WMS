@@ -1019,3 +1019,52 @@ td {
         font-size: 0.7rem;
     }
 }
+
+/* ─────────────────────────────────────────────────────────
+   TOAST NOTIFICATIONS
+   ───────────────────────────────────────────────────────── */
+
+.toast {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    background: var(--gray-8);
+    color: var(--text);
+    padding: 14px 16px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    z-index: 9999;
+    max-width: 300px;
+    border-left: 4px solid var(--gray-6);
+}
+
+.toast.show {
+    opacity: 1;
+}
+
+.toast.success {
+    border-left-color: var(--success, #10b981);
+    background: rgba(16, 185, 129, 0.1);
+    color: var(--success, #10b981);
+}
+
+.toast.error {
+    border-left-color: var(--error, #ef4444);
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--error, #ef4444);
+}
+
+.toast.info {
+    border-left-color: var(--accent, #3b82f6);
+    background: rgba(59, 130, 246, 0.1);
+    color: var(--accent, #3b82f6);
+}
+
+.toast.folio-ok {
+    border-left-color: var(--success, #10b981);
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--success, #10b981);
+}

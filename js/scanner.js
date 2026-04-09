@@ -1,6 +1,7 @@
 /**
  * WMS · Escáner QR
  * Inicialización, captura y procesamiento de códigos QR
+ * SOLO PLACAS
  */
 
 let scanner = null;
@@ -14,23 +15,19 @@ let lastTime = 0;
  */
 function handleScan(text) {
     const now = Date.now();
-    // Evita duplicados dentro de 2 segundos
-    if (text === lastCode && now - lastTime < 2000) return;
+    // Evita duplicados dentro de 3 segundos
+    if (text === lastCode && now - lastTime < 3000) return;
     lastCode = text;
     lastTime = now;
 
-    const result = parseQR(text, scanMode);
+    const result = parseQR(text, 'placa');
     if (!result) {
         showToast('QR no reconocido (formato inválido)', 'error');
         return;
     }
 
-    if (result.tipo === 'folio') {
-        setFolio(result.valor);
-        setMode('placa'); // Vuelve a modo placa automáticamente
-    } else {
-        addRecord(result);
-    }
+    // Solo placas
+    addRecord(result);
 }
 
 /**

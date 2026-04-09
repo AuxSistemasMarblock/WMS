@@ -6,7 +6,7 @@ services:
     ports:
       - "3001:3001"
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=development
       - PORT=3001
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
@@ -15,15 +15,13 @@ services:
       - NETSUITE_ACCOUNT_ID=${NETSUITE_ACCOUNT_ID}
       - NETSUITE_CLIENT_ID=${NETSUITE_CLIENT_ID}
       - NETSUITE_CLIENT_SECRET=${NETSUITE_CLIENT_SECRET}
-    depends_on:
-      - wms-scanner
 
-  wms-scanner:
+  wms-frontend:
     build: .
-    container_name: scanner-app
+    container_name: wms-frontend
     restart: always
     ports:
-      - "80"
+      - "80:80"
     environment:
       - BACKEND_URL=http://wms-backend:3001
     depends_on:

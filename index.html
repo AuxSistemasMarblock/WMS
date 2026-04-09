@@ -11,6 +11,9 @@
   <!-- Librería de firma electrónica -->
   <script src="https://cdn.jsdelivr.net/npm/signature_pad@3.0.0/signature_pad.umd.js"></script>
 
+  <!-- Librería de lectura QR -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.4/html5-qrcode.min.js"></script>
+
   <!-- Fuentes -->
   <link
     href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600;700&display=swap"
@@ -22,6 +25,9 @@
   <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body>
+
+<!-- Toast Notification -->
+<div id="toast" class="toast"></div>
 
 <!-- PANTALLA DE LOGIN -->
 <div id="loginContainer" class="login-container">
@@ -114,14 +120,9 @@
     </div>
   </div>
 
-  <!-- MODO TOGGLE -->
-  <div class="mode-toggle">
-    <button class="mode-btn active-placa" id="btnModeplaca" onclick="setMode('placa')">
-      📦 Escanear placa
-    </button>
-    <button class="mode-btn" id="btnModeFolio" onclick="setMode('folio')">
-      📋 Capturar Folio &nbsp;·&nbsp; QR de IF
-    </button>
+  <!-- ESCANEO DE PLACAS -->
+  <div style="text-align: center; padding: 10px; margin: 10px 0; font-weight: bold; color: #333;">
+    📦 Escanea las placas para agregarlas
   </div>
 
   <!-- SCANNER -->
