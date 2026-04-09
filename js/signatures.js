@@ -13,18 +13,23 @@ let currentSignatureType = null;
  */
 function initSignaturePad() {
   const canvas = document.getElementById('signatureCanvas');
+  if (!canvas) {
+    console.error('❌ Canvas no encontrado');
+    return;
+  }
 
-  // Ajustar tamaño del canvas
-  const rect = canvas.getBoundingClientRect();
-  canvas.width = rect.width * window.devicePixelRatio;
-  canvas.height = rect.height * window.devicePixelRatio;
-  const ctx = canvas.getContext('2d');
-  ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+  console.log('✅ Canvas encontrado:', canvas);
+  console.log('📏 Dimensiones canvas rect:', canvas.getBoundingClientRect());
 
   signaturePad = new SignaturePad(canvas, {
-    backgroundColor: 'rgb(var(--bg-rgb))',
-    penColor: 'rgb(var(--accent-rgb))'
+    backgroundColor: '#ffffff',
+    penColor: '#4285f4',
+    minWidth: 1,
+    maxWidth: 3,
+    throttle: 10
   });
+
+  console.log('✅ SignaturePad inicializado:', signaturePad);
 }
 
 /**
@@ -103,6 +108,9 @@ async function captureNextSignature() {
 
   // Limpiar canvas
   clearSignature();
+
+  // Inicializar SignaturePad
+  initSignaturePad();
 
   // Mostrar modal
   document.getElementById('signatureModal').classList.add('active');
