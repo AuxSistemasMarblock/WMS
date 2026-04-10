@@ -33,6 +33,7 @@ const netsuiteRestletClient = axios.create({
 /**
  * Crear instancia de OAuth 1.0a
  * Configurado con HMAC-SHA256 como en Postman
+ * Incluye REALM de NetSuite para validar firma
  */
 const oauth = new OAuth({
   consumer: {
@@ -40,6 +41,7 @@ const oauth = new OAuth({
     secret: config.netsuite.clientSecret
   },
   signature_method: 'HMAC-SHA256',
+  realm: config.netsuite.realm, // Agregar REALM (sandbox o production)
   hash_function(base_string, key) {
     return crypto
       .createHmac('sha256', key)
