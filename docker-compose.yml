@@ -3,25 +3,17 @@ services:
     build: ./backend
     container_name: wms-backend
     restart: always
+    env_file:
+      - .env
     ports:
       - "3001:3001"
-    environment:
-      - NODE_ENV=development
-      - PORT=3001
-      - SUPABASE_URL=${SUPABASE_URL}
-      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
-      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
-      - JWT_SECRET=${JWT_SECRET}
-      - NETSUITE_ACCOUNT_ID=${NETSUITE_ACCOUNT_ID}
-      - NETSUITE_CLIENT_ID=${NETSUITE_CLIENT_ID}
-      - NETSUITE_CLIENT_SECRET=${NETSUITE_CLIENT_SECRET}
 
   wms-frontend:
     build: .
     container_name: wms-frontend
     restart: always
     ports:
-      - "80:80"
+      - "8080:80"
     environment:
       - BACKEND_URL=http://wms-backend:3001
     depends_on:
