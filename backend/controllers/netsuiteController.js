@@ -1,7 +1,7 @@
 const supabase = require('../config/supabase');
 const netsuiteClient = require('../config/netsuiteAuth');
+const netsuiteRestletClient = require('../config/netsuiteRestlet');
 const config = require('../config/environments');
-const axios = require('axios');
 
 /**
  * Obtener IFs disponibles para una ubicación
@@ -87,14 +87,13 @@ async function uploadFileToNetSuite(fileBuffer, fileName, parentFolderId) {
       folder_id: parentFolderId
     };
 
-    // POST al RESTlet con OAuth 1.0a
-    const restletUrl = 'https://9080139-sb1.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=2860&deploy=1';
+    // Construir ruta relativa del RESTlet
+    const scriptId = process.env.NETSUITE_RESTLET_SCRIPT_ID || '2860';
+    const deployId = process.env.NETSUITE_RESTLET_DEPLOY_ID || '1';
+    const restletPath = `/app/site/hosting/restlet.nl?script=${scriptId}&deploy=${deployId}`;
 
-    const response = await netsuiteClient.post(restletUrl, payload, {
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    });
+    // POST al RESTlet con OAuth 1.0a (usando cliente con interceptor)
+    const response = await netsuiteRestletClient.post(restletPath, payload);
 
     if (!response.data.success) {
       throw new Error(response.data.error || 'RESTlet returned error');
