@@ -26,94 +26,89 @@ if (missing.length > 0) {
 
 // ===== MAPEO DE UBICACIONES A IDs DE CARPETA =====
 // Estructura: ubicacion => { id: folder_id, nombre: nombre_ubicacion, firmas: {tipo => folder_id} }
-// Nota: Ubicaciones con :OUTLET comparten carpeta con ubicación principal
+// IDs leídos desde variables de entorno para facilitar cambios entre sandbox/producción
 const UBICACIONES_CARPETAS = {
-  // ===== CDMX (México D.F. y outlet comparten carpeta) =====
   'MEX': {
     id: 1,
     nombre: 'MEX',
     firmas: {
-      'auxAlmacen': 11765,     // Auxiliar de Almacén
-      'cliente': 11768,         // Cliente
-      'jefeAlmacen': 11772,     // Jefe de Almacén
-      'gerente': 11773          // Gerente de Sucursal
+      'auxAlmacen': parseInt(process.env.NETSUITE_FOLDER_MEX_AUXALMACEN || '0'),
+      'cliente': parseInt(process.env.NETSUITE_FOLDER_MEX_CLIENTE || '0'),
+      'jefeAlmacen': parseInt(process.env.NETSUITE_FOLDER_MEX_JEFE || '0'),
+      'gerente': parseInt(process.env.NETSUITE_FOLDER_MEX_GERENTE || '0')
     }
   },
   'MEX:OUTLET': {
     id: 2,
     nombre: 'MEX:OUTLET',
     firmas: {
-      'auxAlmacen': 11765,     // Mismo como MEX
-      'cliente': 11768,
-      'jefeAlmacen': 11772,
-      'gerente': 11773
+      'auxAlmacen': parseInt(process.env.NETSUITE_FOLDER_MEX_AUXALMACEN || '0'),
+      'cliente': parseInt(process.env.NETSUITE_FOLDER_MEX_CLIENTE || '0'),
+      'jefeAlmacen': parseInt(process.env.NETSUITE_FOLDER_MEX_JEFE || '0'),
+      'gerente': parseInt(process.env.NETSUITE_FOLDER_MEX_GERENTE || '0')
     }
   },
 
-  // ===== GDL (Guadalajara y outlet comparten carpeta) =====
   'GDL': {
     id: 5,
     nombre: 'GDL',
     firmas: {
-      'auxAlmacen': 11766,     // Auxiliar de Almacén
-      'cliente': 11767,         // Cliente
-      'jefeAlmacen': 11771,     // Jefe de Almacén
-      'gerente': 11774          // Gerente de Sucursal
+      'auxAlmacen': parseInt(process.env.NETSUITE_FOLDER_GDL_AUXALMACEN || '0'),
+      'cliente': parseInt(process.env.NETSUITE_FOLDER_GDL_CLIENTE || '0'),
+      'jefeAlmacen': parseInt(process.env.NETSUITE_FOLDER_GDL_JEFE || '0'),
+      'gerente': parseInt(process.env.NETSUITE_FOLDER_GDL_GERENTE || '0')
     }
   },
   'GDL:OUTLET': {
     id: 6,
     nombre: 'GDL:OUTLET',
     firmas: {
-      'auxAlmacen': 11766,     // Mismo como GDL
-      'cliente': 11767,
-      'jefeAlmacen': 11771,
-      'gerente': 11774
+      'auxAlmacen': parseInt(process.env.NETSUITE_FOLDER_GDL_AUXALMACEN || '0'),
+      'cliente': parseInt(process.env.NETSUITE_FOLDER_GDL_CLIENTE || '0'),
+      'jefeAlmacen': parseInt(process.env.NETSUITE_FOLDER_GDL_JEFE || '0'),
+      'gerente': parseInt(process.env.NETSUITE_FOLDER_GDL_GERENTE || '0')
     }
   },
 
-  // ===== MTY (Monterrey y outlet comparten carpeta) =====
   'MTY': {
     id: 3,
     nombre: 'MTY',
     firmas: {
-      'auxAlmacen': 11764,     // Auxiliar de Almacén
-      'cliente': 11769,         // Cliente
-      'jefeAlmacen': 11770,     // Jefe de Almacén
-      'gerente': 11775          // Gerente de Sucursal
+      'auxAlmacen': parseInt(process.env.NETSUITE_FOLDER_MTY_AUXALMACEN || '0'),
+      'cliente': parseInt(process.env.NETSUITE_FOLDER_MTY_CLIENTE || '0'),
+      'jefeAlmacen': parseInt(process.env.NETSUITE_FOLDER_MTY_JEFE || '0'),
+      'gerente': parseInt(process.env.NETSUITE_FOLDER_MTY_GERENTE || '0')
     }
   },
   'MTY:OUTLET': {
     id: 4,
     nombre: 'MTY:OUTLET',
     firmas: {
-      'auxAlmacen': 11764,     // Mismo como MTY
-      'cliente': 11769,
-      'jefeAlmacen': 11770,
-      'gerente': 11775
+      'auxAlmacen': parseInt(process.env.NETSUITE_FOLDER_MTY_AUXALMACEN || '0'),
+      'cliente': parseInt(process.env.NETSUITE_FOLDER_MTY_CLIENTE || '0'),
+      'jefeAlmacen': parseInt(process.env.NETSUITE_FOLDER_MTY_JEFE || '0'),
+      'gerente': parseInt(process.env.NETSUITE_FOLDER_MTY_GERENTE || '0')
     }
   },
 
-  // ===== TEMPORAL y PROYECTOS =====
-  // TODO: Proporcionar IDs de carpeta para estas ubicaciones
   'TEMPORAL': {
     id: 7,
     nombre: 'TEMPORAL',
     firmas: {
-      'auxAlmacen': null,      // TODO: Configurar IDs
-      'cliente': null,
-      'jefeAlmacen': null,
-      'gerente': null
+      'auxAlmacen': parseInt(process.env.NETSUITE_FOLDER_TEMPORAL_AUXALMACEN || '0'),
+      'cliente': parseInt(process.env.NETSUITE_FOLDER_TEMPORAL_CLIENTE || '0'),
+      'jefeAlmacen': parseInt(process.env.NETSUITE_FOLDER_TEMPORAL_JEFE || '0'),
+      'gerente': parseInt(process.env.NETSUITE_FOLDER_TEMPORAL_GERENTE || '0')
     }
   },
   'PROYECTOS': {
     id: 8,
     nombre: 'PROYECTOS',
     firmas: {
-      'auxAlmacen': null,      // TODO: Configurar IDs
-      'cliente': null,
-      'jefeAlmacen': null,
-      'gerente': null
+      'auxAlmacen': parseInt(process.env.NETSUITE_FOLDER_PROYECTOS_AUXALMACEN || '0'),
+      'cliente': parseInt(process.env.NETSUITE_FOLDER_PROYECTOS_CLIENTE || '0'),
+      'jefeAlmacen': parseInt(process.env.NETSUITE_FOLDER_PROYECTOS_JEFE || '0'),
+      'gerente': parseInt(process.env.NETSUITE_FOLDER_PROYECTOS_GERENTE || '0')
     }
   }
 };
@@ -162,14 +157,14 @@ module.exports = {
 
     // RESTlet configuration
     restlet: {
-      url: 'https://9080139-sb1.restlets.api.netsuite.com/app/site/hosting/restlet.nl',
-      scriptId: '2860',
-      deployId: '1'
+      url: process.env.NETSUITE_RESTLET_URL || 'https://9080139-sb1.restlets.api.netsuite.com/app/site/hosting/restlet.nl',
+      scriptId: process.env.NETSUITE_RESTLET_SCRIPT_ID || '2860',
+      deployId: process.env.NETSUITE_RESTLET_DEPLOY_ID || '1'
     },
 
     // Función helper para obtener URL del RESTlet
     getRestletUrl: () => {
-      return `https://9080139-sb1.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=2860&deploy=1`;
+      return process.env.NETSUITE_RESTLET_URL || 'https://9080139-sb1.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=2860&deploy=1';
     },
     fileCabinet: {
       pathPrefix: process.env.NETSUITE_FILECABINET_PATH_PREFIX || '/Firmas',
