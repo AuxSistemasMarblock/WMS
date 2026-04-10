@@ -16,6 +16,15 @@ function base64ToBuffer(base64String) {
 }
 
 /**
+ * Obtener URL del RESTlet dinámicamente desde config
+ */
+function getRestletPath() {
+  const scriptId = process.env.NETSUITE_RESTLET_SCRIPT_ID || '2860';
+  const deployId = process.env.NETSUITE_RESTLET_DEPLOY_ID || '1';
+  return `/app/site/hosting/restlet.nl?script=${scriptId}&deploy=${deployId}`;
+}
+
+/**
  * Subir archivo a NetSuite File Cabinet vía RESTlet
  *
  * @param {string} filename - Nombre del archivo (ej: IF-2026-001_cliente.png)
@@ -38,9 +47,9 @@ async function uploadFile(filename, fileContent, folderId) {
 
     console.log(`📤 Uploading: ${filename} to folder ${folderId}`);
 
-    // POST al RESTlet
+    // POST al RESTlet (dinámico desde .env)
     const response = await netsuiteRestletClient.post(
-      '/app/site/hosting/restlet.nl?script=2860&deploy=1',
+      getRestletPath(),
       payload
     );
 

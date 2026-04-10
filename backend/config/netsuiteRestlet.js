@@ -1,6 +1,7 @@
 /**
  * Cliente OAuth 1.0a para NetSuite RESTlet
  * Usa AMBAS credenciales: Client (Consumer) + Token
+ * Configurable desde .env para sandbox/producción
  */
 
 const axios = require('axios');
@@ -9,10 +10,20 @@ const crypto = require('crypto');
 const config = require('./environments');
 
 /**
+ * Extraer base URL del RESTlet URL completo
+ */
+function getRestletBaseUrl() {
+  const fullUrl = process.env.NETSUITE_RESTLET_URL || config.netsuite.getRestletUrl();
+  // Extract domain from URL (sin query params)
+  const url = new URL(fullUrl);
+  return `${url.protocol}//${url.hostname}`;
+}
+
+/**
  * Crear cliente HTTP autenticado para RESTlet
  */
 const netsuiteRestletClient = axios.create({
-  baseURL: 'https://9080139-sb1.restlets.api.netsuite.com',
+  baseURL: getRestletBaseUrl(),
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json'
@@ -21,6 +32,7 @@ const netsuiteRestletClient = axios.create({
 
 /**
  * Crear instancia de OAuth 1.0a
+ * Configurado con HMAC-SHA256 como en Postman
  */
 const oauth = new OAuth({
   consumer: {
@@ -38,10 +50,12 @@ const oauth = new OAuth({
 
 /**
  * Interceptor para firmar requests con OAuth 1.0a
+ * Agrega Authorization header con firma OAuth
  */
 netsuiteRestletClient.interceptors.request.use((request) => {
-  // Construir URL completa para firmar
-  const fullUrl = `https://9080139-sb1.restlets.api.netsuite.com${request.url}`;
+  // Construir URL completa para firmar (dinámicu desde .env)
+  const baseUrl = getRestletBaseUrl();
+  const fullUrl = `${baseUrl}${request.url}`;
 
   const authHeader = oauth.toHeader(
     oauth.authorize(
@@ -50,14 +64,16 @@ netsuiteRestletClient.interceptors.request.use((request) => {
         method: request.method.toUpperCase()
       },
       {
-        // Token credentials
+        // Token credentials (segundo par de credenciales)
         key: config.netsuite.tokenId,
         secret: config.netsuite.tokenSecret
       }
     )
   );
 
+  // Agregar Authorization header (como en Postman, no en query params)
   request.headers['Authorization'] = authHeader.Authorization;
+
   return request;
 });
 
