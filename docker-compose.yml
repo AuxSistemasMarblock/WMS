@@ -4,7 +4,7 @@ services:
     container_name: wms-backend
     restart: always
     env_file:
-      - .env
+      - backend/.env
     ports:
       - "3001:3001"
 
