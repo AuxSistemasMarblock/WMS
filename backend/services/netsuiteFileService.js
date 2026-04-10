@@ -47,16 +47,10 @@ async function uploadFile(filename, fileContent, folderId) {
 
     console.log(`📤 Uploading: ${filename} to folder ${folderId}`);
 
-    // Construir URL completa para evitar problemas con baseURL + query params
-    const fullUrl = `${process.env.NETSUITE_RESTLET_URL || 'https://9080139-sb1.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=2860&deploy=1'}`;
-
-    // POST directamente (sin usar baseURL del cliente)
+    // POST al RESTlet usando ruta relativa (interceptor maneja OAuth)
     const response = await netsuiteRestletClient.post(
-      fullUrl,
-      payload,
-      {
-        baseURL: '' // Desactivar baseURL para esta request
-      }
+      getRestletPath(),
+      payload
     );
 
     if (!response.data.success) {
