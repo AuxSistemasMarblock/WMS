@@ -20,7 +20,9 @@ app.get('/health', (req, res) => {
 
 // Rutas
 app.use('/auth', require('./routes/auth'));
+app.use('/auth/netsuite', require('./routes/oauth'));
 app.use('/netsuite', require('./routes/netsuite'));
+app.use('/firmas', require('./routes/firmas'));
 
 // Error handling
 app.use((err, req, res, next) => {
