@@ -8,10 +8,10 @@ const netsuiteRestletClient = require('../config/netsuiteRestlet');
 const config = require('../config/environments');
 
 /**
- * GET /firmas/validate
+ * GET /validate
  * Valida la configuración y credenciales antes de subir
  */
-router.get('/validate', async (req, res) => {
+router.get('/', async (req, res) => {
   const validation = {
     timestamp: new Date().toISOString(),
     checks: {},
