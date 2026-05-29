@@ -162,9 +162,21 @@ module.exports = {
       deployId: process.env.NETSUITE_RESTLET_DEPLOY_ID || '1'
     },
 
+    // Search RESTlet configuration (2217)
+    searchRestlet: {
+      url: process.env.NETSUITE_SEARCH_RESTLET_URL || 'https://9080139-sb1.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=2217&deploy=1',
+      scriptId: process.env.NETSUITE_SEARCH_RESTLET_SCRIPT_ID || '2217',
+      deployId: process.env.NETSUITE_SEARCH_RESTLET_DEPLOY_ID || '1'
+    },
+
     // Función helper para obtener URL del RESTlet
     getRestletUrl: () => {
       return process.env.NETSUITE_RESTLET_URL || 'https://9080139-sb1.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=2860&deploy=1';
+    },
+
+    // Función helper para obtener URL del Search RESTlet
+    getSearchRestletUrl: () => {
+      return process.env.NETSUITE_SEARCH_RESTLET_URL || 'https://9080139-sb1.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=2217&deploy=1';
     },
     fileCabinet: {
       pathPrefix: process.env.NETSUITE_FILECABINET_PATH_PREFIX || '/Firmas',

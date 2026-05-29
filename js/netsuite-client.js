@@ -102,11 +102,12 @@ async function submitToNetSuite(signatures) {
   try {
     showToast('Enviando datos a NetSuite...', 'info');
 
-    const payload = {
+const payload = {
       ifTranid: selectedIF.tranid,
+      ifInternalId: selectedIF.internalId,
       ubicacion_id: currentUser.ubicacion.id,
       items: records,
-      signatures: signatures // Base64 PNGs
+      signatures: signatures
     };
 
     const response = await authenticatedFetch(

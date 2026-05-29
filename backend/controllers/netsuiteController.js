@@ -1,55 +1,83 @@
 const supabase = require('../config/supabase');
+const axios = require('axios');
 const netsuiteClient = require('../config/netsuiteAuth');
 const netsuiteRestletClient = require('../config/netsuiteRestlet');
 const config = require('../config/environments');
 
+const SHARED_LOCATIONS = ['TEMPORAL', 'PROYECTOS'];
+
+function extractLocation(location) {
+  if (typeof location === 'string') return location;
+  if (location?.text) return location.text;
+  if (location?.value) return location.value;
+  return null;
+}
+
+function filterIFsByUserLocation(ifRecords, userLocationName) {
+  return ifRecords.filter(ifRecord => {
+    const ifLocation = extractLocation(ifRecord.location);
+    if (SHARED_LOCATIONS.includes(ifLocation)) return true;
+    return ifLocation === userLocationName;
+  });
+}
+
+function formatIFRecord(ifRecord) {
+  return {
+    internalId: ifRecord.id,
+    tranid: ifRecord.tranid,
+    description: ifRecord.memo || ifRecord.description || '',
+    location: ifRecord.location,
+    status: ifRecord.shipstatus,
+    date: ifRecord.trandate
+  };
+}
+
 /**
- * Obtener IFs disponibles para una ubicación
- * Ejecuta búsqueda guardada en NetSuite
+ * Obtener IFs disponibles para la ubicación del usuario
+ * Ejecuta búsqueda guardada en NetSuite (customsearch3434)
  */
 const getIFs = async (req, res) => {
   try {
-    const { ubicacion_id } = req.query;
+    const userUbicacionId = req.user.ubicacion_id;
 
-    if (!ubicacion_id) {
-      return res.status(400).json({ error: 'ubicacion_id is required' });
-    }
-
-    // Obtener datos de ubicación
     const { data: ubicacion, error: ubError } = await supabase
       .from('ubicaciones')
-      .select('*')
-      .eq('id', ubicacion_id)
+      .select('id, nombre')
+      .eq('id', userUbicacionId)
       .single();
 
     if (ubError || !ubicacion) {
-      return res.status(404).json({ error: 'Location not found' });
+      return res.status(404).json({ error: 'Ubicación no encontrada' });
     }
 
-    // IMPORTANTE: Implementar búsqueda en NetSuite
-    // Por ahora retornamos estructura de ejemplo
-    // En producción, llamar makeNetsuiteRequest para ejecutar búsqueda guardada
+    const searchPayload = {
+      searchId: 'customsearch3434',
+      limit: 1000,
+      start: 0
+    };
 
-    const mockIFs = [
-      {
-        tranid: 'IF-2024-001',
-        description: 'Descripción del producto 1',
-        ubicacion: ubicacion.nombre
-      },
-      {
-        tranid: 'IF-2024-002',
-        description: 'Descripción del producto 2',
-        ubicacion: ubicacion.nombre
-      }
-    ];
+    const searchUrl = `/app/site/hosting/restlet.nl?script=${config.netsuite.searchRestlet.scriptId}&deploy=${config.netsuite.searchRestlet.deployId}`;
+
+    const searchResponse = await netsuiteRestletClient.post(searchUrl, searchPayload);
+
+    if (!searchResponse.data || !searchResponse.data.success) {
+      console.error('❌ Error del RESTlet:', searchResponse.data);
+      throw new Error(searchResponse.data?.error || searchResponse.data?.message || 'Error en búsqueda de NetSuite');
+    }
+
+    const allIFs = searchResponse.data.data || [];
+    const filteredIFs = filterIFsByUserLocation(allIFs, ubicacion.nombre);
+    const formattedIFs = filteredIFs.map(formatIFRecord);
 
     res.json({
-      ifs: mockIFs,
-      ubicacion: ubicacion.nombre
+      ifs: formattedIFs,
+      ubicacion: ubicacion.nombre,
+      total: formattedIFs.length
     });
+
   } catch (error) {
     console.error('Get IFs error:', error);
-    res.status(500).json({ error: 'Failed to get IFs', details: error.message });
+    res.status(500).json({ error: 'Error al obtener IFs', details: error.message });
   }
 };
 
@@ -122,11 +150,15 @@ async function uploadFileToNetSuite(fileBuffer, fileName, parentFolderId) {
  */
 const submitData = async (req, res) => {
   try {
-    const { ifTranid, ubicacion_id, items, signatures } = req.body;
+    const { ifTranid, ifInternalId, ubicacion_id, items, signatures } = req.body;
     const userId = req.user.id;
 
     if (!ifTranid || !ubicacion_id || !items || !signatures) {
       return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    if (!ifInternalId) {
+      return res.status(400).json({ error: 'ifInternalId es requerido para actualizar el estado' });
     }
 
     // Obtener info de ubicación
@@ -204,7 +236,7 @@ const submitData = async (req, res) => {
     }
 
     // ──────────────────────────────────────────────────────
-    // Respuesta de resultado
+    // Actualizar status del IF si todas las firmas se subieron
     // ──────────────────────────────────────────────────────
 
     const allUploaded = failedFiles.length === 0;
@@ -214,6 +246,7 @@ const submitData = async (req, res) => {
         ? 'All signatures uploaded successfully to NetSuite'
         : `${uploadedFiles.length} of ${uploadedFiles.length + failedFiles.length} signatures uploaded`,
       ifTranid,
+      ifInternalId,
       location: ubicacion.nombre,
       itemsCount: items.length,
       uploadedFiles: uploadedFiles,
@@ -225,6 +258,35 @@ const submitData = async (req, res) => {
         failureCount: failedFiles.length
       }
     };
+
+    if (allUploaded && ifInternalId) {
+      try {
+        console.log(`🔄 Intentando actualizar status del IF ${ifTranid} (ID: ${ifInternalId}) via RESTlet`);
+
+        const restletPath = `/app/site/hosting/restlet.nl?script=${config.netsuite.restlet.scriptId}&deploy=${config.netsuite.restlet.deployId}`;
+
+        const statusUpdateResponse = await netsuiteRestletClient.post(restletPath, {
+          action: 'updateIFStatus',
+          internalId: ifInternalId
+        });
+
+        console.log(`✅ Status update response:`, statusUpdateResponse.data);
+
+        if (statusUpdateResponse.data.success) {
+          console.log(`✓ Status del IF ${ifTranid} (ID: ${ifInternalId}) actualizado a "C"`);
+          response.ifStatusUpdated = true;
+        } else {
+          throw new Error(statusUpdateResponse.data.error || 'Error desconocido');
+        }
+      } catch (statusError) {
+        console.error(`❌ Error completo al actualizar status:`, {
+          message: statusError.message,
+          response: statusError.response?.data
+        });
+        response.ifStatusUpdated = false;
+        response.ifStatusError = statusError.message;
+      }
+    }
 
     console.log(`\n✓ Submission complete:`);
     console.log(`  - IF: ${ifTranid}`);
