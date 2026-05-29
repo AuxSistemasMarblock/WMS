@@ -1,7 +1,20 @@
 services:
-  wms-scanner:
+  wms-backend:
+    build: ./backend
+    container_name: wms-backend
+    restart: always
+    env_file:
+      - backend/.env
+    ports:
+      - "3001:3001"
+
+  wms-frontend:
     build: .
-    container_name: scanner-app
+    container_name: wms-frontend
     restart: always
     ports:
-      - "80"
+      - "8080:80"
+    environment:
+      - BACKEND_URL=http://wms-backend:3001
+    depends_on:
+      - wms-backend
