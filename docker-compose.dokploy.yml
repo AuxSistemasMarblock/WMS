@@ -1,0 +1,21 @@
+services:
+  wms-backend:
+    build: ./backend
+    container_name: wms-backend
+    restart: always
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+    ports:
+      - "3001:3001"
+
+  wms-frontend:
+    build: .
+    container_name: wms-frontend
+    restart: always
+    ports:
+      - "8080:80"
+    environment:
+      - BACKEND_URL=http://wms-backend:3001
+    depends_on:
+      - wms-backend
