@@ -226,6 +226,15 @@
 
 </div><!-- cierre de mainApp -->
 
+<!-- Configuración de la aplicación (inyectada antes que los módulos) -->
+<script>
+  window.APP_CONFIG = window.APP_CONFIG || {
+    BACKEND_URL: (typeof window.__BACKEND_URL__ === 'string' && window.__BACKEND_URL__)
+      ? window.__BACKEND_URL__
+      : 'https://api.marblock.shop'
+  };
+</script>
+
 <!-- Scripts modulares -->
 <script src="js/utils.js"></script>
 <script src="js/auth.js"></script>

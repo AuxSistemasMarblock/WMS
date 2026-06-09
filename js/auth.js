@@ -3,7 +3,9 @@
  * Maneja login, logout y gestión de sesión con JWT
  */
 
-const BACKEND_URL = 'http://localhost:3001'; // Cambiar según ambiente
+const BACKEND_URL = (window.APP_CONFIG && window.APP_CONFIG.BACKEND_URL)
+  ? window.APP_CONFIG.BACKEND_URL
+  : 'https://api.marblock.shop';
 let currentUser = null;
 let authToken = null;
 
