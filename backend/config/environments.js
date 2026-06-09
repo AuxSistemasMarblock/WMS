@@ -166,7 +166,8 @@ module.exports = {
     searchRestlet: {
       url: process.env.NETSUITE_SEARCH_RESTLET_URL || 'https://9080139-sb1.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=2217&deploy=1',
       scriptId: process.env.NETSUITE_SEARCH_RESTLET_SCRIPT_ID || '2217',
-      deployId: process.env.NETSUITE_SEARCH_RESTLET_DEPLOY_ID || '1'
+      deployId: process.env.NETSUITE_SEARCH_RESTLET_DEPLOY_ID || '1',
+      searchId: process.env.NETSUITE_SEARCH_ID || 'customsearch3672'
     },
 
     // Función helper para obtener URL del RESTlet

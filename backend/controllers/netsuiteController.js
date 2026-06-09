@@ -51,7 +51,7 @@ const getIFs = async (req, res) => {
     }
 
     const searchPayload = {
-      searchId: 'customsearch3434',
+      searchId: config.netsuite.searchRestlet.searchId,
       limit: 1000,
       start: 0
     };
