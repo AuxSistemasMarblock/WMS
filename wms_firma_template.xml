@@ -1,0 +1,231 @@
+<?xml version="1.0"?><!DOCTYPE pdf PUBLIC "-//big.faceless.org//report" "report-1.1.dtd">
+<pdf>
+<head>
+    <link name="NotoSans" type="font" subtype="truetype" src="${nsfont.NotoSans_Regular}" src-bold="${nsfont.NotoSans_Bold}" src-italic="${nsfont.NotoSans_Italic}" src-bolditalic="${nsfont.NotoSans_BoldItalic}" bytes="2" />
+    <#if .locale == "zh_CN">
+        <link name="NotoSansCJKsc" type="font" subtype="opentype" src="${nsfont.NotoSansCJKsc_Regular}" src-bold="${nsfont.NotoSansCJKsc_Bold}" bytes="2" />
+    <#elseif .locale == "zh_TW">
+        <link name="NotoSansCJKtc" type="font" subtype="opentype" src="${nsfont.NotoSansCJKtc_Regular}" src-bold="${nsfont.NotoSansCJKtc_Bold}" bytes="2" />
+    <#elseif .locale == "ja_JP">
+        <link name="NotoSansCJKjp" type="font" subtype="opentype" src="${nsfont.NotoSansCJKjp_Regular}" src-bold="${nsfont.NotoSansCJKjp_Bold}" bytes="2" />
+    <#elseif .locale == "ko_KR">
+        <link name="NotoSansCJKkr" type="font" subtype="opentype" src="${nsfont.NotoSansCJKkr_Regular}" src-bold="${nsfont.NotoSansCJKkr_Bold}" bytes="2" />
+    <#elseif .locale == "th_TH">
+        <link name="NotoSansThai" type="font" subtype="opentype" src="${nsfont.NotoSansThai_Regular}" src-bold="${nsfont.NotoSansThai_Bold}" bytes="2" />
+    </#if>
+    <macrolist>
+        <macro id="nlheader">
+            <table class="header" style="width: 100%; font-size: 10pt;"><tr>
+    <td rowspan="5"><table>
+      <tr>
+        <td><#if companyInformation.logoUrl?length != 0><@filecabinet nstype="image" src="${companyInformation.logoUrl}" style="float: left; margin: 5px" width="120" height="40"/> </#if></td>
+        <td><span class="nameandaddress" colspan="6">${companyInformation.addressText}</span></td>
+      </tr>
+      </table>
+    </td>
+    <td align="right"><span class="title" font-size="18 pt">Entrega de Mercancía</span></td>
+    </tr>
+    <tr>
+    <td align="right"><span class="number" font-size="10 pt">#${record.tranid}</span></td>
+    </tr>
+    <tr>
+    <td align="right">Almacén: ${record.createdfrom.location}</td>
+    </tr>
+    <tr>
+    <td align="right">${record.createdfrom}</td>
+    </tr>
+    <#assign horaActual = .now>
+    <tr>
+    <td align="right">Fecha y hora: ${record.datetoday} ${horaActual?string("HH:mm:ss")}
+    </td>
+    </tr>
+          </table>
+        </macro>
+        <macro id="nlfooter">
+  <table class="footer" style="width:100%;">
+    <tr>
+      <td style="vertical-align:bottom; text-align:left;">
+        <barcode codetype="qrcode" showtext="false"
+                 style="width:80pt; height:80pt;"
+                 value="${record.createdfrom.number}"/>
+      </td>
+      <td style="vertical-align:bottom; text-align:right;">
+        <pagenumber/> of <totalpages/>
+      </td>
+    </tr>
+  </table>
+</macro>
+    </macrolist>
+    <style type="text/css">* {
+        <#if .locale == "zh_CN">
+            font-family: NotoSans, NotoSansCJKsc, sans-serif;
+        <#elseif .locale == "zh_TW">
+            font-family: NotoSans, NotoSansCJKtc, sans-serif;
+        <#elseif .locale == "ja_JP">
+            font-family: NotoSans, NotoSansCJKjp, sans-serif;
+        <#elseif .locale == "ko_KR">
+            font-family: NotoSans, NotoSansCJKkr, sans-serif;
+        <#elseif .locale == "th_TH">
+            font-family: NotoSans, NotoSansThai, sans-serif;
+        <#else>
+            font-family: NotoSans, sans-serif;
+        </#if>
+        }
+        table {
+            font-size: 9pt;
+            table-layout: fixed;
+        }
+        th {
+            font-weight: bold;
+            font-size: 8pt;
+            vertical-align: middle;
+            padding: 5px 6px 3px;
+            background-color: #e3e3e3;
+            color: #333333;
+        }
+        td {
+            padding: 4px 6px;
+        }
+        td p { align:left }
+        b {
+            font-weight: bold;
+            color: #333333;
+        }
+        table.header td {
+            padding: 0;
+            font-size: 10pt;
+        }
+        table.footer td {
+            padding: 0;
+            font-size: 8pt;
+        }
+        table.itemtable th {
+            padding-bottom: 10px;
+            padding-top: 10px;
+        }
+        table.body td {
+            padding-top: 2px;
+        }
+        td.addressheader {
+            font-size: 8pt;
+            font-weight: bold;
+            padding-top: 6px;
+            padding-bottom: 2px;
+        }
+        td.address {
+            padding-top: 0;
+        }
+        span.title {
+            font-size: 28pt;
+        }
+        span.number {
+            font-size: 16pt;
+        }
+        span.itemname {
+            font-weight: bold;
+            line-height: 150%;
+        }
+        div.returnform {
+            width: 100%;
+            /* To ensure minimal height of return form */
+            height: 200pt;
+            page-break-inside: avoid;
+            page-break-after: avoid;
+        }
+        hr {
+            border-top: 1px dashed #d3d3d3;
+            width: 100%;
+            color: #ffffff;
+            background-color: #ffffff;
+            height: 1px;
+        }
+</style>
+</head>
+<body header="nlheader" header-height="10%" footer="nlfooter" 
+      footer-height="90pt" 
+      padding="0.5in 0.5in 0.5in 0.5in" size="Letter">
+    <table style="width: 100%; margin-top: 10px;"><tr>
+    <td class="addressheader">${salesorder.shipaddress@label}</td>
+    </tr>
+    <tr>
+    <td class="address">${salesorder.shipaddress}</td>
+    </tr></table>
+
+<table class="body" style="width: 100%; margin-top: 10px;"><tr>
+    <th>Vendedor</th>
+    <th>${salesorder.linkedtrackingnumbers@label}</th>
+    <th>${record.shipmethod@label}</th>
+    <th>${record.shipphone@label}</th>
+    </tr>
+    <tr>
+    <td>${record.createdfrom.salesrep}</td>
+    <td>${salesorder.linkedtrackingnumbers}</td>
+    <td>${record.shipmethod}</td>
+    <td>${record.shipphone}</td>
+    </tr></table>
+<#if salesorder.item?has_content>
+
+<table class="itemtable" style="width: 100%; margin-top: 10px;">
+<thead>
+    <tr>
+    <th colspan="4">Embarque</th>
+    <th colspan="10">${salesorder.item[0].item@label}</th>
+    <th colspan="3">Unidad</th>
+    <th colspan="4">Detalle de inventario test</th>
+    <th> </th>
+     <th> </th>
+    <th align="right" colspan="4">${salesorder.item[0].quantity@label}</th>
+    </tr>
+</thead>
+<#list salesorder.item as tranline><tr>
+    <td colspan="4"> </td>
+    <td colspan="10"><span class="itemname">${tranline.item}</span><br />${tranline.description}</td>
+    <td colspan="3">${tranline.units}</td>
+    <td colspan="4">${tranline.inventorydetail}</td>
+    <td> </td>
+  <td> </td>
+  
+    <td align="right" colspan="4">${tranline.quantity?string["#,###.0000;; decimalSeparator='.' groupingSeparator=','"]}</td>
+    </tr>
+    </#list></table>
+</#if>
+
+<#-- INICIO SECCIÓN FIRMA DINÁMICA -->
+<table style="margin-top: 20px; width: 100%;">
+    <tr>
+        <td align="center" style="width: 50%; padding: 8px;">
+            <p style="font-weight: bold; margin-bottom: 5px;">Aux. Almacén</p>
+            <@filecabinet nstype="image" src="${record.custbody60}" width="200" height="80"/>
+        </td>
+        <td align="center" style="width: 50%; padding: 8px;">
+            <p style="font-weight: bold; margin-bottom: 5px;">Cliente</p>
+            <@filecabinet nstype="image" src="${record.custbody61}" width="200" height="80"/>
+        </td>
+    </tr>
+    <tr>
+        <td align="center" style="width: 50%; padding: 8px;">
+            <p style="font-weight: bold; margin-bottom: 5px;">Jefe de Almacén</p>
+            <@filecabinet nstype="image" src="${record.custbody62}" width="200" height="80"/>
+        </td>
+        <td align="center" style="width: 50%; padding: 8px;">
+            <p style="font-weight: bold; margin-bottom: 5px;">Gerente</p>
+            <@filecabinet nstype="image" src="${record.custbody63}" width="200" height="80"/>
+        </td>
+    </tr>
+</table>
+<#-- FIN SECCIÓN FIRMA DINÁMICA -->
+
+<#if preferences.RETURNFORM && returnForm??>
+<hr />
+<br />
+<p style="font-size: 10px">Fecha de carga: _________________________  &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; Hora de carga: _________________________</p>
+  <br />
+  <br />
+  <p style= "font-size: 10px">Autoriza tesorería: _________________________ &nbsp; &nbsp; &nbsp; &nbsp; Entrega Almacén: _________________________ &nbsp; &nbsp; &nbsp; &nbsp; Persona que recibe: _________________________</p>
+<br />
+  <br />
+<p style="font-size: 10px">Jefe de Almacen (+ de 3 placas): _________________________  &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; Gerente Sucursal (+ de 10 placas): _________________________</p>
+
+</#if>
+</body>
+</pdf>
