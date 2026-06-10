@@ -153,6 +153,10 @@ async function submitWithSignatures() {
     const success = await submitToNetSuite(collectedSignatures);
 
     if (success) {
+      if (typeof exportJSON === 'function') {
+        await exportJSON();
+      }
+
       // Limpiar datos
       records = [];
       collectedSignatures = {};
