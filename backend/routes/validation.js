@@ -40,16 +40,12 @@ router.get('/', async (req, res) => {
       details: envVars
     };
 
-    // 2. Validar folder IDs
+    // 2. Validar folder IDs (mapa plano: 4 env vars únicas)
     const folderChecks = {
-      'MEX (auxAlmacen)': process.env.NETSUITE_FOLDER_MEX_AUXALMACEN,
-      'MEX (cliente)': process.env.NETSUITE_FOLDER_MEX_CLIENTE,
-      'MEX (jefe)': process.env.NETSUITE_FOLDER_MEX_JEFE,
-      'MEX (gerente)': process.env.NETSUITE_FOLDER_MEX_GERENTE,
-      'GDL (auxAlmacen)': process.env.NETSUITE_FOLDER_GDL_AUXALMACEN,
-      'GDL (cliente)': process.env.NETSUITE_FOLDER_GDL_CLIENTE,
-      'MTY (auxAlmacen)': process.env.NETSUITE_FOLDER_MTY_AUXALMACEN,
-      'MTY (cliente)': process.env.NETSUITE_FOLDER_MTY_CLIENTE
+      'auxAlmacen':  process.env.NETSUITE_FOLDER_AUXALMACEN,
+      'cliente':     process.env.NETSUITE_FOLDER_CLIENTE,
+      'jefeAlmacen': process.env.NETSUITE_FOLDER_JEFE,
+      'gerente':     process.env.NETSUITE_FOLDER_GERENTE
     };
 
     validation.checks.folders = folderChecks;

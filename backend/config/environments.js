@@ -24,109 +24,42 @@ if (missing.length > 0) {
   }
 }
 
-// ===== MAPEO DE UBICACIONES A IDs DE CARPETA =====
-// Estructura: ubicacion => { id: folder_id, nombre: nombre_ubicacion, firmas: {tipo => folder_id} }
-// IDs leídos desde variables de entorno para facilitar cambios entre sandbox/producción
-const UBICACIONES_CARPETAS = {
-  'MEX': {
-    id: 1,
-    nombre: 'MEX',
-    firmas: {
-      'auxAlmacen': parseInt(process.env.NETSUITE_FOLDER_MEX_AUXALMACEN || '0'),
-      'cliente': parseInt(process.env.NETSUITE_FOLDER_MEX_CLIENTE || '0'),
-      'jefeAlmacen': parseInt(process.env.NETSUITE_FOLDER_MEX_JEFE || '0'),
-      'gerente': parseInt(process.env.NETSUITE_FOLDER_MEX_GERENTE || '0')
-    }
-  },
-  'MEX:OUTLET': {
-    id: 2,
-    nombre: 'MEX:OUTLET',
-    firmas: {
-      'auxAlmacen': parseInt(process.env.NETSUITE_FOLDER_MEX_AUXALMACEN || '0'),
-      'cliente': parseInt(process.env.NETSUITE_FOLDER_MEX_CLIENTE || '0'),
-      'jefeAlmacen': parseInt(process.env.NETSUITE_FOLDER_MEX_JEFE || '0'),
-      'gerente': parseInt(process.env.NETSUITE_FOLDER_MEX_GERENTE || '0')
-    }
-  },
+// ===== MAPEO PLANO DE TIPOS DE FIRMA A IDs DE CARPETA =====
+// Estructura física del File Cabinet: /Firmas/{tipoFirma} con 4 subcarpetas
+// La ubicación del usuario NO determina el folder físico; solo filtra IFs visibles.
+// IDs leídos desde variables de entorno para facilitar cambios entre sandbox/producción.
+const FIRMAS_CARPETAS = {
+  'auxAlmacen':  parseInt(process.env.NETSUITE_FOLDER_AUXALMACEN || '0'),
+  'cliente':     parseInt(process.env.NETSUITE_FOLDER_CLIENTE    || '0'),
+  'jefeAlmacen': parseInt(process.env.NETSUITE_FOLDER_JEFE       || '0'),
+  'gerente':     parseInt(process.env.NETSUITE_FOLDER_GERENTE    || '0')
+};
 
-  'GDL': {
-    id: 5,
-    nombre: 'GDL',
-    firmas: {
-      'auxAlmacen': parseInt(process.env.NETSUITE_FOLDER_GDL_AUXALMACEN || '0'),
-      'cliente': parseInt(process.env.NETSUITE_FOLDER_GDL_CLIENTE || '0'),
-      'jefeAlmacen': parseInt(process.env.NETSUITE_FOLDER_GDL_JEFE || '0'),
-      'gerente': parseInt(process.env.NETSUITE_FOLDER_GDL_GERENTE || '0')
-    }
-  },
-  'GDL:OUTLET': {
-    id: 6,
-    nombre: 'GDL:OUTLET',
-    firmas: {
-      'auxAlmacen': parseInt(process.env.NETSUITE_FOLDER_GDL_AUXALMACEN || '0'),
-      'cliente': parseInt(process.env.NETSUITE_FOLDER_GDL_CLIENTE || '0'),
-      'jefeAlmacen': parseInt(process.env.NETSUITE_FOLDER_GDL_JEFE || '0'),
-      'gerente': parseInt(process.env.NETSUITE_FOLDER_GDL_GERENTE || '0')
-    }
-  },
-
-  'MTY': {
-    id: 3,
-    nombre: 'MTY',
-    firmas: {
-      'auxAlmacen': parseInt(process.env.NETSUITE_FOLDER_MTY_AUXALMACEN || '0'),
-      'cliente': parseInt(process.env.NETSUITE_FOLDER_MTY_CLIENTE || '0'),
-      'jefeAlmacen': parseInt(process.env.NETSUITE_FOLDER_MTY_JEFE || '0'),
-      'gerente': parseInt(process.env.NETSUITE_FOLDER_MTY_GERENTE || '0')
-    }
-  },
-  'MTY:OUTLET': {
-    id: 4,
-    nombre: 'MTY:OUTLET',
-    firmas: {
-      'auxAlmacen': parseInt(process.env.NETSUITE_FOLDER_MTY_AUXALMACEN || '0'),
-      'cliente': parseInt(process.env.NETSUITE_FOLDER_MTY_CLIENTE || '0'),
-      'jefeAlmacen': parseInt(process.env.NETSUITE_FOLDER_MTY_JEFE || '0'),
-      'gerente': parseInt(process.env.NETSUITE_FOLDER_MTY_GERENTE || '0')
-    }
-  },
-
-  'TEMPORAL': {
-    id: 7,
-    nombre: 'TEMPORAL',
-    firmas: {
-      'auxAlmacen': parseInt(process.env.NETSUITE_FOLDER_TEMPORAL_AUXALMACEN || '0'),
-      'cliente': parseInt(process.env.NETSUITE_FOLDER_TEMPORAL_CLIENTE || '0'),
-      'jefeAlmacen': parseInt(process.env.NETSUITE_FOLDER_TEMPORAL_JEFE || '0'),
-      'gerente': parseInt(process.env.NETSUITE_FOLDER_TEMPORAL_GERENTE || '0')
-    }
-  },
-  'PROYECTOS': {
-    id: 8,
-    nombre: 'PROYECTOS',
-    firmas: {
-      'auxAlmacen': parseInt(process.env.NETSUITE_FOLDER_PROYECTOS_AUXALMACEN || '0'),
-      'cliente': parseInt(process.env.NETSUITE_FOLDER_PROYECTOS_CLIENTE || '0'),
-      'jefeAlmacen': parseInt(process.env.NETSUITE_FOLDER_PROYECTOS_JEFE || '0'),
-      'gerente': parseInt(process.env.NETSUITE_FOLDER_PROYECTOS_GERENTE || '0')
-    }
-  }
+// ===== MAPA DE UBICACIONES (solo para filtrado de IFs por usuario) =====
+// No se usa para resolver folders; se conserva para que el controller pueda
+// referenciar nombres/IDs al filtrar resultados del RESTlet 2217.
+const UBICACIONES = {
+  'MEX':         { id: 1, nombre: 'MEX' },
+  'MEX:OUTLET':  { id: 2, nombre: 'MEX:OUTLET' },
+  'GDL':         { id: 5, nombre: 'GDL' },
+  'GDL:OUTLET':  { id: 6, nombre: 'GDL:OUTLET' },
+  'MTY':         { id: 3, nombre: 'MTY' },
+  'MTY:OUTLET':  { id: 4, nombre: 'MTY:OUTLET' },
+  'TEMPORAL':    { id: 7, nombre: 'TEMPORAL' },
+  'PROYECTOS':   { id: 8, nombre: 'PROYECTOS' }
 };
 
 /**
- * Obtener ID de carpeta para una firma específica
- * @param {string} ubicacion - Cod ubicación (MEX, MEX:OUTLET, GDL, etc.)
+ * Obtener ID de carpeta para un tipo de firma
+ * La ubicación no participa: el folder físico es el mismo para todas las ubicaciones.
+ *
  * @param {string} tipoFirma - Tipo (auxAlmacen, cliente, jefeAlmacen, gerente)
  * @returns {number} ID de carpeta en NetSuite
  */
-function getFolderId(ubicacion, tipoFirma) {
-  const ub = UBICACIONES_CARPETAS[ubicacion];
-  if (!ub) {
-    throw new Error(`Ubicación no soportada: ${ubicacion}`);
-  }
-  const folderId = ub.firmas[tipoFirma];
+function getFolderId(tipoFirma) {
+  const folderId = FIRMAS_CARPETAS[tipoFirma];
   if (!folderId) {
-    throw new Error(`Tipo de firma no soportado: ${tipoFirma} en ${ubicacion}`);
+    throw new Error(`Tipo de firma no soportado: ${tipoFirma}`);
   }
   return folderId;
 }
@@ -185,8 +118,10 @@ module.exports = {
       filePattern: process.env.NETSUITE_FILECABINET_FILE_PATTERN || '{IF}_{TYPE}.png'
     },
 
-    // Mapeo de carpetas
-    ubicacionesCarpetas: UBICACIONES_CARPETAS,
+    // Mapeo plano de carpetas de firma (4 tipos)
+    firmasCarpetas: FIRMAS_CARPETAS,
+    // Mapa de ubicaciones (solo para filtrado de IFs por usuario, no para folders)
+    ubicaciones: UBICACIONES,
     getFolderId
   },
 

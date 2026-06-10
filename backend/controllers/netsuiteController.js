@@ -1,6 +1,4 @@
 const supabase = require('../config/supabase');
-const axios = require('axios');
-const netsuiteClient = require('../config/netsuiteAuth');
 const netsuiteRestletClient = require('../config/netsuiteRestlet');
 const config = require('../config/environments');
 
@@ -200,8 +198,8 @@ const submitData = async (req, res) => {
       }
 
       try {
-        // Obtener ID de carpeta para esta firma en esta ubicación
-        const folderId = config.netsuite.getFolderId(ubicacion.nombre, sigType);
+        // Obtener ID de carpeta para esta firma (la ubicación no afecta el folder físico)
+        const folderId = config.netsuite.getFolderId(sigType);
 
         const fileBuffer = base64ToBuffer(sigData);
         const fileName = `${ifTranid}_${sigType}.png`; // Patrón: {IF}_{TYPE}.png
@@ -324,8 +322,8 @@ const diagnosticTest = async (req, res) => {
     const requiredVars = {
       'NETSUITE_ACCOUNT_ID': config.netsuite.accountId,
       'NETSUITE_REALM': config.netsuite.realm,
-      'NETSUITE_CONSUMER_KEY': config.netsuite.consumerKey,
-      'NETSUITE_CONSUMER_SECRET': config.netsuite.consumerSecret,
+      'NETSUITE_CLIENT_ID': config.netsuite.clientId,
+      'NETSUITE_CLIENT_SECRET': config.netsuite.clientSecret,
       'NETSUITE_TOKEN_ID': config.netsuite.tokenId,
       'NETSUITE_TOKEN_SECRET': config.netsuite.tokenSecret
     };
@@ -355,46 +353,26 @@ const diagnosticTest = async (req, res) => {
     const baseUrl = config.netsuite.baseUrl();
     console.log(`   ${baseUrl}`);
 
-    // 3. Hacer un request simple a NetSuite (sin autenticación aún, solo para debug)
-    console.log('\n3️⃣  Intentando conexión simple a NetSuite (sin OAuth)...');
+    // 3. Hacer un test dummy de upload al RESTlet 2860 (mismo path que el flujo principal)
+    console.log('\n3️⃣  Testeando RESTlet 2860 (dummy upload a folder de validación)...');
     try {
-      const simpleTest = await axios.get(`${baseUrl}/record/salesorder/1`, {
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        },
-        timeout: 5000,
-        validateStatus: () => true // Aceptar cualquier status para debug
-      });
+      const scriptId = process.env.NETSUITE_RESTLET_SCRIPT_ID || '2860';
+      const deployId = process.env.NETSUITE_RESTLET_DEPLOY_ID || '1';
+      const restletPath = `/app/site/hosting/restlet.nl?script=${scriptId}&deploy=${deployId}`;
 
-      console.log(`   Status: ${simpleTest.status}`);
-      console.log(`   Headers recibidos:`, Object.keys(simpleTest.headers));
-    } catch (simpleError) {
-      console.log(`   ⚠️  Error esperado (sin OAuth): ${simpleError.message}`);
-    }
+      const testPayload = {
+        filename: 'VALIDATION_TEST.png',
+        contents: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+        folder_id: config.netsuite.getFolderId('auxAlmacen')
+      };
 
-    // 4. Ahora hacer request con cliente autenticado
-    console.log('\n4️⃣  Intentando conexión CON OAuth 1.0a...');
-    try {
-      const response = await netsuiteClient.get(`/record/salesorder/1`, {
-        timeout: 10000,
+      const response = await netsuiteRestletClient.post(restletPath, testPayload, {
         validateStatus: () => true
       });
 
       console.log(`   ✓ Status: ${response.status}`);
-      console.log(`   ✓ Respuesta headers:`, {
-        contentType: response.headers['content-type'],
-        server: response.headers['server']
-      });
-
-      if (response.status === 401 || response.status === 403) {
-        console.log(`   ⚠️  Autenticación fallida. Status: ${response.status}`);
-        console.log(`   Error details:`, response.data);
-      } else if (response.status === 200) {
-        console.log(`   ✓ Autenticación exitosa`);
-      } else if (response.status === 404) {
-        console.log(`   ✓ Autenticación funciona (404 es OK - recurso no existe)`);
-      }
+      const authenticated = response.status !== 401 && response.status !== 403;
+      console.log(`   ${authenticated ? '✓' : '⚠️'} Autenticación ${authenticated ? 'exitosa' : 'fallida'}`);
 
       return res.status(200).json({
         test: 'COMPLETED',
@@ -402,8 +380,9 @@ const diagnosticTest = async (req, res) => {
         netsuite_connection: {
           status: response.status,
           statusText: response.statusText,
-          authenticated: response.status !== 401 && response.status !== 403,
+          authenticated,
           baseUrl: baseUrl,
+          restlet_tested: `${scriptId}/${deployId}`,
           headers_sent: {
             'Content-Type': 'application/json',
             'Accept': 'application/json',

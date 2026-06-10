@@ -79,7 +79,8 @@ async function uploadFile(filename, fileContent, folderId) {
  *
  * @param {Object} signatures - {tipo: base64String, ...}
  * @param {string} ifNumber - Número de IF (ej: IF-2026-001)
- * @param {string} location - Ubicación (ej: MEX, MTY)
+ * @param {string} [location] - Ubicación del IF (ej: MEX, MTY). No se usa para resolver el folder,
+ *   se conserva en la firma para compatibilidad con callers existentes.
  * @returns {Promise<Object>} {uploaded: [...], failed: [...]}
  */
 async function uploadSignatures(signatures, ifNumber, location) {
@@ -90,8 +91,8 @@ async function uploadSignatures(signatures, ifNumber, location) {
     if (!base64Content) continue;
 
     try {
-      // Obtener folder ID según ubicación y tipo
-      const folderId = config.netsuite.getFolderId(location, signatureType);
+      // El folder físico es el mismo para todas las ubicaciones
+      const folderId = config.netsuite.getFolderId(signatureType);
       const filename = `${ifNumber}_${signatureType}.png`;
 
       const result = await uploadFile(filename, base64Content, folderId);
