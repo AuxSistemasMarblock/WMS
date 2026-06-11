@@ -15,6 +15,18 @@
 4. [Backend](#4-backend)
 5. [Frontend](#5-frontend)
 6. [Integración con NetSuite](#6-integración-con-netsuite)
+   - 6.1 Componentes de NetSuite requeridos
+   - 6.2 Rol `WMS` — Permisos requeridos
+   - 6.3 Integration Record
+   - 6.4 Token TBA (Token-Based Authentication)
+   - 6.5 Búsqueda guardada
+   - 6.6 RESTlet de búsqueda de IFs
+   - 6.7 RESTlet de subida de archivos y status
+   - 6.8 File Cabinet — Estructura
+   - 6.9 Estrategias de autenticación
+   - 6.10 Procedimiento de regeneración tras pérdida de credenciales
+   - 6.11 UserEvent Script `wms_link_firmas.js` — Vinculación de firmas
+   - 6.12 Advanced PDF/HTML Template `wms_firma_template.xml` — Render de firmas
 7. [Despliegue (Dokploy)](#7-despliegue-dokploy)
 8. [Variables de entorno](#8-variables-de-entorno)
 9. [Runbook / Troubleshooting](#9-runbook--troubleshooting)
@@ -51,19 +63,25 @@ WMS Scanner es la herramienta móvil/web que utilizan los operadores de almacén
 Las ubicaciones determinan qué IFs ve cada usuario. Reglas:
 
 - Un usuario pertenece a **una sola ubicación** (`usuarios.ubicacion_id`).
-- Las IFs se filtran en backend por la ubicación del usuario + outlets + las ubicaciones compartidas `TEMPORAL` y `PROYECTOS` (ver `backend/controllers/netsuiteController.js:7-22`).
-- Ejemplo: un usuario en `MEX` (id=1) ve IFs de `MEX` y `MEX:OUTLET` (id=2), además de `TEMPORAL` y `PROYECTOS`.
+- **Solo las ubicaciones restringidas** (las que inician con `MEX`, `MTY` o `GDL`) filtran por usuario. **Cualquier otra ubicación** (ej: `TIJUANA`, `NUEVA SUCURSAL`, `TIENDA_PRUEBA`, etc.) es **compartida y visible para todos los usuarios**, sin importar su `ubicacion_id`.
+- Adicionalmente, las ubicaciones explícitamente listadas como `TEMPORAL`, `PROYECTOS`, `Material Transformado` y `MATRIZ` son siempre compartidas, independientemente de su prefijo.
+- **Regla de inclusión de outlets** (importante): el campo `location` de una IF en NetSuite puede llegar como string simple (`GDL`) o como string multi-valor separado por espacios o `:` (ej: `GDL:OUTLET GDL`, `MEX:OUTLET MEX`). La lógica de filtrado divide el string por `[\s:]+` y hace `includes` contra el nombre de la ubicación del usuario, por lo que un usuario de `GDL` **sí ve** IFs con location `GDL:OUTLET GDL` (porque el token `GDL` aparece), pero **no ve** IFs con location `MTY:OUTLET MTY`. Esto es intencional: cada outlet hereda las IFs de su sucursal padre, pero no las de otras sucursales.
+- Ejemplo: un usuario en `MEX` (id=1) ve IFs de `MEX` y `MEX:OUTLET` (id=2), además de **todas** las IFs con ubicaciones no restringidas (`TIJUANA`, etc.) y las explícitamente compartidas (`TEMPORAL`, `PROYECTOS`).
+- **Prefijos reservados**: `MEX`, `MTY`, `GDL` (case-sensitive, match exacto o seguidos de `:` o espacio). Ej: `GDL` ✓, `GDL:OUTLET` ✓, `GDL:OUTLET GDL` ✓, pero `GDLX` ✗, `mex` ✗ (lowercase).
 
-| ID  | Nombre        | Notas                       |
-|-----|---------------|-----------------------------|
-| 1   | `MEX`         | Principal                   |
-| 2   | `MEX:OUTLET`  | Outlet vinculado a MEX      |
-| 3   | `MTY`         | Principal                   |
-| 4   | `MTY:OUTLET`  | Outlet vinculado a MTY      |
-| 5   | `GDL`         | Principal                   |
-| 6   | `GDL:OUTLET`  | Outlet vinculado a GDL      |
-| 7   | `TEMPORAL`    | Compartida, visible para todos |
-| 8   | `PROYECTOS`   | Compartida, visible para todos |
+| ID  | Nombre        | Notas                                                                                  |
+|-----|---------------|----------------------------------------------------------------------------------------|
+| 1   | `MEX`         | Principal (prefijo restringido)                                                        |
+| 2   | `MEX:OUTLET`  | Outlet vinculado a MEX (prefijo restringido)                                          |
+| 3   | `MTY`         | Principal (prefijo restringido)                                                        |
+| 4   | `MTY:OUTLET`  | Outlet vinculado a MTY (prefijo restringido)                                          |
+| 5   | `GDL`         | Principal (prefijo restringido)                                                        |
+| 6   | `GDL:OUTLET`  | Outlet vinculado a GDL (prefijo restringido)                                          |
+| 7   | `TEMPORAL`    | Compartida, visible para todos (whitelist explícita)                                   |
+| 8   | `PROYECTOS`   | Compartida, visible para todos (whitelist explícita)                                   |
+| 9   | `Material Transformado` | Compartida, visible para todos (whitelist explícita)                          |
+| 10  | `MATRIZ`      | Compartida, visible para todos (whitelist explícita)                                   |
+| —   | *cualquier otra* | Cualquier ubicación que NO inicie con `MEX`, `MTY` o `GDL` (ej: `TIJUANA`, `TIENDA_PRUEBA`) es **compartida y visible para todos los usuarios** |
 
 ### 1.4 Diagrama de componentes
 
@@ -237,6 +255,17 @@ backend/
 └── middleware/
     └── auth.js
 ```
+
+**Archivos en la raíz del repo** (scripts/templates de NetSuite, no son parte del backend Node.js — se despliegan manualmente al File Cabinet de NetSuite):
+
+```
+./
+├── wms_link_firmas.js        # UserEvent Script → §6.11
+├── wms_firma_template.xml    # Advanced PDF/HTML Template → §6.12
+└── wms_restlet.js            # RESTlet 2860 (subida + status IF) → §6.7
+```
+
+> Estos archivos viven en la raíz porque se suben directamente a NetSuite vía `Customization → Scripting → Scripts → New` (los `.js`) o `Customization → Forms → Advanced PDF/HTML Templates` (el `.xml`). **No** son ejecutados por el backend ni servidos por nginx.
 
 ### 4.3 Entry point (`server.js`)
 
@@ -412,17 +441,32 @@ req.user = {
 
 | Función            | Línea  | Responsabilidad                                                                                                       |
 |--------------------|--------|-----------------------------------------------------------------------------------------------------------------------|
-| `getIFs`           | 39-82  | Llama al RESTlet 2217 con `searchId=customsearch3434`, filtra por ubicación del usuario, mapea a formato simplificado |
-| `submitData`       | 151-309| Por cada firma: sube PNG al File Cabinet (script 2860). Si todas OK, actualiza status del IF a `C`                   |
-| `diagnosticTest`   | 318-440| Valida env vars, prueba conexión sin OAuth y con OAuth a `/record/salesorder/1`                                      |
+| `getIFs`           | 53-96  | Llama al RESTlet 2217 con `searchId=customsearch3672`, filtra por ubicación del usuario, mapea a formato simplificado |
+| `submitData`       | 165-323| Por cada firma: sube PNG al File Cabinet (script 2860). Si todas OK, actualiza status del IF a `C`                   |
+| `diagnosticTest`   | 332-454| Valida env vars, prueba conexión sin OAuth y con OAuth a `/record/salesorder/1`                                      |
 
-**Lógica de filtrado de IFs** (`filterIFsByUserLocation`):
+**Lógica de filtrado de IFs** (`filterIFsByUserLocation`, líneas 27-36, más helpers `isSharedLocation` y `startsWithRestrictedPrefix`):
 
 ```js
-// Si la IF.location es TEMPORAL o PROYECTOS → siempre visible
-// Si no, solo si location === user.ubicacion.nombre
-// Soporta que location llegue como string, {text} o {value}
+// Constantes de configuración:
+//   RESTRICTED_LOCATION_PREFIXES = ['MEX', 'MTY', 'GDL']   // prefijos exclusivos
+//   SHARED_LOCATIONS = ['TEMPORAL', 'PROYECTOS', 'Material Transformado', 'MATRIZ']  // whitelist
+
+// Una IF es visible para el usuario si:
+//   1. Su location está en SHARED_LOCATIONS (whitelist explícita), o
+//   2. Su location NO inicia con ninguno de los prefijos restringidos (MEX, MTY, GDL)
+//      → en ese caso es una ubicación "compartida por default" y todos la ven, o
+//   3. Su location inicia con un prefijo restringido Y:
+//        (a) location === user.ubicacion.nombre (match exacto), o
+//        (b) location contiene el nombre de la ubicación del usuario como token
+//            (split por [\s:]+ → includes) — cubre "GDL:OUTLET GDL" para usuarios GDL.
+//
+// Soporta que location llegue como string, {text} o {value}.
 ```
+
+> **Importante** (ver §9.8): el caso (3b) es el fix que permite a un usuario de la sucursal padre ver las IFs de su outlet. Sin él, IFs con location `"GDL:OUTLET GDL"` no aparecían para usuarios de `GDL`.
+>
+> La regla (2) — "cualquier location que no inicie con MEX/MTY/GDL es compartida" — existe porque la lista de ubicaciones puede crecer (nuevas tiendas, proyectos especiales) y el sistema debe ser permisivo: si una nueva ubicación no se parece a ninguna restringida, todos la ven. La `whitelist` explícita (`TEMPORAL`, `PROYECTOS`) se conserva para garantizar que esos nombres siempre sean compartidos sin depender del prefijo.
 
 #### `firmasController` (`backend/controllers/firmasController.js`)
 
@@ -1023,6 +1067,15 @@ Patrones configurables vía env vars:
 
 > A la fecha, la implementación sube directamente al `folder_id` numérico, no construye paths a partir de los patrones.
 
+**Pipeline completo de firma → impresión**:
+
+1. **Frontend** (`js/signatures.js` + `js/netsuite-client.js`): captura las 4 firmas en `<canvas>` y las envía como base64 a `POST /netsuite/submit`.
+2. **Backend** (`backend/controllers/netsuiteController.js:submitData`): sube cada PNG al folder correspondiente vía RESTlet 2860, nombrando como `{IF}_{TIPO}.png`.
+3. **Script UserEvent** (`wms_link_firmas.js`, ver §6.11): se dispara en `afterSubmit` de la IF, busca los 4 archivos por patrón y vincula su `internal id` a los custom fields `custbody60/61/62/63`.
+4. **Template PDF** (`wms_firma_template.xml`, ver §6.12): al imprimir la IF, el macro `@filecabinet` lee esos custom fields y embebe las imágenes en el PDF.
+
+> Si falta alguno de los 4 pasos, la firma no aparece impresa. El más frágil es el (3) — si el script no está desplegado, los fields quedan vacíos y el template renderiza celdas vacías sin error.
+
 ### 6.9 Estrategias de autenticación
 
 | Cliente                       | Auth                  | Uso actual                                  |
@@ -1051,9 +1104,173 @@ Si NetSuite sandbox se actualiza o las credenciales TBA dejan de funcionar (esce
 
 > **Importante**: el cambio de IDs en env vars en Dokploy **no requiere commit al repo**. Solo se actualiza en el panel y se hace redeploy.
 
+### 6.11 UserEvent Script `wms_link_firmas.js` — Vinculación de firmas al IF
+
+**Propósito**: después de que el backend sube los PNG de firma al File Cabinet, este script UserEvent (desplegado sobre la **Instrucción de Fabricación / Item Fulfillment**) busca los archivos esperados por patrón y vincula su `internal id` a los `custom body fields` del IF. Así, cuando se imprime la IF con el template avanzado, las firmas aparecen embebidas.
+
+**Tipo y deployment**:
+
+| Propiedad              | Valor                                                       |
+|------------------------|-------------------------------------------------------------|
+| `@NApiVersion`         | `2.1`                                                       |
+| `@NScriptType`         | `UserEventScript`                                           |
+| Records objetivo       | `Item Fulfillment` (ejecución de orden de artículo)          |
+| Eventos                | `CREATE`, `EDIT` (no `XEDIT` para evitar doble disparo)     |
+| Función                | `afterSubmit` (nunca `beforeLoad` para evitar recursión)    |
+
+**Custom Body Fields que debe crear el administrador en NetSuite** (sobre el record `Item Fulfillment` / ejecución de orden de artículo):
+
+| Label              | ID interno    | Tipo                | Aplicar a         | Notas                                                  |
+|--------------------|---------------|---------------------|-------------------|--------------------------------------------------------|
+| `wms_Cliente`      | `custbody61`  | **Document (File)** | Item Fulfillment  | Almacena el `internal id` del PNG firmado por cliente |
+| `wms_AuxAlmacen`   | `custbody60`  | **Document (File)** | Item Fulfillment  | Almacena el `internal id` del PNG firmado por aux. almacén |
+| `wms_JefeAlmacen`  | `custbody62`  | **Document (File)** | Item Fulfillment  | Almacena el `internal id` del PNG firmado por jefe de almacén |
+| `wms_Gerente`      | `custbody63`  | **Document (File)** | Item Fulfillment  | Almacena el `internal id` del PNG firmado por gerente  |
+
+> **Creación paso a paso en NetSuite**:
+> 1. `Customization → Lists, Records, & Fields → Entity / Item / Transaction Body Fields → New`
+> 2. **Type**: `Document` (no `Image` — el template lo resuelve a través del macro `@filecabinet`).
+> 3. **Label**: el nombre legible (ej: `wms_Cliente`).
+> 4. **ID**: el internal id (NetSuite lo autopropone como `custbodyNN`; se puede dejar el sugerido o forzar uno específico).
+> 5. **Applies To**: marcar **Item Fulfillment** únicamente.
+> 6. **Store Value** = `T` (para que el `submitFields` funcione).
+> 7. Guardar y registrar el ID interno (columna **ID**) en una tabla interna — esos IDs son los que el script lee.
+> 8. Repetir para los 4 tipos de firma.
+
+**Mapeo interno del script** (en `wms_link_firmas.js:16-21`):
+
+```js
+const FIRMAS = [
+    { tipo: 'auxAlmacen',  folderId: 12848, fieldId: 'custbody60' },
+    { tipo: 'cliente',     folderId: 12849, fieldId: 'custbody61' },
+    { tipo: 'jefeAlmacen', folderId: 11772, fieldId: 'custbody62' },
+    { tipo: 'gerente',     folderId: 11773, fieldId: 'custbody63' }
+];
+```
+
+> ⚠️ **Importante**: los `folderId` (12848 / 12849 / 11772 / 11773) son los del sandbox actual. **Antes de promover a producción, ajustar a los folder IDs de producción** (los mismos definidos en `backend/config/environments.js §6.8`).
+
+**Lógica de búsqueda**:
+
+1. En `afterSubmit`, obtiene el `tranid` del IF (ej: `IF14639`).
+2. Por cada tipo de firma, busca en el File Cabinet un archivo con nombre exacto:
+   ```
+   {tranid}_{tipo}.png
+   ```
+   Ejemplo: `IF14639_auxAlmacen.png` en el folder `12848`.
+3. Compara el `internal id` encontrado contra el valor actual del custom field:
+   - Si difieren y el archivo existe, lo actualiza vía `record.submitFields`.
+   - Si no hay archivo, deja el field intacto.
+4. Hace **un solo `submitFields`** con todos los cambios para minimizar round-trips.
+5. Loggea: `Resumen` (debug, siempre) y `Firmas vinculadas` (audit, solo cuando hubo cambios).
+
+**Convenciones de nombre** (consistente con §6.8.1):
+- Patrón: `{IF}_{TIPO}.png`
+- El sub-folder depende solo del **tipo de firma**, no de la ubicación del IF (ver §6.8 — estructura plana).
+
+**Despliegue del script en NetSuite** (procedimiento manual, no automatizado):
+
+1. `Customization → Scripting → Scripts → New` → seleccionar el archivo `wms_link_firmas.js` del File Cabinet.
+2. Completar:
+   - **Name**: `WMS Link Firmas`
+   - **Owner**: rol administrador
+   - **Script Type**: User Event
+3. En la pestaña **Deployments** → `New`:
+   - **Title**: `WMS Link Firmas - Item Fulfillment`
+   - **Record Type**: `Item Fulfillment` (ejecución de orden de artículo)
+   - **Execute As Role**: `WMS` (o el rol que tenga permisos sobre custom fields, ver §6.2)
+   - **Status**: `Released`
+   - **Available Without Logging In**: `false`
+   - **Event Types**: `Create`, `Edit` (desmarcar `XEDIT` y `Delete`)
+   - **Audience**: el mismo rol `WMS` (o todos si el admin lo prefiere)
+4. **Save and Deploy**.
+5. Validar: crear/editar un IF en NetSuite, subir firmas vía el frontend WMS, y verificar que el log del script (`Customization → Scripting → Script Execution Log`) muestre:
+   ```
+   wms_link_firmas.js | CUSTOMDEPLOY1 | audit | Firmas vinculadas | {"tranid":"IF14639","custbody60":"318445","custbody61":"318446"}
+   ```
+
+> Si el log no aparece: revisar (a) que el `Status` del deployment sea `Released`, (b) que el record sea `Item Fulfillment` (no `Sales Order`), (c) que el `Execute As Role` tenga permisos sobre los custom fields.
+
+**Idempotencia**: el script es idempotente. Solo escribe si el `internal id` actual del field difiere del encontrado en File Cabinet. No hay riesgo de loop infinito porque corre en `afterSubmit` (no en `beforeLoad`) y no se dispara a sí mismo.
+
 ---
 
-## 7. Despliegue (Dokploy)
+### 6.12 Advanced PDF/HTML Template `wms_firma_template.xml` — Render de firmas en la IF
+
+**Propósito**: al imprimir la IF desde NetSuite (botón "Imprimir" o el Advanced PDF Template asignado al record), este template muestra las 4 firmas dinámicas (cliente, aux. almacén, jefe, gerente) usando el macro `@filecabinet` con los custom body fields `custbody60/61/62/63` como fuente.
+
+**Tipo de template**:
+
+| Propiedad                 | Valor                                                                                  |
+|---------------------------|----------------------------------------------------------------------------------------|
+| Tipo                      | Advanced PDF/HTML Template (BFO engine)                                                |
+| Versión del schema DTD    | `report-1.1.dtd`                                                                       |
+| Aplicado al record        | `Item Fulfillment` (ejecución de orden de artículo)                                   |
+
+**Asociación en NetSuite**:
+1. Subir el archivo `wms_firma_template.xml` al File Cabinet (recomendado: carpeta `/Templates`).
+2. `Customization → Forms → Advanced PDF/HTML Templates → Customize` (o "Set Up Template" en la IF).
+3. En el record `Item Fulfillment`, asignar este template como **Standard Template** o como template específico para Subsidiary / Location si se requiere.
+
+**Sección de firmas dinámicas** (en `wms_firma_template.xml:193-216`):
+
+```xml
+<#-- INICIO SECCIÓN FIRMA DINÁMICA -->
+<table style="margin-top: 20px; width: 100%;">
+    <tr>
+        <td align="center" style="width: 50%; padding: 8px;">
+            <p style="font-weight: bold; margin-bottom: 5px;">Aux. Almacén</p>
+            <@filecabinet nstype="image" src="${record.custbody60}" width="200" height="80"/>
+        </td>
+        <td align="center" style="width: 50%; padding: 8px;">
+            <p style="font-weight: bold; margin-bottom: 5px;">Cliente</p>
+            <@filecabinet nstype="image" src="${record.custbody61}" width="200" height="80"/>
+        </td>
+    </tr>
+    <tr>
+        <td align="center" style="width: 50%; padding: 8px;">
+            <p style="font-weight: bold; margin-bottom: 5px;">Jefe de Almacén</p>
+            <@filecabinet nstype="image" src="${record.custbody62}" width="200" height="80"/>
+        </td>
+        <td align="center" style="width: 50%; padding: 8px;">
+            <p style="font-weight: bold; margin-bottom: 5px;">Gerente</p>
+            <@filecabinet nstype="image" src="${record.custbody63}" width="200" height="80"/>
+        </td>
+    </tr>
+</table>
+<#-- FIN SECCIÓN FIRMA DINÁMICA -->
+```
+
+**Cómo funciona**:
+- `${record.custbody60}` resuelve al **internal id del file** en NetSuite (guardado por `wms_link_firmas.js`).
+- El macro BFO `<@filecabinet nstype="image" ...>` descarga el archivo, lo embebe en el PDF, y lo renderiza al tamaño solicitado (`width="200" height="80"`).
+- Si el field está vacío (no se firmó aún), la celda queda vacía sin error.
+- El layout es **2x2**: fila 1 = Aux. Almacén + Cliente; fila 2 = Jefe + Gerente. Replicable según necesidad de roles.
+
+**Requisitos para que funcione**:
+- Los 4 custom body fields `custbody60/61/62/63` deben existir y ser de tipo **Document (File)** (§6.11).
+- El archivo PNG debe existir en el File Cabinet con nombre exacto `{tranid}_{tipo}.png` (§6.8.1).
+- El `wms_link_firmas.js` debe estar desplegado y haber corrido en `afterSubmit` (§6.11).
+- El `Executed As Role` del template debe tener permiso de lectura sobre los custom fields (mismo rol `WMS`).
+
+**Invalidar caché del template** (cuando se actualiza el XML):
+1. `Customization → Forms → Advanced PDF/HTML Templates`.
+2. Buscar el template por nombre.
+3. Click → "Invalidate Cache" en el menú.
+4. Re-imprimir la IF y validar.
+
+**Limitación conocida**: el macro `@filecabinet` con file ID directo funciona porque el field es de tipo Document (File). Si en algún ambiente se cambia a tipo **Image**, la sintaxis correcta es diferente (`${record.custbody60.url}` o el helper `?url`). Mantener tipo **Document (File)** en los 4 fields.
+
+**Probar sin afectar IFs reales**:
+1. Crear una IF de prueba (puede ser vía Sales Order → Mark Picked / Packed / Shipped).
+2. Firmar las 4 firmas en el frontend WMS.
+3. Esperar a que `wms_link_firmas.js` corra (~5 segundos).
+4. En NetSuite, sobre la IF de prueba, click **Print** → seleccionar el template.
+5. Validar visualmente que las 4 firmas aparezcan. Si alguna no aparece, revisar el Script Execution Log de `wms_link_firmas.js` para confirmar que el file ID se vinculó.
+
+---
+
+
 
 ### 7.1 Provider
 
@@ -1262,6 +1479,135 @@ curl https://api.marblock.shop/health
 curl https://api.marblock.shop/validate
 ```
 
+### 9.8 IFs de Outlet no se muestran al usuario de la sucursal padre
+
+**Síntoma**: un usuario con `ubicacion_id = 5` (GDL) no ve las IFs que en NetSuite están asignadas a la ubicación `GDL:OUTLET GDL` (id=6). Captura típica: la tabla muestra `GDL:OUTLET GDL` en la columna "Ubicación" pero la IF no aparece en el dropdown de la UI.
+
+**Causa**: el campo `location` que devuelve la búsqueda guardada en NetSuite (`customsearch3672` o `customsearch3434`) es un string multi-valor como `GDL:OUTLET GDL`, donde se listan **dos** ubicaciones concatenadas (el outlet y su sucursal padre). Un comparador `===` rechazaba esas IFs para el usuario de la sucursal padre.
+
+**Fix (aplicado)**: `backend/controllers/netsuiteController.js:25-34` ahora divide el string por `[\s:]+` y hace `includes`. Un usuario de `GDL` ve tanto IFs `GDL` como IFs `GDL:OUTLET GDL`, pero **no** ve IFs `MTY:OUTLET MTY`.
+
+**Verificar el fix**:
+```bash
+# En el backend
+docker exec -it wms-backend node -e "
+const ej = [
+  {tranid:'IF14611', location:'GDL:OUTLET GDL'},
+  {tranid:'IF14609', location:'MEX'},
+  {tranid:'IF14616', location:'MTY:OUTLET MTY'},
+  {tranid:'IF_TJ',   location:'TIJUANA'},
+  {tranid:'IF_TMP',  location:'TEMPORAL'},
+  {tranid:'IF_MTZ',  location:'MATRIZ'}
+];
+const SHARED = ['TEMPORAL','PROYECTOS','Material Transformado','MATRIZ'];
+const RESTR  = ['MEX','MTY','GDL'];
+const filtra = (arr, user) => arr.filter(r => {
+  const ifLoc = r.location;
+  if (!ifLoc) return false;
+  if (SHARED.includes(ifLoc)) return true;
+  if (!RESTR.some(p => ifLoc === p || ifLoc.startsWith(p+':') || ifLoc.startsWith(p+' '))) return true;
+  if (ifLoc === user) return true;
+  return ifLoc.split(/[\s:]+/).includes(user);
+});
+console.log('GDL ve:', filtra(ej, 'GDL').map(r => r.tranid));
+console.log('MEX ve:', filtra(ej, 'MEX').map(r => r.tranid));
+console.log('MTY ve:', filtra(ej, 'MTY').map(r => r.tranid));
+"
+```
+
+Salida esperada:
+- GDL ve: `IF14611` (outlet propio), `IF_TJ`, `IF_TMP`, `IF_MTZ`
+- MEX ve: `IF14609`, `IF_TJ`, `IF_TMP`, `IF_MTZ`
+- MTY ve: `IF14616`, `IF_TJ`, `IF_TMP`, `IF_MTZ`
+
+Si alguna IF de outlet sigue sin aparecer:
+1. Confirmar que la búsqueda guardada devuelve el string multi-valor (no un objeto `{text:'GDL', value:'6'}`). Si es objeto, `extractLocation` ya lo maneja.
+2. Confirmar que el deploy tiene el último código: `git log --oneline -1 backend/controllers/netsuiteController.js`.
+3. Forzar redeploy si el código en Dokploy no incluye el fix.
+
+### 9.9 Firmas no aparecen en la IF impresa
+
+**Síntoma**: la IF se imprime sin firmas (celdas vacías), aunque las firmas se capturaron y el backend reportó éxito. O bien, las firmas aparecen como placeholder/imagen rota en el PDF.
+
+**Causa más probable**: el script `wms_link_firmas.js` (§6.11) no está desplegado o no corrió, dejando los custom fields `custbody60/61/62/63` vacíos.
+
+**Diagnóstico paso a paso**:
+
+1. **¿El script está desplegado?**
+   `Customization → Scripting → Scripts` → buscar `WMS Link Firmas`. Verificar que existe y tiene al menos un Deployment con Status = Released.
+
+2. **¿El script corrió en el último IF?**
+   `Customization → Scripting → Script Execution Log` → filtrar por `wms_link_firmas.js` y por el tranid (ej: `IF14639`). Buscar:
+   - Línea `Resumen` con `found` mostrando los tipos de firma detectados.
+   - Línea `Firmas vinculadas` con los custom fields actualizados.
+
+3. **¿El archivo PNG existe en el File Cabinet?**
+   `Documents → Files → File Cabinet` → navegar a la carpeta correspondiente (§6.8) y verificar que existe `{tranid}_{tipo}.png`.
+
+4. **¿Los custom fields existen y son tipo Document?**
+   `Customization → Lists, Records, & Fields → Transaction Body Fields` → buscar `custbody60`, `custbody61`, `custbody62`, `custbody63`. Verificar:
+   - Type = **Document** (no Image, no Free-Form Text).
+   - Applies To = Item Fulfillment (marcado).
+
+5. **¿El template está asignado y usa el macro correcto?**
+   `Customization → Forms → Advanced PDF/HTML Templates` → buscar el template → Invalidar Caché y volver a imprimir.
+
+6. **¿El campo es accesible por el rol que ejecuta el template?**
+   En el template, revisar el campo `Execute As Role`. Debe tener permiso de lectura sobre los 4 custom fields (mismo rol `WMS`).
+
+**Fix típico**: si el script no estaba desplegado, seguir el procedimiento de §6.11 (Deployments). Si el template no muestra las imágenes, verificar que el macro sea exactamente `<@filecabinet nstype="image" src="${record.custbody60}" width="200" height="80"/>` y que el `Record Type` del template sea `Item Fulfillment`.
+
+**Si el campo no se renderiza pero los logs del script muestran OK**:
+El problema está en el template. Verificar que `custbody60/61/62/63` son tipo **Document**, no Image. Si son Image, cambiar el macro a `${record.custbody60}` directo dentro de un `<img src="...">` o usar el helper `?url`. Mantener tipo Document para compatibilidad con el macro `@filecabinet`.
+
+### 9.10 `Error en línea 200, columna 27 de la plantilla` al guardar el template
+
+**Síntoma**: NetSuite rechaza guardar `wms_firma_template.xml` con error de "atributo 'src' contiene el carácter '<'".
+
+**Causa**: la URL del File Cabinet construida en FreeMarker contiene un `&` (separador de query params) que el parser XML interpreta como inicio de una entity reference no escapada, o el file object expone su `toString()` con `<` (ej: `<File:6217>`).
+
+**Fix**: usar exclusivamente el macro `<@filecabinet nstype="image" src="${record.custbody60}" .../>` (sin construir URL manualmente, sin `&amp;` ni `&#38;`). El macro maneja la resolución del file ID internamente.
+
+**Si necesitas URL explícita** (caso raro): construirla dentro de un `<#assign>` y escapar `&` como `&amp;` solo en el output final, nunca literal en el fuente XML. Alternativamente, evitar la URL y delegar al macro.
+
+### 9.11 Nueva ubicación de NetSuite no es visible para los usuarios
+
+**Síntoma**: se creó una nueva ubicación/tienda en NetSuite (ej: `TIJUANA`, `PUEBLA`, `TIENDA_PRUEBA`), se le asignaron IFs, pero los usuarios de la app WMS no las ven en el dropdown. Lo opuesto también puede ocurrir: una nueva ubicación que **debería** ser restringida termina siendo visible para todos.
+
+**Diagnóstico rápido**: revisar si el nombre de la nueva ubicación inicia con uno de los **prefijos restringidos** (`MEX`, `MTY`, `GDL`).
+
+- Si **NO** inicia con `MEX`, `MTY` o `GDL` → es tratada como **compartida por default** y todos la ven. No requiere cambio de código.
+- Si **SÍ** inicia con `MEX`, `MTY` o `GDL` → es tratada como restringida, y solo el usuario con `ubicacion.nombre` igual al de la IF la ve (más su outlet, vía token match).
+
+**Caso especial — agregar una nueva ubicación restringida** (ej: una nueva ciudad `PUEBLA` que debe ser exclusiva de usuarios `PUEBLA`):
+1. Editar `backend/controllers/netsuiteController.js:5` y agregar `'PUEBLA'` al array `RESTRICTED_LOCATION_PREFIXES`.
+2. Hacer commit, push, redeploy en Dokploy.
+3. Documentar el nuevo prefijo en §1.3.
+
+**Caso especial — agregar una ubicación a la whitelist explícita** (ej: `BODEGA_CENTRAL` debe ser visible para todos, aunque el nombre sea específico):
+1. Editar `backend/controllers/netsuiteController.js:6` y agregar `'BODEGA_CENTRAL'` al array `SHARED_LOCATIONS` (que actualmente contiene `TEMPORAL`, `PROYECTOS`, `Material Transformado`, `MATRIZ`).
+2. Hacer commit, push, redeploy.
+
+**Caso especial — la nueva ubicación se llama `MEX_NUEVO`**: por el prefijo `MEX`, será tratada como restringida. Un usuario de `MEX` no la verá porque el match requiere `MEX` exacto o como token separado (el `_` no es separador). Considerar renombrar a `MEX:NUEVO` o agregar a la whitelist.
+
+**Prueba unitaria rápida**:
+```bash
+docker exec -it wms-backend node -e "
+const SHARED = ['TEMPORAL','PROYECTOS','Material Transformado','MATRIZ'];
+const RESTR  = ['MEX','MTY','GDL'];
+const filtra = (arr, user) => arr.filter(loc => {
+  if (!loc) return false;
+  if (SHARED.includes(loc)) return true;
+  if (!RESTR.some(p => loc === p || loc.startsWith(p+':') || loc.startsWith(p+' '))) return true;
+  if (loc === user) return true;
+  return loc.split(/[\s:]+/).includes(user);
+});
+console.log(filtra(['GDL','GDL:OUTLET GDL','MEX:OUTLET MEX','TIJUANA','PUEBLA','TEMPORAL','BODEGA_CENTRAL','MATRIZ'], 'GDL'));
+"
+```
+
+Salida esperada: `['GDL', 'GDL:OUTLET GDL', 'TIJUANA', 'PUEBLA', 'TEMPORAL', 'BODEGA_CENTRAL', 'MATRIZ']` (excluye `MEX:OUTLET MEX` porque el usuario es GDL).
+
 ---
 
 ## 10. Anexos
@@ -1281,18 +1627,22 @@ curl https://api.marblock.shop/validate
 
 ### 10.2 Pendientes y mejoras
 
-| # | Pendiente                                                                                |
-|---|-------------------------------------------------------------------------------------------|
-| 1 | Persistir firmas también en `firmas` de Supabase (hoy solo en NetSuite).                  |
-| 2 | Escribir `audit_logs` desde el backend (hoy la tabla existe pero no se usa).              |
-| 3 | Eliminar `GUIA_USUARIOS.md` (no actualizado).                                             |
-| 4 | Completar flujo OAuth 2.0 en `oauthController.js` (hoy el callback no persiste el token). |
-| 5 | Considerar agregar `package-lock.json` al repo para builds reproducibles.                 |
-| 6 | Mover el `BACKEND_URL` a una variable de entorno del frontend (requiere `sub_filter` en nginx). |
-| 7 | Refactor del `WEBHOOK_URL` de n8n: está hardcodeado en `js/webhook.js:10` y no se usa.   |
-| 8 | Documentar el script 2217 (no está en el repo, solo existe en NetSuite).                  |
-| 9 | Internacionalización (i18n) — hoy todo en español-MX.                                     |
-| 10| Tests automatizados (no hay suite de tests).                                              |
+| #  | Pendiente                                                                                |
+|----|-------------------------------------------------------------------------------------------|
+| 1  | Persistir firmas también en `firmas` de Supabase (hoy solo en NetSuite).                  |
+| 2  | Escribir `audit_logs` desde el backend (hoy la tabla existe pero no se usa).              |
+| 3  | Eliminar `GUIA_USUARIOS.md` (no actualizado).                                             |
+| 4  | Completar flujo OAuth 2.0 en `oauthController.js` (hoy el callback no persiste el token). |
+| 5  | Considerar agregar `package-lock.json` al repo para builds reproducibles.                 |
+| 6  | Mover el `BACKEND_URL` a una variable de entorno del frontend (requiere `sub_filter` en nginx). |
+| 7  | Refactor del `WEBHOOK_URL` de n8n: está hardcodeado en `js/webhook.js:10` y no se usa.   |
+| 8  | Documentar el script 2217 (no está en el repo, solo existe en NetSuite).                  |
+| 9  | Internacionalización (i18n) — hoy todo en español-MX.                                     |
+| 10 | Tests automatizados (no hay suite de tests).                                              |
+| 11 | Ajustar los `folderId` (12848/12849/11772/11773) en `wms_link_firmas.js:16-21` cuando se promuevan a producción (deben coincidir con los de `backend/config/environments.js`). |
+| 12 | Agregar `wms_link_firmas.js` y `wms_firma_template.xml` al File Cabinet de producción y desplegar script + asignar template al record Item Fulfillment. |
+| 13 | Considerar extraer el helper de filtrado de location a un módulo separado (`backend/utils/locationFilter.js`) para que sea testeable aisladamente. |
+| 14 | Mover `RESTRICTED_LOCATION_PREFIXES` (`['MEX', 'MTY', 'GDL']`) y `SHARED_LOCATIONS` (`['TEMPORAL', 'PROYECTOS', 'Material Transformado', 'MATRIZ']`) a `backend/config/environments.js` (junto a `UBICACIONES`) para que sean configurables sin tocar el controller. |
 
 ### 10.3 Comandos útiles
 
@@ -1320,11 +1670,15 @@ curl -X POST https://api.marblock.shop/auth/login \
 - `css/variables.css` y `css/styles.css` — estilos; no afectan la lógica.
 - `images/` — assets visuales.
 - `lib/signature_pad.min.js` — librería externa, no inspeccionada.
-- `wms_restlet.js` — RESTlet 2860 documentado parcialmente en §6.2.
 - `docker-compose.yml` (raíz) — versión local/dev, no usada en Dokploy.
 - `backend/package-lock.json` — no se commitea (está en `.gitignore`).
+
+**Archivos documentados a profundidad** (referencias cruzadas):
+- `wms_restlet.js` → §6.7 (RESTlet 2860)
+- `wms_link_firmas.js` → §6.11 (UserEvent script)
+- `wms_firma_template.xml` → §6.12 (Advanced PDF template)
 
 ---
 
 **Mantenido por**: equipo WMS Marblock.
-**Última actualización**: junio 2026.
+**Última actualización**: junio 2026 (regla de ubicaciones compartidas por default en `netsuiteController.js:5-25`; whitelist de `Material Transformado` y `MATRIZ`; fix de filtrado de outlets; documentación de `wms_link_firmas.js` y `wms_firma_template.xml`).
