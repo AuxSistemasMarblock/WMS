@@ -2,7 +2,8 @@ const supabase = require('../config/supabase');
 const netsuiteRestletClient = require('../config/netsuiteRestlet');
 const config = require('../config/environments');
 
-const SHARED_LOCATIONS = ['TEMPORAL', 'PROYECTOS'];
+const RESTRICTED_LOCATION_PREFIXES = ['MEX', 'MTY', 'GDL'];
+const SHARED_LOCATIONS = ['TEMPORAL', 'PROYECTOS', 'Material Transformado', 'MATRIZ'];
 
 function extractLocation(location) {
   if (typeof location === 'string') return location;
@@ -11,11 +12,26 @@ function extractLocation(location) {
   return null;
 }
 
+function startsWithRestrictedPrefix(ifLocation) {
+  return RESTRICTED_LOCATION_PREFIXES.some(prefix => {
+    return ifLocation === prefix || ifLocation.startsWith(prefix + ':') || ifLocation.startsWith(prefix + ' ');
+  });
+}
+
+function isSharedLocation(ifLocation) {
+  if (!ifLocation) return false;
+  if (SHARED_LOCATIONS.includes(ifLocation)) return true;
+  return !startsWithRestrictedPrefix(ifLocation);
+}
+
 function filterIFsByUserLocation(ifRecords, userLocationName) {
   return ifRecords.filter(ifRecord => {
     const ifLocation = extractLocation(ifRecord.location);
-    if (SHARED_LOCATIONS.includes(ifLocation)) return true;
-    return ifLocation === userLocationName;
+    if (!ifLocation) return false;
+    if (isSharedLocation(ifLocation)) return true;
+    if (ifLocation === userLocationName) return true;
+    const ifLocationTokens = ifLocation.split(/[\s:]+/).filter(Boolean);
+    return ifLocationTokens.includes(userLocationName);
   });
 }
 
