@@ -3,9 +3,10 @@
  * Maneja login, logout y gestión de sesión con JWT
  */
 
-const BACKEND_URL = (window.APP_CONFIG && window.APP_CONFIG.BACKEND_URL)
-  ? window.APP_CONFIG.BACKEND_URL
-  : 'https://api.marblock.shop';
+const BACKEND_URL = window.APP_CONFIG?.BACKEND_URL;
+if (!BACKEND_URL) {
+  console.error('APP_CONFIG.BACKEND_URL no definido. Verifica js/config.js.');
+}
 let currentUser = null;
 let authToken = null;
 
@@ -39,20 +40,16 @@ async function handleLogin(event) {
 
     const data = await response.json();
 
-    // Guardar token y usuario
     authToken = data.token;
     currentUser = data.user;
 
-    // Guardar en sessionStorage (se limpia al cerrar pestaña)
     sessionStorage.setItem('authToken', authToken);
     sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
 
     showToast(`¡Bienvenido ${currentUser.nombre}!`, 'success');
 
-    // Cambiar a vista principal
     showMainView();
 
-    // Cargar IFs disponibles
     await loadIFs();
 
   } catch (error) {
