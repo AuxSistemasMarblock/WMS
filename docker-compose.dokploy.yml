@@ -38,7 +38,11 @@ services:
       - "3001:3001"
 
   wms-frontend:
-    build: .
+    build:
+      context: .
+      args:
+        BACKEND_URL: https://api.marblock.shop
+        ENVIRONMENT: production
     container_name: wms-frontend
     restart: always
     ports:
