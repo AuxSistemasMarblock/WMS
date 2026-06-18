@@ -9,12 +9,14 @@ services:
       - "3001:3001"
 
   wms-frontend:
-    build: .
+    build:
+      context: .
+      args:
+        BACKEND_URL: http://localhost:3001
+        ENVIRONMENT: development
     container_name: wms-frontend
     restart: always
     ports:
       - "8080:80"
-    environment:
-      - BACKEND_URL=http://wms-backend:3001
     depends_on:
       - wms-backend

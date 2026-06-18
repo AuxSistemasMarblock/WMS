@@ -16,8 +16,8 @@ define(['N/search', 'N/record', 'N/log'], (search, record, log) => {
     const FIRMAS = [
         { tipo: 'auxAlmacen',  folderId: 12848, fieldId: 'custbody60' },
         { tipo: 'cliente',     folderId: 12849, fieldId: 'custbody61' },
-        { tipo: 'jefeAlmacen', folderId: 11772, fieldId: 'custbody62' },
-        { tipo: 'gerente',     folderId: 11773, fieldId: 'custbody63' }
+        { tipo: 'jefeAlmacen', folderId: 12850, fieldId: 'custbody62' },
+        { tipo: 'gerente',     folderId: 12851, fieldId: 'custbody63' }
     ];
 
     const afterSubmit = (scriptContext) => {
