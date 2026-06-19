@@ -46,7 +46,7 @@ function updateIFSelect() {
   availableIFs.forEach(IF => {
     const option = document.createElement('option');
     option.value = IF.tranid;
-    option.textContent = `${IF.tranid} - ${IF.description}`;
+    option.textContent = `${IF.tranid}`;
     select.appendChild(option);
   });
 }
