@@ -59,6 +59,7 @@ function buildPayload() {
 
     return {
         ifTranid: IF.tranid,
+        ifDocOrigen: IF.sourceDoc || '',                                              // indica desde dónde se creó la IF (ej: SO14548, TO155)
         usuarioId: user.id,
         usuario: user.nombre,
         ubicacion: user.ubicacion.nombre,
