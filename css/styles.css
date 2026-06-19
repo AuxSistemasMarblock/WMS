@@ -261,6 +261,172 @@ main {
     margin-bottom: 22px;
 }
 
+.scanner-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+}
+
+.scanner-card-header h2 {
+    margin-bottom: 0;
+}
+
+.source-toggle {
+    display: inline-flex;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 2px;
+    gap: 2px;
+}
+
+.source-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 10px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.04em;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    color: var(--muted);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+
+.source-toggle-btn:hover {
+    color: var(--text);
+}
+
+.source-toggle-btn.active {
+    background: var(--accent);
+    color: #fff;
+}
+
+.gun-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 24px 18px;
+    background: linear-gradient(180deg, #0d0f14 0%, #1a1d24 100%);
+    border-radius: 10px;
+    min-height: 220px;
+    justify-content: center;
+}
+
+.gun-led-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.gun-led {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #2ecc71;
+    flex-shrink: 0;
+    transition: background 0.2s, box-shadow 0.2s;
+    box-shadow: 0 0 10px #2ecc71;
+    animation: pulse 1.2s infinite;
+}
+
+.gun-led.idle {
+    background: #555;
+    box-shadow: none;
+    animation: none;
+}
+
+.gun-led.active {
+    background: #2ecc71;
+    box-shadow: 0 0 10px #2ecc71;
+    animation: pulse 1.2s infinite;
+}
+
+.gun-led-label {
+    color: #fff;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.78rem;
+    letter-spacing: 0.04em;
+}
+
+.last-scan {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 14px 16px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+}
+
+.last-scan-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.last-scan-text {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 1.05rem;
+    color: rgba(255, 255, 255, 0.85);
+    word-break: break-all;
+    min-height: 1.4em;
+    line-height: 1.4;
+}
+
+.last-scan-text.idle {
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 0.85rem;
+}
+
+.last-scan-text.success {
+    color: #2ecc71;
+    font-weight: 600;
+}
+
+.last-scan-text.error {
+    color: var(--danger);
+}
+
+.camera-warning {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    padding: 10px 12px;
+    background: color-mix(in srgb, var(--warn) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent);
+    border-radius: 8px;
+    color: var(--warn);
+    font-size: 0.82rem;
+    line-height: 1.4;
+}
+
+.camera-warning svg {
+    flex-shrink: 0;
+}
+
+.btn-debug-toggle {
+    font-size: 0.75rem;
+    padding: 7px 12px;
+}
+
+.camera-panel {
+    position: relative;
+    background: #000;
+    border-radius: 10px;
+    overflow: hidden;
+    min-height: 220px;
+}
+
 .scanner-card h2 {
     font-size: 0.78rem;
     letter-spacing: 0.1em;
@@ -271,19 +437,17 @@ main {
 
 .scan-area {
     position: relative;
-    background: #000;
+    background: transparent;
     border-radius: 10px;
     overflow: hidden;
     min-height: 220px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
 }
 
 #reader {
     width: 100%;
     border-radius: 10px;
     overflow: hidden;
+    background: #000;
 }
 
 #reader video {
