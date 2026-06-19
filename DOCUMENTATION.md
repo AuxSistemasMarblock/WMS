@@ -4,28 +4,32 @@
 >
 > **Versión**: 2.0
 > **Stack**: Node.js 18 + Express · JavaScript vanilla (frontend) · Supabase (Postgres) · NetSuite RESTlet (OAuth 1.0a TBA) · Dokploy + Traefik (despliegue).
+>
+> **Frontend scanner**: pistola lectora de QR HID (modo principal) + cámara del dispositivo (fallback). Ver [§1.5](#15-arquitectura-del-escáner).
 
 ---
 
 ## Tabla de contenidos
 
 1. [Visión general](#1-visión-general)
+   - 1.5 Arquitectura del escáner
 2. [Arquitectura](#2-arquitectura)
 3. [Modelo de datos (Supabase)](#3-modelo-de-datos-supabase)
 4. [Backend](#4-backend)
 5. [Frontend](#5-frontend)
+   - 5.2 Estructura de archivos frontend
+   - 5.3 Carga de scripts
+   - 5.5 Estado global
+   - 5.6 Flujo de usuario
+   - 5.7 Funciones por módulo
+   - 5.8 Convenciones de UI
 6. [Integración con NetSuite](#6-integración-con-netsuite)
    - 6.1 Componentes de NetSuite requeridos
    - 6.2 Rol `WMS` — Permisos requeridos
    - 6.3 Integration Record
    - 6.4 Token TBA (Token-Based Authentication)
    - 6.5 Búsqueda guardada
-     - 6.5.3 Columnas (resultados)
-     - 6.5.4 Mapping backend → frontend
-     - 6.5.5 Equivalencia campos NetSuite → keys JSON
    - 6.6 RESTlet 2217 (`searchResults.js`) — Búsqueda de IFs
-     - 6.6.3 Comportamiento interno (RESTlet genérico)
-     - 6.6.4 Errores comunes
    - 6.7 RESTlet 2976 (`wms_restlet.js`) — Subida de archivos y status
    - 6.8 File Cabinet — Estructura
    - 6.9 Estrategias de autenticación
@@ -39,6 +43,10 @@
    - 9.12 Cómo agregar un nuevo campo al API de IFs
    - 9.13 Una columna nueva de `customsearch3672` no aparece en el frontend
    - 9.14 El modal de confirmación de salida de placas no aparece
+   - 9.15 La pistola no escanea al cargar la página
+   - 9.16 El toggle a Cámara no funciona
+   - 9.17 El LED de la pistola no se pone verde
+   - 9.18 La pistola se lee pero la placa no aparece en la tabla
 10. [Anexos](#10-anexos)
 
 ---
@@ -51,9 +59,11 @@ WMS Scanner es la herramienta móvil/web que utilizan los operadores de almacén
 
 1. **Registrarse / iniciar sesión** con credenciales corporativas.
 2. **Consultar Instrucciones de Fabricación (IF)** abiertas en su ubicación, vía búsqueda guardada en NetSuite (`customsearch3672`).
-3. **Escanear placas** mediante la cámara del dispositivo (formato QR: `SKU LOTE UBICACION`).
+3. **Escanear placas** mediante **pistola lectora de QR HID** (modo principal) o **cámara del dispositivo** (fallback). Formato QR: `SKU LOTE UBICACION` (3 tokens separados por espacio, ej: `030LTH 12572-3.16X1.96 GDL`).
 4. **Capturar firmas electrónicas** (aux. de almacén, cliente, jefe de almacén, gerente) según el número de placas.
 5. **Sincronizar con NetSuite**: subir las firmas PNG al File Cabinet, actualizar el status del IF a "Enviado" (`C`) y, opcionalmente, notificar vía webhook a n8n como fallback.
+
+> **Decisión de diseño**: la pistola HID es la fuente principal porque es 5–10x más rápida que apuntar con la cámara del celular en un entorno de almacén, y permite usar ambas manos. La cámara queda como fallback por si falla la pistola o se agotan sus baterías. Ver [§1.5](#15-arquitectura-del-escáner) para el detalle.
 
 ### 1.2 Roles y permisos
 
@@ -111,6 +121,57 @@ Las ubicaciones determinan qué IFs ve cada usuario. Reglas:
 │ (ajdnnjxnrazflk) │   tablas: usuarios, ubicaciones, firmas, audit_logs
 └──────────────────┘
 ```
+
+### 1.5 Arquitectura del escáner
+
+El componente de escaneo es crítico y tiene su propia arquitectura. Hay **dos fuentes de entrada** que terminan en una única función `handleScan(text)`:
+
+```
+                           ┌─────────────────────────────────────────┐
+                           │  js/scanner.js                          │
+                           │                                         │
+  ┌──────────────┐         │  ┌────────────────────────┐            │
+  │  Pistola QR  │──HID──►│  │ onPistolaKeydown(e)    │            │
+  │  (USB Keyboard)        │  │  • buffer + terminator │            │
+  └──────────────┘         │  │  • timing-based capture │            │
+                           │  └───────────┬────────────┘            │
+                           │              │                         │
+                           │              ▼                         │
+                           │  ┌────────────────────────┐            │
+                           │  │ handleScan(text)        │◄─────┐     │
+                           │  │  • dedupe 3s            │      │     │
+                           │  │  • parseQR              │      │     │
+                           │  │  • addRecord            │      │     │
+                           │  └───────────┬────────────┘      │     │
+                           │              │                   │     │
+                           │              ▼                   │     │
+  ┌──────────────┐         │  ┌────────────────────────┐  │     │
+  │   Cámara     │──MD───►│  │ startCamera()           │──┘     │
+  │   (fallback) │  qrcode │  │  • Html5Qrcode          │        │
+  └──────────────┘         │  │  • callback handleScan  │        │
+                           │  └────────────────────────┘        │
+                           └─────────────────────────────────────────┘
+                                              │
+                                              ▼
+                                    ┌──────────────────┐
+                                    │  js/qr-parser.js  │
+                                    │  parseQR(text)    │
+                                    └──────────────────┘
+                                              │
+                                              ▼
+                                    ┌──────────────────┐
+                                    │  js/table.js      │
+                                    │  addRecord(item)  │  → <tr> en #tableBody
+                                    └──────────────────┘
+```
+
+**¿Cómo funciona la pistola?** Una pistola lectora de QR (HID Keyboard) emite los caracteres decodificados del código como si el usuario los tipeara muy rápido, seguidos de un carácter terminador (configurable: por default `Enter`). El navegador recibe `keydown` events en el documento, los acumulamos en un buffer, y al recibir el terminador procesamos el buffer como un código único.
+
+**¿Cómo funciona la cámara?** `Html5Qrcode` (CDN) inicializa la cámara trasera del dispositivo con `facingMode: environment`, escanea frames a 10 fps, y cuando detecta un QR llama a `handleScan(decodedText)`.
+
+**¿Por qué dos fuentes?** La pistola es más rápida y práctica en almacén. La cámara es el fallback universal (cualquier dispositivo con cámara puede escanear).
+
+**Selección de fuente**: control `scanSource = 'pistola' | 'camara'`. Por default `'pistola'`. El usuario puede alternar con el toggle en el card del escáner. El listener de pistola se auto-activa al cargar la página (no requiere click). Ver [§5.7 scanner.js](#jsscannerjs) para la lógica completa.
 
 ---
 
@@ -552,50 +613,75 @@ netsuiteRestletClient.interceptors.request.use((request) => { ... });
 - **Sin build step**. JS vanilla, sin bundler, sin TypeScript.
 - Librerías externas (CDN o local):
   - `signature_pad.min.js` (local en `lib/`) — captura de firma en canvas.
-  - `html5-qrcode` (CDN: cdnjs) — escáner QR.
+  - `html5-qrcode` (CDN: cdnjs, con `defer`) — escáner QR por cámara (fallback).
 - Iconos: SVG inline.
 - Estilos: `css/variables.css` + `css/styles.css`.
+- **Cache-busting**: los scripts se sirven con `?v=N` para forzar recarga tras deploy. Incrementar `N` cuando se actualice el JS.
 
-### 5.2 Estructura
+### 5.2 Estructura de archivos frontend
 
 ```
 WMS/
-├── index.html              # Entry point, carga 9 scripts
+├── index.html              # Entry point, carga 9 scripts (con ?v=N)
+├── test-scanner.html       # Página standalone para verificar la pistola sin login
 ├── css/
-├── images/
-├── lib/signature_pad.min.js
+│   ├── variables.css       # Variables CSS (colores, fonts)
+│   └── styles.css          # Estilos completos
+├── images/                 # Assets visuales (logo, etc.)
+├── lib/
+│   └── signature_pad.min.js  # Librería de firma
 └── js/
     ├── utils.js            # showToast, setStatus, esc
     ├── auth.js             # Login, logout, restoreSession, BACKEND_URL
     ├── netsuite-client.js  # loadIFs, submitToNetSuite
     ├── signatures.js       # getRequiredSignatures, captureNextSignature
     ├── qr-parser.js        # parseQR(text, mode)
-    ├── webhook.js          # WEBHOOK_URL a n8n (FALLBACK)
+    ├── webhook.js          # WEBHOOK_URL a n8n (LEGACY / FALLBACK)
     ├── table.js            # records[], addRecord, deleteRow, clearTable
-    ├── scanner.js          # startScanner, stopScanner, handleScan
+    ├── scanner.js          # Pistola (principal) + Cámara (fallback)
     └── app.js              # initApp, scanMode
 ```
 
 ### 5.3 Carga de scripts
 
-`index.html` define `window.APP_CONFIG` con `BACKEND_URL` (default `https://api.marblock.shop`) **antes** de cargar los scripts. Luego carga en este orden estricto:
+`index.html` define `window.APP_CONFIG` con `BACKEND_URL` (default `https://api.marblock.shop`) **antes** de cargar los scripts. Luego carga en este orden estricto, **con `?v=N` para forzar cache-busting**:
+
+```html
+<script src="js/config.js?v=4"></script>
+<script src="js/utils.js?v=4"></script>
+<script src="js/auth.js?v=4"></script>
+<script src="js/netsuite-client.js?v=4"></script>
+<script src="js/signatures.js?v=4"></script>
+<script src="js/qr-parser.js?v=4"></script>
+<script src="js/webhook.js?v=4"></script>
+<script src="js/table.js?v=4"></script>
+<script src="js/scanner.js?v=4"></script>
+<script src="js/app.js?v=4"></script>
+```
+
+**Reglas del cache-busting**:
+- Cuando se actualice cualquier JS, **incrementar `N`** en TODOS los tags `<script>`.
+- El frontend sirve archivos estáticos con cache por defecto; sin `?v=N` los usuarios verían versiones viejas.
+- En local (`python -m http.server`), el cache no aplica, pero mantenemos `?v=N` para paridad con producción.
+
+**Orden y dependencias** (debe respetarse):
 
 1. `utils.js` — sin dependencias.
-2. `auth.js` — define `BACKEND_URL`, `currentUser`, `authToken`. Depende de `utils.js` (showToast).
-3. `netsuite-client.js` — depende de `auth.js` (`currentUser`, `authenticatedFetch`).
-4. `signatures.js` — depende de `auth.js`, `table.js` (`records`).
+2. `auth.js` — usa `showToast` (utils).
+3. `netsuite-client.js` — usa `currentUser`, `authenticatedFetch` (auth).
+4. `signatures.js` — usa `records` (table), `clearScanBuffer` (scanner — declarado globalmente en window).
 5. `qr-parser.js` — sin dependencias.
-6. `webhook.js` — depende de `auth.js`, `table.js`, `app.js`.
-7. `table.js` — depende de `utils.js`.
-8. `scanner.js` — depende de `utils.js`, `table.js`, `qr-parser.js`, `app.js`.
-9. `app.js` — depende de `table.js`.
+6. `webhook.js` — usa `auth`, `table`, `app`.
+7. `table.js` — usa `utils`.
+8. `scanner.js` — usa `utils`, `table` (addRecord), `qr-parser` (parseQR).
+9. `app.js` — usa `table`.
 
 > **Importante**: el orden está hardcodeado en `index.html` y debe respetarse. Refactorizar a ES Modules requeriría servidor con MIME `application/javascript` y agrega complejidad no justificada.
 
 ### 5.4 Configuración
 
 ```html
-<!-- index.html:229-237 -->
+<!-- index.html -->
 <script>
   window.APP_CONFIG = window.APP_CONFIG || {
     BACKEND_URL: (typeof window.__BACKEND_URL__ === 'string' && window.__BACKEND_URL__)
@@ -606,26 +692,45 @@ WMS/
 ```
 
 - `window.__BACKEND_URL__` puede inyectarse desde el servidor (nginx `sub_filter` o similar). Si no existe, usa el fallback público.
-- El valor se lee en `js/auth.js:6-9`.
+- El valor se lee en `js/auth.js`.
 
 ### 5.5 Estado global
 
-Todas las variables compartidas están en `window` (no en módulos):
+Todas las variables compartidas son globales (declaradas con `var` en cada script, accesible desde todos los demás). Esto evita la necesidad de ES Modules:
 
-| Variable       | Definida en          | Usada en                                |
-|----------------|----------------------|------------------------------------------|
-| `BACKEND_URL`  | `auth.js:6`          | `auth.js`, `webhook.js` (no), `netsuite-client.js` (vía `authenticatedFetch`) |
-| `currentUser`  | `auth.js:7`          | `auth.js`, `netsuite-client.js`, `webhook.js` |
-| `authToken`    | `auth.js:8`          | `auth.js` (en `authenticatedFetch`)      |
-| `availableIFs` | `netsuite-client.js:6` | `netsuite-client.js`                  |
-| `selectedIF`   | `netsuite-client.js:7` | `netsuite-client.js`, `signatures.js`, `webhook.js` |
-| `records`      | `table.js:6`         | Toda la app                              |
-| `signaturePad` | `signatures.js:6`    | `signatures.js`                          |
-| `collectedSignatures` | `signatures.js:7` | `signatures.js`                   |
-| `signatureQueue` | `signatures.js:8`  | `signatures.js`                          |
-| `currentSignatureType` | `signatures.js:9` | `signatures.js`                    |
-| `scanMode`     | `app.js:6`           | `scanner.js`                             |
-| `hasBeenSent`  | `webhook.js:11`      | `webhook.js`, `table.js`                 |
+| Variable                | Definida en              | Tipo       | Usada en                                                                  |
+|-------------------------|--------------------------|------------|---------------------------------------------------------------------------|
+| `BACKEND_URL`           | `auth.js`                | string     | `auth.js`, `netsuite-client.js` (vía `authenticatedFetch`)                |
+| `currentUser`           | `auth.js`                | object     | `auth.js`, `netsuite-client.js`, `webhook.js`                             |
+| `authToken`             | `auth.js`                | string     | `auth.js` (en `authenticatedFetch`)                                       |
+| `availableIFs`          | `netsuite-client.js`     | array      | `netsuite-client.js`                                                     |
+| `selectedIF`            | `netsuite-client.js`     | object     | `netsuite-client.js`, `signatures.js`, `webhook.js`                      |
+| `records`               | `table.js`               | array      | Toda la app                                                               |
+| `signaturePad`          | `signatures.js`          | object     | `signatures.js`                                                          |
+| `collectedSignatures`   | `signatures.js`          | object     | `signatures.js`                                                          |
+| `signatureQueue`        | `signatures.js`          | array      | `signatures.js`                                                          |
+| `currentSignatureType`  | `signatures.js`          | string     | `signatures.js`                                                          |
+| `hasBeenSent`           | `webhook.js`             | bool       | `webhook.js`, `table.js`                                                 |
+| `scanSource`            | `scanner.js`             | string     | `scanner.js` (pistola/cámara)                                             |
+| `pistolActive`          | `scanner.js`             | bool       | `scanner.js`                                                              |
+| `cameraActive`          | `scanner.js`             | bool       | `scanner.js`                                                              |
+| `scanBuffer`            | `scanner.js`             | string     | `scanner.js`                                                              |
+| `scanner`               | `scanner.js`             | Html5Qrcode | `scanner.js`                                                            |
+
+**API expuesta vía `window`** (para que los `onclick` inline en el HTML la encuentren):
+
+| Función                          | Definida en     | Para qué                                            |
+|----------------------------------|-----------------|-----------------------------------------------------|
+| `window.setScanSource(src)`      | `scanner.js`    | Alternar entre pistola y cámara                     |
+| `window.startScanner()`          | `scanner.js`    | Iniciar fuente activa                               |
+| `window.stopScanner()`           | `scanner.js`    | Detener fuente activa                               |
+| `window.clearScanBuffer()`       | `scanner.js`    | Limpiar buffer manualmente                          |
+| `window.getScannerState()`       | `scanner.js`    | Estado en tiempo real (debug desde consola)         |
+| `handleLogin`, `handleLogout`, `restoreSession` | `auth.js` | Login flow |
+| `loadIFs`, `submitToNetSuite`, `handleIFSelect`, `reloadIFs`, `clearIF` | `netsuite-client.js` | IFs |
+| `startSignatureCapture`, `askExitConfirmation`, `captureNextSignature`, `submitSignature`, `submitWithSignatures` | `signatures.js` | Firmas |
+| `addRecord`, `deleteRow`, `clearTable`, `getActiveRecords`, `renderEmpty` | `table.js` | Tabla |
+| `parseQR` | `qr-parser.js` | Parser (usado por `scanner.js`) |
 
 ### 5.6 Flujo de usuario
 
@@ -635,21 +740,28 @@ Todas las variables compartidas están en `window` (no en módulos):
 └─────┬──────┘
       │  JWT en sessionStorage
       ▼
-┌────────────┐
-│ CARGAR IFs │  loadIFs()  →  GET /netsuite/ifs  (con Bearer token)
-└─────┬──────┘
-      │  dropdown poblado con IFs filtradas
+┌────────────────┐
+│ mainApp visible │  mainApp pasa de display:none a display:block
+│ (auto-load IFs) │  loadIFs() se llama en restoreSession() si hay token
+└─────┬──────────┘
+      │
+      ▼
+┌────────────────┐
+│ PISTOLA ACTIVA  │  IIFE en scanner.js adjunta el listener de keydown
+│ (auto-arranque) │  al cargar la página. El LED se pone verde.
+└─────┬──────────┘
+      │  Usuario selecciona IF
       ▼
 ┌────────────┐
-│ SELECCIONAR│  onChange del select  →  selectedIF
-│    IF      │
+│ SELECCIONAR│  handleIFSelect(event)  →  selectedIF
+│    IF      │  Si cambia con records cargados, pide confirmación
 └─────┬──────┘
       │
       ▼
-┌────────────┐
-│  ESCANEAR  │  startScanner() + handleScan(text)  →  addRecord(parsedQR)
-│  PLACAS    │
-└─────┬──────┘
+┌────────────────┐
+│  ESCANEAR     │  Pistola: onPistolaKeydown() buffer→terminator→handleScan
+│  PLACAS       │  Cámara (si activa): Html5Qrcode callback→handleScan
+└─────┬──────────┘
       │  records[] poblado
       ▼
 ┌────────────┐
@@ -672,22 +784,23 @@ Todas las variables compartidas están en `window` (no en módulos):
 
 #### `js/utils.js`
 - `showToast(msg, type)` — notificación temporal 2.8s. `type`: `success`, `error`, `folio-ok`.
-- `setStatus(msg, type)` — actualiza línea de estado del escáner.
+- `setStatus(msg, type)` — actualiza línea de estado del escáner (`#statusText` + `#statusDot`).
 - `esc(s)` — escape HTML para evitar XSS al inyectar `sku`, `lote`, `ubicacion`.
 
 #### `js/auth.js`
 - `handleLogin(event)` — login con fetch.
 - `handleLogout()` — limpia `sessionStorage` y vuelve a vista de login.
-- `restoreSession()` — al cargar la página, si hay token en `sessionStorage` lo rehidrata.
+- `restoreSession()` — al cargar la página, si hay token en `sessionStorage` lo rehidrata. Llamado en `DOMContentLoaded`.
 - `authenticatedFetch(endpoint, options)` — wrapper que agrega `Authorization: Bearer <token>` y maneja 401 (logout forzado).
+- `showMainView()` — muestra `#mainApp`, oculta `#loginContainer`. No inicia la pistola (eso lo hace `scanner.js` automáticamente).
 
 #### `js/netsuite-client.js`
-- `loadIFs()` — GET a `/netsuite/ifs` con la ubicación del usuario. Llena `availableIFs` y el `<select>`.
-- `updateIFSelect()` — renderiza opciones del dropdown. Formato por opción: `IF14580 (SO14548)` (tranid + paréntesis con `sourceDoc`). Si la IF no tiene `sourceDoc`, muestra solo `IF14580`.
-- `handleIFSelect(event)` — al cambiar el select, guarda `selectedIF`.
-- `reloadIFs()` — recarga IFs.
+- `loadIFs()` — GET a `/netsuite/ifs`. Llena `availableIFs` y el `<select>`.
+- `updateIFSelect()` — renderiza opciones del dropdown. Formato: `IF14580 (SO14548)`.
+- `handleIFSelect(event)` — al cambiar el select, guarda `selectedIF`. **Si hay placas escaneadas y el usuario cambia de IF, pide confirmación** (no se borran automáticamente, pero advierte que esas placas no se enviarán con la nueva IF).
+- `reloadIFs()` — recarga IFs (también pide confirmación si hay placas).
 - `clearIF()` — limpia selección.
-- `submitToNetSuite(signatures)` — POST a `/netsuite/submit` con todo el payload.
+- `submitToNetSuite(signatures)` — POST a `/netsuite/submit` con `{ifTranid, ifInternalId, ubicacion_id, items, signatures}`.
 
 #### `js/signatures.js`
 - `initSignaturePad()` — instancia `new SignaturePad(canvas, ...)`.
@@ -695,34 +808,218 @@ Todas las variables compartidas están en `window` (no en módulos):
   - siempre: `auxAlmacen` y `cliente`
   - si `> 3`: `jefeAlmacen`
   - si `> 10`: `gerente`
-- `startSignatureCapture()` — valida en cascada (ver abajo) y, si todo OK, arma la cola y arranca.
-- `askExitConfirmation(count, selectedIF)` — muestra el modal de confirmación de salida de placas (`#confirmExitModal`) con la cantidad y la IF+doc origen. Devuelve `Promise<boolean>`. Solo se muestra al usuario **después** de validar que hay IF seleccionada y al menos 1 placa (ver §5.6 y §5.8).
-- `captureNextSignature()` — saca la siguiente firma de la cola y muestra el modal.
+- `startSignatureCapture()` — valida en cascada:
+  1. `records.length === 0` → toast "Escanea al menos una placa…" + return.
+  2. `!selectedIF` → toast "Selecciona una IF antes…" + return.
+  3. Llama `clearScanBuffer()` (defensivo) y muestra `#confirmExitModal`.
+- `askExitConfirmation(count, selectedIF)` — modal con "Se registrarán N placas para IF14580 (SO14548). ¿Deseas continuar?".
+- `captureNextSignature()` — saca la siguiente firma de la cola y muestra `#signatureModal`. Llama `clearScanBuffer()` antes de mostrar.
 - `clearSignature()` — limpia el canvas.
-- `submitSignature()` — toma `toDataURL('image/png')` y la guarda en `collectedSignatures`.
-- `submitWithSignatures()` — llama a `submitToNetSuite(collectedSignatures)`.
-
-**Validaciones en cascada de `startSignatureCapture()`** (orden de evaluación, todas con `showToast` y `return` — ninguna muestra el modal):
-
-1. `records.length === 0` → toast "Escanea al menos una placa antes de capturar firmas" + return.
-2. `!selectedIF` → toast "Selecciona una IF antes de completar el registro" + return.
-3. Ambas pasan → se muestra el modal de confirmación. Si el usuario cancela, return. Si confirma, sigue el flujo normal de firmas.
+- `submitSignature()` — toma `toDataURL('image/png')` y guarda en `collectedSignatures`.
+- `submitWithSignatures()` — llama a `submitToNetSuite(collectedSignatures)`. Si OK, limpia tabla y llama `clearIF()`.
 
 #### `js/qr-parser.js`
-- `parseQR(raw, mode)` — devuelve `{tipo:'placa', sku, lote, ubicacion}` si tiene 3+ partes separadas por espacio, o `{tipo:'folio', valor}` si 1 parte. Modo `folio` siempre devuelve `folio`.
+- `parseQR(raw, mode)` — devuelve `{tipo:'placa', sku, lote, ubicacion}` si tiene 3+ partes separadas por espacio, o `{tipo:'folio', valor}` si 1 parte. Modo `folio` siempre devuelve `folio`. La app solo usa modo `placa`.
 
 #### `js/table.js`
-- `addRecord(item)` — agrega a `records[]` y crea `<tr>` con `hora` en formato es-MX.
-- `deleteRow(btn, idx)` — marca como null (soft delete).
-- `clearTable()` — pide confirmación, vacía todo, llama a `unlockForResend()`.
+- `records` (array global) — todas las placas escaneadas.
+- `addRecord(item)` — agrega a `records[]` y crea `<tr>` con `hora` formato es-MX. Usa `esc()` para evitar XSS.
+- `deleteRow(btn, idx)` — marca como null (soft delete, no remueve del array).
+- `clearTable()` — pide confirmación, vacía todo, llama `unlockForResend()`.
 - `getActiveRecords()` — filtra los no eliminados.
 - `renderEmpty()` — pinta el estado vacío.
 
-#### `js/scanner.js`
-- `handleScan(text)` — dedupe de 3s, llama a `parseQR` y `addRecord`.
-- `startScanner()` — instancia `Html5Qrcode`, configura resolución 4K ideal, `facingMode: environment`, `experimentalFeatures.useBarCodeDetectorIfSupported: true`. Aplica autoenfoque continuo vía `applyConstraints`.
-- `applyFocus()` — pide `focusMode: continuous` y `focusDistance: min` al track.
-- `stopScanner()` — detiene y limpia.
+#### `js/scanner.js` (CRÍTICO — leer con atención)
+
+Este módulo es el **punto de entrada de los códigos QR** y soporta dos fuentes alternativas (pistola HID o cámara). La lógica es no trivial por los edge cases que resuelve.
+
+**Estado interno** (todas `var` globales):
+
+```js
+var scanSource = 'pistola';    // 'pistola' | 'camara'
+var pistolActive = false;       // listener de keydown adjunto?
+var cameraActive = false;       // cámara Html5Qrcode corriendo?
+var scanBuffer = '';            // buffer de caracteres acumulados
+var lastKeyTime = 0;            // para detectar timeout entre teclas
+```
+
+Constantes (en `js/scanner.js`):
+- `SCAN_TERMINATOR_KEYS = ['Enter', 'Tab', '\n', '\r']` — cualquiera de estos cierra el buffer.
+- `SCAN_MAX_LENGTH = 200` — límite de caracteres por buffer.
+- `SCAN_BUFFER_TIMEOUT = 500` (ms) — sin actividad, se descarta el buffer (anti-ruido).
+
+**API pública** (expuesta en `window`):
+- `setScanSource(src)` — alterna entre `'pistola'` y `'camara'`. Detiene la activa antes de cambiar.
+- `startPistola()` / `stopPistola()` — adjunta/remueve el listener de keydown.
+- `startCamera()` / `stopCamera()` — inicia/detiene `Html5Qrcode`.
+- `startScanner()` / `stopScanner()` — orquestadores (llaman al de la fuente activa).
+- `handleScan(text)` — entrada única para ambas fuentes: dedupe 3s, `parseQR`, `addRecord`, actualiza `#lastScanText`.
+- `clearScanBuffer()` — limpia el buffer manualmente (llamado por `signatures.js` al abrir modales).
+- `getScannerState()` — getter para debug en consola.
+
+**Flujo del modo pistola** (paso a paso, en pseudocódigo):
+
+```js
+// 1. Se adjunta el listener UNA sola vez al cargar la página (IIFE)
+//    y cada vez que el usuario cambia de Cámara → Pistola.
+
+document.addEventListener('keydown', onPistolaKeydown);
+
+function onPistolaKeydown(e) {
+    // 2. Si hay un modal abierto, descartar el buffer
+    if (isAnyModalOpen()) { scanBuffer = ''; return; }
+
+    // 3. Solo procesar si la pistola está activa
+    if (scanSource !== 'pistola' || !pistolActive) return;
+
+    // 4. Detectar el ritmo: pistola ~5-30ms entre teclas, humano ~100-300ms
+    var dt = performance.now() - lastKeyTime;
+    lastKeyTime = performance.now();
+    var isRapid = dt < 50;     // <50ms entre teclas = pistola
+    var isTerminator = SCAN_TERMINATOR_KEYS.indexOf(e.key) !== -1;
+
+    // 5. Si el target es un form field Y el tipeo es lento (humano),
+    //    dejar pasar al input normalmente y resetear el buffer
+    if (isFormField(e.target) && !isRapid && !isTerminator) {
+        scanBuffer = '';
+        return;
+    }
+
+    // 6. Si es el terminador (Enter), procesar el buffer
+    if (isTerminator) {
+        e.preventDefault();        // evita scroll
+        e.stopPropagation();        // evita que Enter active botón
+        // Blur del input/select/button con foco para evitar re-dispare
+        var active = document.activeElement;
+        if (active && active.blur && (isFocusedButton() || isFormField(active))) {
+            active.blur();
+        }
+        var cleanBuf = scanBuffer.replace(/[\r\n\t]+/g, '').trim();
+        scanBuffer = '';
+        if (cleanBuf.length > 0) handleScan(cleanBuf);
+        return;
+    }
+
+    // 7. Acumular caracteres imprimibles
+    if (e.key && e.key.length === 1) {
+        if (scanBuffer && dt > SCAN_BUFFER_TIMEOUT) scanBuffer = '';
+        scanBuffer += e.key;
+        if (scanBuffer.length > SCAN_MAX_LENGTH) scanBuffer = '';
+    }
+}
+```
+
+**Decisiones de diseño críticas**:
+
+1. **Auto-arranque al cargar la página**: el listener se adjunta en la IIFE al final del archivo, sin esperar a que el usuario haga click. Esto simplifica la UX (el operador solo abre la app y empieza a escanear).
+
+2. **Detección pistola vs humano por timing**: si el `keydown` viene de un `<input>` o `<select>` y el intervalo entre teclas es >50ms, asumimos que es tipeo humano y dejamos pasar al campo. Si es <50ms, asumimos que es la pistola y capturamos los caracteres aunque vengan de un campo de formulario. Esto resuelve el bug histórico donde escanear con foco en el `<select>` de IF no funcionaba (ver §9.15).
+
+3. **Blur del elemento con foco al recibir Enter**: cuando llega el terminador, hacemos `blur()` del input/select/button que tiene foco. Esto evita que (a) caracteres basura queden visibles en un input, y (b) el Enter re-dispare un botón (como pasaba con el botón "Probar scan" en versiones anteriores).
+
+4. **`preventDefault` SIEMPRE en terminador**: aunque el buffer esté vacío, prevenimos el default del Enter. Esto evita el comportamiento por defecto del navegador de hacer scroll cuando se presiona Enter sin target específico.
+
+5. **Helper `isFormField`**: retorna `true` para `INPUT`, `TEXTAREA`, `SELECT` o elementos `contentEditable`. NO incluye `BUTTON` (los botones no aceptan texto).
+
+6. **Helper `isFocusedButton`**: retorna `true` si `document.activeElement.tagName === 'BUTTON'`. Usado para blurear el botón con foco al recibir el terminador.
+
+7. **Helper `isAnyModalOpen`**: detecta si `.confirm-modal.active` o `.signature-modal.active` están abiertos. Si lo están, descartamos el buffer y retornamos (los modales manejan su propio input).
+
+**Flujo del modo cámara** (modo fallback, opcional):
+
+```js
+function startCamera() {
+    if (cameraActive) return;
+    if (typeof Html5Qrcode === 'undefined') {
+        showToast('No se pudo cargar la librería de cámara', 'error');
+        return;
+    }
+    scanner = new Html5Qrcode('reader');
+    var config = {
+        fps: 10,
+        qrbox: { width: 220, height: 220 },  // mínimo 50px
+        aspectRatio: 1.7778,
+        experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+        videoConstraints: {
+            facingMode: { ideal: 'environment' },  // cámara trasera
+            width: { ideal: 1920, min: 640 },
+            height: { ideal: 1080, min: 480 }
+        }
+    };
+    scanner.start({ facingMode: 'environment' }, config, handleScan, () => {})
+        .then(() => { cameraActive = true; ... })
+        .catch((err) => { showToast('No se pudo acceder a la cámara', 'error'); });
+}
+```
+
+**Función unificadora `handleScan(text)`**:
+
+```js
+function handleScan(text) {
+    var now = Date.now();
+    if (text === lastCode && (now - lastTime) < 3000) {
+        console.log('[WMS-SCAN] dedupe');
+        return;  // dedupe: mismo código dentro de 3s
+    }
+    lastCode = text;
+    lastTime = now;
+
+    var result;
+    try { result = parseQR(text, 'placa'); }
+    catch (e) { console.error('[WMS-SCAN] ERROR en parseQR:', e); return; }
+
+    if (!result) {
+        showToast('QR no reconocido (formato inválido)', 'error');
+        updateLastScanPreview({ error: 'Formato inválido: ' + text.substring(0, 40) });
+        return;
+    }
+
+    if (typeof addRecord === 'function') {
+        try { addRecord(result); }
+        catch (e) {
+            console.error('[WMS-SCAN] ERROR en addRecord:', e);
+            showToast('Error al agregar registro: ' + e.message, 'error');
+        }
+    } else {
+        console.error('[WMS-SCAN] ERROR: addRecord no está definida. ¿Se cargó table.js?');
+    }
+    updateLastScanPreview({ ok: result });
+}
+```
+
+**Importante**: `parseQR` espera el formato `SKU LOTE UBICACION` (3 tokens separados por espacio). Si el QR no tiene este formato, retorna `null` y se muestra un toast de error.
+
+**Init (IIFE al final del archivo)**:
+
+```js
+(function initScanner() {
+    console.log('[WMS-SCAN] initScanner ejecutándose, readyState:', document.readyState);
+    applyScanSourceUI();
+    if (scanSource === 'pistola' && !pistolActive) startPistola();
+
+    // Si el DOM no estaba listo, esperar
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function () {
+            applyScanSourceUI();
+            if (scanSource === 'pistola' && !pistolActive) startPistola();
+        });
+    }
+})();
+```
+
+**Toggle visual** (en el HTML del card del escáner):
+- Botón `#sourcePistola` → `onclick="setScanSource('pistola')"`.
+- Botón `#sourceCamara` → `onclick="setScanSource('camara')"`.
+- `applyScanSourceUI()` actualiza el panel visible (`#gunPanel` vs `#cameraPanel`), el título del card, y muestra/oculta el banner de aviso (`#cameraWarning`).
+
+**Helpers DOM** (defensivos, no fallan si el elemento no existe):
+
+```js
+function _el(id) { return document.getElementById(id); }
+function _setDisplay(id, value) { var e = _el(id); if (e) e.style.display = value; }
+function _setText(id, value) { var e = _el(id); if (e) e.textContent = value; }
+function _setClass(id, cls) { var e = _el(id); if (e) e.className = cls; }
+```
 
 #### `js/webhook.js` (LEGACY / FALLBACK)
 - `exportJSON()` — POST a `https://n8nmrb.marblock.shop/webhook/...` con el payload. Si falla, descarga JSON local.
@@ -732,8 +1029,8 @@ Todas las variables compartidas están en `window` (no en módulos):
 > El frontend hoy **no llama a `exportJSON()`** (no hay botón que la invoque). La función existe para compatibilidad pero el flujo activo es `submitToNetSuite()`. Ver §10.2.
 
 #### `js/app.js`
-- `initApp()` — llama a `renderEmpty()`.
-- `scanMode = 'placa'` — constante, el modo "folio" existe en el código pero no se usa en la UI actual.
+- `initApp()` — llama a `renderEmpty()`. Listener `DOMContentLoaded`.
+- `scanMode = 'placa'` — constante legacy. El modo "folio" existe en el código pero no se usa en la UI actual.
 
 ### 5.8 Convenciones de UI
 
@@ -741,8 +1038,14 @@ Todas las variables compartidas están en `window` (no en módulos):
 - **Iconos**: SVG inline, no font icons. Estilo: `stroke="currentColor"`, `stroke-width="1.2-2.2"`.
 - **Notificaciones**: solo `showToast()`, no alerts nativos.
 - **Modales**: clase `.active` para mostrar. Hay dos:
-  - `#signatureModal` — modal de captura de firma en canvas (existente).
-  - `#confirmExitModal` — modal de confirmación previo al flujo de firmas, muestra "Se registrarán N placas para la IF14580 (SO14548). ¿Deseas continuar?" con botones Cancelar/Confirmar. `z-index: 1001` (encima del modal de firma). Ver §5.7 `askExitConfirmation`.
+  - `#signatureModal` — modal de captura de firma en canvas.
+  - `#confirmExitModal` — modal de confirmación previo al flujo de firmas, `z-index: 1001` (encima del modal de firma).
+- **Card del escáner** (estructura HTML):
+  - **Header**: título + toggle Pistola/Cámara (segmented control).
+  - **Panel pistola** (`#gunPanel`, visible por default): LED de estado (`#gunLed` con clase `active` cuando escucha) + label "Pistola activa" / "Pistola inactiva" + última placa leída (`#lastScanText`).
+  - **Panel cámara** (`#cameraPanel`, oculto por default): `#reader` con `Html5Qrcode` + overlay de marco de escaneo.
+  - **Banner de aviso** (`#cameraWarning`, oculto por default): "Modo Cámara: la pistola NO funcionará acá. Volvé a Pistola...".
+  - **Status line** (`.status-line`): punto de estado + texto del último evento.
 
 ---
 
@@ -1813,6 +2116,120 @@ Hacer restart del backend, login en el frontend, y revisar `docker logs --tail 3
    - Si `selectedIF.sourceDoc` es `undefined`, el `ifDisplay` cae al fallback `selectedIF.tranid` y se ve "para la IF14580", no "para la IF14580 (SO14548)".
    - Verificar que `formatIFRecord` incluye `sourceDoc` y que la columna de NetSuite está bien configurada (ver §9.13).
 
+### 9.15 La pistola no escanea al cargar la página
+
+**Síntoma**: el operador carga la página, escanea con la pistola, y no pasa nada. **Después de hacer click en el toggle Pistola→Cámara→Pistola, la pistola empieza a funcionar**.
+
+**Causa**: el listener de keydown de la pistola se adjunta en la IIFE al final del archivo `scanner.js`, pero **si el foco está en un `<select>` (el dropdown de IF) o un `<input>` al momento de escanear**, el listener retorna temprano porque `e.target` es un form field.
+
+Esto es especialmente común porque:
+- El operador selecciona la IF del dropdown
+- El foco queda en el `<select>` (los selects retienen el foco después de seleccionar)
+- El operador escanea sin hacer click afuera
+- El listener `onPistolaKeydown` ve `e.target.tagName === 'SELECT'` y hace `return` sin procesar
+
+**Fix (aplicado)**: la lógica actual en `js/scanner.js` distingue pistola vs humano por **timing**:
+- Si el `keydown` viene de un form field Y el intervalo entre teclas es >50ms (tipeo humano) → deja pasar al campo normalmente.
+- Si el `keydown` viene de un form field Y el intervalo entre teclas es <50ms (pistola) → captura los caracteres y los acumula en el buffer.
+
+Cuando llega el terminador (Enter), hace `blur()` del elemento con foco para evitar caracteres basura y para que el próximo scan también funcione.
+
+**Workaround adicional**: si el problema persiste, hacer click en el `<body>` (o en cualquier área gris) antes de escanear para sacar el foco del select.
+
+**Diagnóstico**:
+```js
+// En la consola del navegador:
+window.getScannerState()
+// Devuelve: { scanSource, pistolActive, cameraActive, bufferLen, buffer }
+```
+
+Si `pistolActive === false`, la pistola no está escuchando. Si `scanSource !== 'pistola'`, el usuario está en modo cámara.
+
+### 9.16 El toggle a Cámara no funciona
+
+**Síntoma**: el operador hace click en el botón "Cámara" del toggle superior derecho del card del escáner, y no pasa nada (o tira error en consola).
+
+**Causas posibles**:
+
+1. **Cache del navegador**: la versión vieja del JS no tiene `setScanSource` exportada a `window`. **Fix**: hard refresh (Ctrl+Shift+R) o limpiar cache.
+
+2. **Error de carga de script**: si el script `scanner.js` no se cargó correctamente, `setScanSource` no está definida. **Fix**: DevTools → Network → verificar que `js/scanner.js?v=N` se cargó con status 200.
+
+3. **El CDN de html5-qrcode no cargó**: la cámara requiere `Html5Qrcode` del CDN. Si la red del operador bloquea cdnjs, `startCamera()` falla con "Librería de cámara no disponible". **Fix**: el operador puede seguir usando la pistola; el modo cámara solo es fallback.
+
+**Diagnóstico en orden**:
+1. Abrir DevTools → Console.
+2. Buscar el error: si dice `ReferenceError: setScanSource is not defined`, es cache (fix: hard refresh).
+3. Si dice `Librería de cámara no disponible`, es el CDN bloqueado.
+4. Si no hay error pero no pasa nada, verificar que `window.setScanSource` existe:
+   ```js
+   typeof window.setScanSource === 'function'  // debe ser true
+   ```
+
+### 9.17 El LED de la pistola no se pone verde
+
+**Síntoma**: el operador carga la página, pero el círculo LED del card del escáner aparece gris (clase `idle`) en vez de verde (clase `active`).
+
+**Causa**: la IIFE en `scanner.js` no se ejecutó, o `startPistola()` no fue llamado. Posibles razones:
+- Error de sintaxis en `scanner.js` (el script no parseó).
+- El DOM no contenía el elemento `#gunLed` cuando se llamó `setGunLedActive(true)`.
+- `scanSource` se cambió a `'camara'` antes de cargar la página (improbable pero posible).
+
+**Diagnóstico**:
+```js
+// En la consola:
+window.getScannerState()
+// Verificar pistolActive === true
+```
+
+Si `pistolActive === false`:
+1. Verificar que no hay errores en consola al cargar.
+2. Verificar que el HTML contiene `<div class="gun-led" id="gunLed">`.
+3. Hard refresh.
+
+**Fix manual temporal** (en consola):
+```js
+window.startScanner()  // fuerza el inicio
+```
+
+### 9.18 La pistola se lee pero la placa no aparece en la tabla
+
+**Síntoma**: el operador dispara la pistola, la pistola pita, pero la fila no aparece en `#tableBody`. Posibles causas:
+
+1. **`addRecord` no está definida**: `scanner.js` se cargó antes que `table.js`. **Fix**: verificar orden de scripts (ver §5.3).
+
+2. **`addRecord` falla internamente**: el método ejecuta operaciones DOM que pueden fallar. **Fix**: revisar consola — debería haber un log `[WMS-SCAN] ERROR en addRecord: ...`.
+
+3. **Dedupe de 3s bloqueó el scan**: si escaneás el mismo código dos veces en menos de 3s, el segundo es ignorado. **Fix**: esperar 3s o escanear un código diferente.
+
+4. **El formato del QR no es `SKU LOTE UBICACION`**: el parser espera exactamente 3 tokens separados por espacio. Ejemplos:
+   - ✅ `030LTH 12572-3.16X1.96 GDL` (3 tokens)
+   - ✅ `SKU-A L-001 A-1-2` (3 tokens)
+   - ❌ `030LTH-12572-3.16X1.96-GDL` (1 token, guión como separador)
+   - ❌ `030LTH 12572-3.16X1.96` (2 tokens, falta ubicación)
+   - ❌ `030LTH:12572-3.16X1.96:GDL` (1 token, `:` como separador en vez de espacio)
+
+   **Fix**: configurar el QR para usar **espacio** como separador, o ajustar `js/qr-parser.js:parseQR` para aceptar el formato de la pistola.
+
+5. **El modal de firma está abierto**: el listener descarta el buffer si detecta un modal abierto. **Fix**: cerrar el modal antes de escanear.
+
+**Diagnóstico paso a paso**:
+```js
+// 1. Verificar que el listener se está disparando
+//    Disparar la pistola y mirar la consola: debería haber logs [WMS-SCAN] ESCANEO:
+
+// 2. Si hay log, ver qué buffer se procesó
+//    El log muestra: [WMS-SCAN] ESCANEO: <texto>
+
+// 3. Verificar que parseQR funciona
+parseQR('030LTH 12572-3.16X1.96 GDL', 'placa')
+// Debe devolver: { tipo: 'placa', sku: '030LTH', lote: '12572-3.16X1.96', ubicacion: 'GDL' }
+
+// 4. Verificar que addRecord se llama
+addRecord({ tipo: 'placa', sku: 'TEST', lote: 'TEST', ubicacion: 'TEST' })
+// Debe agregar una fila a la tabla
+```
+
 ---
 
 ## 10. Anexos
@@ -1831,26 +2248,36 @@ Hacer restart del backend, login en el frontend, y revisar `docker logs --tail 3
 | **shipstatus** | Nombre del campo nativo de NetSuite en el record `Item Fulfillment`. Valores: `A` Pending Approval, `B` Pending Fulfillment, `C` Shipped, `D` Partially Shipped, `E` Pending Billing, `F` Billed, `G` Closed. En el response de la búsqueda guardada (RESTlet 2217) este campo llega como `statusref` (`{value, text}`). |
 | **statusref** | Nombre de la key en el JSON de respuesta del RESTlet 2217. Contiene `{ value: "packed", text: "Empaquetado" }`. Mapeado a `status` en el response del backend por `formatIFRecord`. |
 | **formulatext** | Nombre por default que NetSuite asigna a una columna de fórmula de texto en una búsqueda guardada. Si no le pusiste un nombre custom, el RESTlet 2217 la devuelve bajo esta key. Mapeado a `sourceDoc` en el response del backend. |
+| **HID Keyboard** | Human Interface Device Keyboard. Una pistola lectora de QR en modo USB Keyboard se comporta como un teclado y emite los caracteres del código QR como keystrokes seguidos de un terminador (Enter). El navegador los recibe como eventos `keydown`. |
+| **scanSource** | Variable global en `js/scanner.js` que indica la fuente activa: `'pistola'` (default) o `'camara'`. Cambiable vía el toggle visual en el card del escáner o vía `window.setScanSource(src)`. |
+| **Buffer de scan** | Variable global `scanBuffer` en `js/scanner.js` que acumula caracteres del QR hasta recibir el terminador. Se descarta automáticamente después de 500ms sin actividad (anti-ruido). |
 
 ### 10.2 Pendientes y mejoras
 
-| #  | Pendiente                                                                                |
-|----|-------------------------------------------------------------------------------------------|
-| 1  | Persistir firmas también en `firmas` de Supabase (hoy solo en NetSuite).                  |
-| 2  | Escribir `audit_logs` desde el backend (hoy la tabla existe pero no se usa).              |
-| 3  | Eliminar `GUIA_USUARIOS.md` (no actualizado).                                             |
-| 4  | Completar flujo OAuth 2.0 en `oauthController.js` (hoy el callback no persiste el token). |
-| 5  | Considerar agregar `package-lock.json` al repo para builds reproducibles.                 |
-| 6  | Mover el `BACKEND_URL` a una variable de entorno del frontend (requiere `sub_filter` en nginx). |
-| 7  | Refactor del `WEBHOOK_URL` de n8n: está hardcodeado en `js/webhook.js:10` y no se usa.   |
-| 8  | ~~Documentar el script 2217 (no está en el repo, solo existe en NetSuite).~~ Resuelto parcialmente en §6.13 (se documenta el contrato y el flujo, no el código fuente del RESTlet). |
-| 9  | Internacionalización (i18n) — hoy todo en español-MX.                                     |
-| 10 | Tests automatizados (no hay suite de tests).                                              |
-| 11 | ~~Ajustar los `folderId` (12848/12849/11772/11773) en `wms_link_firmas.js:16-21` cuando se promuevan a producción (deben coincidir con los de `backend/config/environments.js`).~~ Documentado en §6.11 con warning explícito. |
-| 12 | Agregar `wms_link_firmas.js` y `wms_firma_template.xml` al File Cabinet de producción y desplegar script + asignar template al record Item Fulfillment. |
-| 13 | Considerar extraer el helper de filtrado de location a un módulo separado (`backend/utils/locationFilter.js`) para que sea testeable aisladamente. |
-| 14 | Mover `RESTRICTED_LOCATION_PREFIXES` (`['MEX', 'MTY', 'GDL']`) y `SHARED_LOCATIONS` (`['TEMPORAL', 'PROYECTOS', 'Material Transformado', 'MATRIZ']`) a `backend/config/environments.js` (junto a `UBICACIONES`) para que sean configurables sin tocar el controller. |
-| 15 | Cuando se cambie el nombre de la columna fórmula en NetSuite (de `formulatext` a un ID custom como `custbody_num_doc_origen`), actualizar `formatIFRecord` y §6.5.5. Mientras siga como `formulatext` default, no requiere cambio. |
+| #  | Estado | Pendiente                                                                                |
+|----|--------|-------------------------------------------------------------------------------------------|
+| 1  | ⏳     | Persistir firmas también en `firmas` de Supabase (hoy solo en NetSuite).                  |
+| 2  | ⏳     | Escribir `audit_logs` desde el backend (hoy la tabla existe pero no se usa).              |
+| 3  | ⏳     | Eliminar `GUIA_USUARIOS.md` (no actualizado).                                             |
+| 4  | ⏳     | Completar flujo OAuth 2.0 en `oauthController.js` (hoy el callback no persiste el token). |
+| 5  | ⏳     | Considerar agregar `package-lock.json` al repo para builds reproducibles.                 |
+| 6  | ⏳     | Mover el `BACKEND_URL` a una variable de entorno del frontend (requiere `sub_filter` en nginx). |
+| 7  | ⏳     | Refactor del `WEBHOOK_URL` de n8n: está hardcodeado en `js/webhook.js` y no se usa.        |
+| 8  | ✅     | ~~Documentar el script 2217 (no está en el repo, solo existe en NetSuite).~~ Resuelto en §6.13. |
+| 9  | ⏳     | Internacionalización (i18n) — hoy todo en español-MX.                                     |
+| 10 | ⏳     | Tests automatizados (no hay suite de tests).                                              |
+| 11 | ✅     | ~~Ajustar los `folderId` (12848/12849/11772/11773) en `wms_link_firmas.js` cuando se promuevan a producción.~~ Documentado en §6.11 con warning explícito. |
+| 12 | ⏳     | Agregar `wms_link_firmas.js` y `wms_firma_template.xml` al File Cabinet de producción y desplegar script + asignar template al record Item Fulfillment. |
+| 13 | ⏳     | Considerar extraer el helper de filtrado de location a un módulo separado (`backend/utils/locationFilter.js`) para que sea testeable aisladamente. |
+| 14 | ⏳     | Mover `RESTRICTED_LOCATION_PREFIXES` y `SHARED_LOCATIONS` a `backend/config/environments.js` para que sean configurables sin tocar el controller. |
+| 15 | ⏳     | Cuando se cambie el nombre de la columna fórmula en NetSuite (de `formulatext` a un ID custom como `custbody_num_doc_origen`), actualizar `formatIFRecord` y §6.5.5. Mientras siga como `formulatext` default, no requiere cambio. |
+| 16 | ✅     | ~~Migrar el escáner de cámara a pistola HID como fuente principal.~~ Resuelto en v2.0. Documentado en §1.5, §5.7, §9.15-9.18. |
+| 17 | ✅     | ~~Cache-busting de los scripts del frontend.~~ Resuelto con `?v=N` (incrementar al actualizar JS). |
+| 18 | ✅     | ~~Bug: pistola no escaneaba con foco en `<select>` de IF.~~ Resuelto con detección por timing en `js/scanner.js` (pistola: <50ms entre teclas, humano: >50ms). |
+| 19 | ✅     | ~~Bug: pistola no se activaba al cargar la página.~~ Resuelto con IIFE en `scanner.js` que llama `startPistola()` automáticamente. |
+| 20 | ⏳     | Cuando se cambie la pistola de modelo, verificar que el terminador siga siendo `Enter` (algunas pistolas usan `Tab`). Configurable vía `SCAN_TERMINATOR_KEYS` en `js/scanner.js:24`. |
+| 21 | ⏳     | Considerar agregar feedback visual/sonoro al recibir un scan (toast verde, beep, vibración). Por ahora solo se actualiza `#lastScanText`. |
+| 22 | ⏳     | Documentar y automatizar la regeneración de credenciales NetSuite (script `scripts/regen-netsuite-creds.sh`?). |
 
 ### 10.3 Comandos útiles
 
@@ -1880,22 +2307,38 @@ curl -X POST https://api.marblock.shop/auth/login \
 - `lib/signature_pad.min.js` — librería externa, no inspeccionada.
 - `docker-compose.yml` (raíz) — versión local/dev, no usada en Dokploy.
 - `backend/package-lock.json` — no se commitea (está en `.gitignore`).
+- `test-scanner.html` — página standalone para verificar la pistola sin login. Útil como smoke test manual (cargar la URL, click "Activar pistola", disparar). No es parte del flujo productivo.
 
 **Archivos documentados a profundidad** (referencias cruzadas):
 - `wms_restlet.js` → §6.7 (RESTlet 2860)
 - `wms_link_firmas.js` → §6.11 (UserEvent script)
 - `wms_firma_template.xml` → §6.12 (Advanced PDF template)
+- `js/scanner.js` → §1.5 (arquitectura), §5.7 (API), §9.15-9.18 (troubleshooting)
 
 ---
 
 **Mantenido por**: equipo WMS Marblock.
 **Última actualización**: junio 2026
-- Modal de confirmación de salida de placas (`#confirmExitModal`) con conteo + IF + doc origen
-- Campo `sourceDoc` agregado al API (mapea `ifRecord.formulatext` en `formatIFRecord`)
-- Dropdown y modal de warning muestran formato `IF14580 (SO14548)`
-- Validaciones en cascada en `startSignatureCapture()` (records + selectedIF)
-- §6.13 nueva: flujo completo de data de NetSuite al frontend (para evitar debug futuro)
-- §9.12-9.14 nuevas: cómo agregar un campo nuevo, diagnosticar columnas faltantes, diagnosticar modal que no aparece
-- §6.5.5 nueva: equivalencia campos NetSuite → keys JSON
-- Correcciones: `shipstatus` → `statusref`, `formulatext` documentado, unificación de `customsearch3672` en todo el doc
-- Regla de ubicaciones compartidas por default en `netsuiteController.js:5-25`; whitelist de `Material Transformado` y `MATRIZ`; fix de filtrado de outlets; documentación de `wms_link_firmas.js` y `wms_firma_template.xml`
+
+### Cambios recientes (v2.0)
+
+**Scanner** (principal cambio):
+- §1.5 nueva: arquitectura del escáner con diagrama de flujo de las dos fuentes (pistola + cámara)
+- §5.1, §5.2, §5.3 actualizadas: stack, estructura de archivos, cache-busting `?v=N`
+- §5.5 actualizada: tabla de variables globales incluyendo `scanSource`, `pistolActive`, `cameraActive`, `scanBuffer`, `scanner`
+- §5.5 nueva: tabla de funciones expuestas en `window.*` para los `onclick` inline
+- §5.6 actualizada: flujo de usuario incluye auto-arranque de la pistola
+- §5.7 reescrita: `js/scanner.js` documentado con pseudocódigo del listener, decisiones de diseño, helpers, IIFE de init, flujo del modo cámara, función unificadora `handleScan`
+- §9.15-9.18 nuevas: troubleshooting específico del escáner (foco en select, toggle, LED, no aparece en tabla)
+- §10.1 glosario extendido: HID Keyboard, scanSource, buffer de scan
+- §10.2 actualizadas: marcadores ✅/⏳; 7 ítems nuevos (#16-22) reflejando lo hecho y los pendientes del escáner
+
+**Otros cambios pendientes de documentar** (en futuras revisiones):
+- v1.x: Modal de confirmación de salida de placas (`#confirmExitModal`) con conteo + IF + doc origen
+- v1.x: Campo `sourceDoc` agregado al API (mapea `ifRecord.formulatext` en `formatIFRecord`)
+- v1.x: Dropdown y modal de warning muestran formato `IF14580 (SO14548)`
+- v1.x: Validaciones en cascada en `startSignatureCapture()` (records + selectedIF)
+- v1.x: §6.13 flujo completo de data de NetSuite al frontend
+- v1.x: §9.12-9.14 cómo agregar un campo nuevo, diagnosticar columnas faltantes, diagnosticar modal que no aparece
+- v1.x: §6.5.5 equivalencia campos NetSuite → keys JSON
+- v1.x: Regla de ubicaciones compartidas por default; whitelist de `Material Transformado` y `MATRIZ`; fix de filtrado de outlets; documentación de `wms_link_firmas.js` y `wms_firma_template.xml`
