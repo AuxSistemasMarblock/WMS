@@ -204,6 +204,21 @@
     <!-- jsonPreview eliminado para producción -->
   </div>
 
+<!-- MODAL DE CONFIRMACIÓN DE SALIDA DE PLACAS -->
+<div class="confirm-modal" id="confirmExitModal">
+  <div class="confirm-card">
+    <div class="confirm-icon">⚠️</div>
+    <h3 class="confirm-title">Confirmar salida de placas</h3>
+    <p class="confirm-text">
+      Se registrarán <strong id="confirmPlacaCount">0</strong> placas para salir. ¿Deseas continuar?
+    </p>
+    <div class="confirm-actions">
+      <button class="btn btn-ghost" id="btnCancelExit">Cancelar</button>
+      <button class="btn btn-primary" id="btnConfirmExit">Confirmar</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL DE FIRMA ELECTRÓNICA -->
 <div class="signature-modal" id="signatureModal">
   <div class="signature-card">
