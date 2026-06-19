@@ -20,16 +20,25 @@
    - 6.3 Integration Record
    - 6.4 Token TBA (Token-Based Authentication)
    - 6.5 Búsqueda guardada
-   - 6.6 RESTlet de búsqueda de IFs
-   - 6.7 RESTlet de subida de archivos y status
+     - 6.5.3 Columnas (resultados)
+     - 6.5.4 Mapping backend → frontend
+     - 6.5.5 Equivalencia campos NetSuite → keys JSON
+   - 6.6 RESTlet 2217 (`searchResults.js`) — Búsqueda de IFs
+     - 6.6.3 Comportamiento interno (RESTlet genérico)
+     - 6.6.4 Errores comunes
+   - 6.7 RESTlet 2976 (`wms_restlet.js`) — Subida de archivos y status
    - 6.8 File Cabinet — Estructura
    - 6.9 Estrategias de autenticación
    - 6.10 Procedimiento de regeneración tras pérdida de credenciales
    - 6.11 UserEvent Script `wms_link_firmas.js` — Vinculación de firmas
    - 6.12 Advanced PDF/HTML Template `wms_firma_template.xml` — Render de firmas
+   - 6.13 Cómo fluye la data de NetSuite al frontend
 7. [Despliegue (Dokploy)](#7-despliegue-dokploy)
 8. [Variables de entorno](#8-variables-de-entorno)
 9. [Runbook / Troubleshooting](#9-runbook--troubleshooting)
+   - 9.12 Cómo agregar un nuevo campo al API de IFs
+   - 9.13 Una columna nueva de `customsearch3672` no aparece en el frontend
+   - 9.14 El modal de confirmación de salida de placas no aparece
 10. [Anexos](#10-anexos)
 
 ---
@@ -41,7 +50,7 @@
 WMS Scanner es la herramienta móvil/web que utilizan los operadores de almacén para:
 
 1. **Registrarse / iniciar sesión** con credenciales corporativas.
-2. **Consultar Instrucciones de Fabricación (IF)** abiertas en su ubicación, vía búsqueda guardada en NetSuite (`customsearch3434`).
+2. **Consultar Instrucciones de Fabricación (IF)** abiertas en su ubicación, vía búsqueda guardada en NetSuite (`customsearch3672`).
 3. **Escanear placas** mediante la cámara del dispositivo (formato QR: `SKU LOTE UBICACION`).
 4. **Capturar firmas electrónicas** (aux. de almacén, cliente, jefe de almacén, gerente) según el número de placas.
 5. **Sincronizar con NetSuite**: subir las firmas PNG al File Cabinet, actualizar el status del IF a "Enviado" (`C`) y, opcionalmente, notificar vía webhook a n8n como fallback.
@@ -124,7 +133,7 @@ Traefik (gestionado por Dokploy) actúa como reverse proxy y termination TLS con
 
 ### 2.3 Comunicación backend → NetSuite
 
-- **RESTlet de búsqueda** (script 2217, deploy 1): `POST /app/site/hosting/restlet.nl?script=2217&deploy=1` con `{"searchId":"customsearch3434","limit":1000,"start":0}`.
+- **RESTlet de búsqueda** (script 2217, deploy 1): `POST /app/site/hosting/restlet.nl?script=2217&deploy=1` con `{"searchId":"customsearch3672","limit":1000,"start":0}`.
 - **RESTlet de upload** (script 2860, deploy 1): `POST .../restlet.nl?script=2860&deploy=1` con `{"filename","contents","folder_id"}` o `{"action":"updateIFStatus","internalId"}`.
 - Auth: OAuth 1.0a Token-Based Authentication (TBA) con firma `HMAC-SHA256`.
 
@@ -367,6 +376,7 @@ app.use('/validate',       require('./routes/validation'));
     {
       "internalId": 12345,
       "tranid": "IF-2026-001",
+      "sourceDoc": "SO14548",
       "description": "Salida de placas MEX",
       "location": "MEX",
       "status": "B",
@@ -377,6 +387,8 @@ app.use('/validate',       require('./routes/validation'));
   "total": 1
 }
 ```
+
+> Los nombres de los campos del response final son producto de `formatIFRecord` (`backend/controllers/netsuiteController.js:38-48`), que mapea por nombre desde la respuesta cruda del RESTlet 2217. Ver §6.5.5 para la equivalencia entre campos NetSuite y keys del JSON.
 
 #### `POST /netsuite/submit`
 
@@ -441,7 +453,8 @@ req.user = {
 
 | Función            | Línea  | Responsabilidad                                                                                                       |
 |--------------------|--------|-----------------------------------------------------------------------------------------------------------------------|
-| `getIFs`           | 53-96  | Llama al RESTlet 2217 con `searchId=customsearch3672`, filtra por ubicación del usuario, mapea a formato simplificado |
+| `getIFs`           | 54-97  | Llama al RESTlet 2217 con `searchId=customsearch3672`, filtra por ubicación del usuario, mapea a formato simplificado |
+| `formatIFRecord`   | 38-48  | Helper que toma la fila cruda del RESTlet 2217 y devuelve el objeto que consume el frontend. Mapea por nombre (no por índice). |
 | `submitData`       | 165-323| Por cada firma: sube PNG al File Cabinet (script 2860). Si todas OK, actualiza status del IF a `C`                   |
 | `diagnosticTest`   | 332-454| Valida env vars, prueba conexión sin OAuth y con OAuth a `/record/salesorder/1`                                      |
 
@@ -670,7 +683,7 @@ Todas las variables compartidas están en `window` (no en módulos):
 
 #### `js/netsuite-client.js`
 - `loadIFs()` — GET a `/netsuite/ifs` con la ubicación del usuario. Llena `availableIFs` y el `<select>`.
-- `updateIFSelect()` — renderiza opciones del dropdown.
+- `updateIFSelect()` — renderiza opciones del dropdown. Formato por opción: `IF14580 (SO14548)` (tranid + paréntesis con `sourceDoc`). Si la IF no tiene `sourceDoc`, muestra solo `IF14580`.
 - `handleIFSelect(event)` — al cambiar el select, guarda `selectedIF`.
 - `reloadIFs()` — recarga IFs.
 - `clearIF()` — limpia selección.
@@ -682,11 +695,18 @@ Todas las variables compartidas están en `window` (no en módulos):
   - siempre: `auxAlmacen` y `cliente`
   - si `> 3`: `jefeAlmacen`
   - si `> 10`: `gerente`
-- `startSignatureCapture()` — arma la cola y arranca.
+- `startSignatureCapture()` — valida en cascada (ver abajo) y, si todo OK, arma la cola y arranca.
+- `askExitConfirmation(count, selectedIF)` — muestra el modal de confirmación de salida de placas (`#confirmExitModal`) con la cantidad y la IF+doc origen. Devuelve `Promise<boolean>`. Solo se muestra al usuario **después** de validar que hay IF seleccionada y al menos 1 placa (ver §5.6 y §5.8).
 - `captureNextSignature()` — saca la siguiente firma de la cola y muestra el modal.
 - `clearSignature()` — limpia el canvas.
 - `submitSignature()` — toma `toDataURL('image/png')` y la guarda en `collectedSignatures`.
 - `submitWithSignatures()` — llama a `submitToNetSuite(collectedSignatures)`.
+
+**Validaciones en cascada de `startSignatureCapture()`** (orden de evaluación, todas con `showToast` y `return` — ninguna muestra el modal):
+
+1. `records.length === 0` → toast "Escanea al menos una placa antes de capturar firmas" + return.
+2. `!selectedIF` → toast "Selecciona una IF antes de completar el registro" + return.
+3. Ambas pasan → se muestra el modal de confirmación. Si el usuario cancela, return. Si confirma, sigue el flujo normal de firmas.
 
 #### `js/qr-parser.js`
 - `parseQR(raw, mode)` — devuelve `{tipo:'placa', sku, lote, ubicacion}` si tiene 3+ partes separadas por espacio, o `{tipo:'folio', valor}` si 1 parte. Modo `folio` siempre devuelve `folio`.
@@ -720,7 +740,9 @@ Todas las variables compartidas están en `window` (no en módulos):
 - **Colores**: definidos en `css/variables.css` (no inspeccionado a fondo). Usar variables CSS, no valores hardcoded.
 - **Iconos**: SVG inline, no font icons. Estilo: `stroke="currentColor"`, `stroke-width="1.2-2.2"`.
 - **Notificaciones**: solo `showToast()`, no alerts nativos.
-- **Modales**: clase `.active` para mostrar (`signatureModal`).
+- **Modales**: clase `.active` para mostrar. Hay dos:
+  - `#signatureModal` — modal de captura de firma en canvas (existente).
+  - `#confirmExitModal` — modal de confirmación previo al flujo de firmas, muestra "Se registrarán N placas para la IF14580 (SO14548). ¿Deseas continuar?" con botones Cancelar/Confirmar. `z-index: 1001` (encima del modal de firma). Ver §5.7 `askExitConfirmation`.
 
 ---
 
@@ -864,32 +886,55 @@ La búsqueda activa para el flujo de carga de IFs es `customsearch3672`. Su defi
 
 > El valor "Empaquetado" corresponde al estado `Picked` o `Packed` en NetSuite. Verificar en la UI de filtros que la traducción al español coincide con el estado real del record.
 
-#### 6.5.3 Columnas (resultados) — en este orden
+#### 6.5.3 Columnas (resultados) — orden y nombres de keys
 
-| # | Columna              | Tipo de campo       |
-|---|----------------------|---------------------|
-| 1 | Número de documento  | Tran ID (tranid)    |
-| 2 | Nota                 | Memo                |
-| 3 | Ubicación            | Location            |
-| 4 | Estado               | Ship Status         |
-| 5 | Fecha                | Transaction Date    |
+| # | Columna NetSuite              | Key en el JSON devuelto por el RESTlet 2217 | Tipo de campo                  |
+|---|-------------------------------|----------------------------------------------|--------------------------------|
+| 1 | Internal ID                   | `id`                                         | Internal ID                    |
+| 2 | Record Type                   | `recordType`                                 | — (siempre `itemfulfillment`)  |
+| 3 | Fórmula texto (doc origen)    | `formulatext`                                | Formula (Text)                 |
+| 4 | Número de documento           | `tranid`                                     | Tran ID                        |
+| 5 | Nota                          | `memo`                                       | Memo                           |
+| 6 | Ubicación                     | `location`                                   | Location (object `{value,text}`) |
+| 7 | Estado                        | `statusref`                                  | Ship Status (object `{value,text}`) |
+| 8 | Fecha                         | `trandate`                                   | Transaction Date               |
 
-> **Importante**: el orden de las columnas es relevante porque el backend (`backend/controllers/netsuiteController.js:24-33` y `formatIFRecord`) mapea por índice. Si se cambia el orden en la búsqueda, hay que actualizar el código.
+> **Importante**:
+> - El **orden de las columnas en la UI de NetSuite es libre** — el backend mapea por **nombre de key**, no por índice.
+> - La columna 3 (fórmula texto) es la que captura el número de documento origen de la IF (ej: SO14548 o TO155). Si la renombras en la búsqueda, la key en el JSON cambia y hay que ajustar `formatIFRecord`. Ver §6.5.5 y §9.12.
 
 #### 6.5.4 Mapping backend → frontend
 
-El backend mapea las columnas a este JSON:
+`formatIFRecord` (`backend/controllers/netsuiteController.js:38-48`) mapea **por nombre** la respuesta cruda del RESTlet al JSON que consume el frontend:
 
 ```jsonc
 {
-  "internalId": 12345,      // Internal ID
-  "tranid": "IF-2026-001",   // Columna 1
-  "description": "Memo",    // Columna 2
-  "location": "MEX",        // Columna 3 (puede llegar como {value, text})
-  "status": "B",            // Columna 4
-  "date": "2026-06-09"      // Columna 5
+  "internalId": 12345,         // ← ifRecord.id
+  "tranid": "IF-2026-001",     // ← ifRecord.tranid
+  "sourceDoc": "SO14548",      // ← ifRecord.formulatext (doc de origen de la IF)
+  "description": "Memo",       // ← ifRecord.memo || ifRecord.description || ''
+  "location": "MEX",           // ← ifRecord.location (puede llegar como {value, text})
+  "status": "B",               // ← ifRecord.statusref ({value, text} → el objeto completo)
+  "date": "2026-06-09"         // ← ifRecord.trandate
 }
 ```
+
+Para agregar un campo nuevo al response del backend, hay que (1) tener la columna en `customsearch3672` Results, (2) mapearla aquí. Ver §9.12.
+
+#### 6.5.5 Equivalencia campos NetSuite → keys JSON (referencia rápida)
+
+Cuando debuguees, esta tabla evita tener que ir a `formatIFRecord`:
+
+| Campo / columna en NetSuite             | Key en JSON del RESTlet 2217 | Mapeado a (en `formatIFRecord`) | Notas                                              |
+|------------------------------------------|------------------------------|----------------------------------|----------------------------------------------------|
+| Internal ID                              | `id`                         | `internalId`                     | String numérico como `"12345"`                     |
+| Record Type                              | `recordType`                 | (no se mapea)                    | Siempre `"itemfulfillment"`                         |
+| Fórmula texto (doc origen)               | `formulatext`                | `sourceDoc`                      | Solo aparece si NetSuite le puso ese nombre; si lo renombras, la key cambia |
+| Tran ID                                  | `tranid`                     | `tranid`                         | —                                                  |
+| Memo                                     | `memo`                       | `description`                    | Fallback a `description` y a `''`                  |
+| Location                                 | `location`                   | `location`                       | Llega como `{ value: "1", text: "MEX" }`           |
+| Ship Status                              | `statusref`                  | `status`                         | ⚠️ NO se llama `shipstatus` en el response, aunque internamente NetSuite lo sigue nombrando así en el record |
+| Transaction Date                         | `trandate`                   | `date`                           | —                                                  |
 
 ### 6.6 RESTlet 2217 (`searchResults.js`) — Búsqueda de IFs
 
@@ -931,10 +976,11 @@ Authorization: OAuth 1.0a ...
     {
       "id": 12345,
       "recordType": "itemfulfillment",
+      "formulatext": "SO14548",
       "tranid": "IF-2026-001",
       "memo": "Salida de placas MEX",
       "location": { "value": "1", "text": "MEX" },
-      "shipstatus": { "value": "B", "text": "Empaquetado" },
+      "statusref": { "value": "packed", "text": "Empaquetado" },
       "trandate": "2026-06-09"
     }
   ]
@@ -961,12 +1007,14 @@ Authorization: OAuth 1.0a ...
    - Ejecuta `searchResultSet.getRange({ start, end: start + limit })`.
    - Para cada fila, construye un objeto con `id`, `recordType` y todas las columnas (`name`, `value`, `text`).
 
+> **Nota importante — el RESTlet 2217 es genérico**: NO tiene columnas hardcodeadas en el código. Recibe cualquier `searchId` y devuelve **todas las columnas** que la búsqueda guardada tenga configuradas en su pestaña **Results**. Esto significa que agregar/quitar campos al response del API es 100% decisión de la búsqueda guardada en NetSuite, no del RESTlet. El mapping al JSON que consume el frontend ocurre del lado backend en `formatIFRecord` (ver §6.5.4). Para agregar una columna nueva, ver §9.12.
+
 #### 6.6.4 Errores comunes
 
 | Status | Causa probable                                       | Solución                                                       |
 |--------|------------------------------------------------------|----------------------------------------------------------------|
 | 400    | Falta `searchId` en el body                          | Verificar que `netsuiteController.js:54` lo envíe              |
-| 400    | `searchId` no es una búsqueda válida                | Verificar que `customsearch3672` exista y esté publicada       |
+| 400    | `searchId` no es una búsqueda válida                | Verificar que `customsearch3672` exista, esté publicada y no esté siendo modificada simultáneamente (puede causar lock temporal) |
 | 400    | Rol sin permiso sobre el record type                | Agregar `Ejecución de orden de artículos = Completo` al rol `WMS` |
 | 500    | Error de sintaxis en `searchResults.js`             | Revisar Execution Log del RESTlet en NetSuite                  |
 
@@ -1270,6 +1318,50 @@ const FIRMAS = [
 
 ---
 
+### 6.13 Cómo fluye la data de NetSuite al frontend
+
+Esta sección existe para evitar tener que debuguear de nuevo el camino de los datos cuando se agreguen campos nuevos. La intuición de "cambié la búsqueda y debería aparecer en el frontend" es incorrecta porque hay 3 capas intermedias.
+
+**Flujo completo de un IF** (de NetSuite al dropdown de la UI):
+
+```
+┌─────────────────────┐
+│  NetSuite           │
+│  customsearch3672   │  ← Aquí defines qué columnas devuelve
+│  (Resultados)       │
+└──────────┬──────────┘
+           │ el RESTlet 2217 ejecuta esa búsqueda
+           ▼
+┌─────────────────────┐
+│  RESTlet 2217       │  ← Devuelve TODAS las columnas de Results,
+│  (searchResults.js) │    sin filtrar. Key por columna.
+│  en NetSuite        │
+└──────────┬──────────┘
+           │ POST con searchId → array en .data
+           ▼
+┌─────────────────────┐
+│  Backend Node       │
+│  netsuiteController │  ← formatIFRecord (línea 38) decide qué
+│  .js                │    keys del response crudo pasan al frontend
+└──────────┬──────────┘
+           │ res.json con .ifs mapeadas
+           ▼
+┌─────────────────────┐
+│  Frontend           │
+│  js/netsuite-client │  ← updateIFSelect (línea 42) arma el <option>
+│  .js                │    con el formato visible al usuario
+└─────────────────────┘
+```
+
+**Reglas derivadas**:
+
+1. **Para que un campo llegue al frontend**, debe existir en (a) los Results de la búsqueda, (b) el mapping de `formatIFRecord`, y (c) la lógica de display en `js/netsuite-client.js` (o donde se use).
+2. **El Network tab del navegador muestra la respuesta del backend** (`/netsuite/ifs`), NO la de NetSuite. Por eso cambios a la búsqueda no se ven reflejados al instante en Network — pasan por `formatIFRecord` primero.
+3. **Para ver la respuesta cruda de NetSuite** (antes del mapping), hay que loguearla en el backend. Ver §9.12.
+4. **El RESTlet 2217 no filtra columnas** — devuelve todo lo que la búsqueda expone. Si agregas una columna y no la mapeas en `formatIFRecord`, queda invisible para el frontend pero sigue viajando por la red.
+
+---
+
 
 
 ### 7.1 Provider
@@ -1418,7 +1510,7 @@ const url='https://9080139-sb1.restlets.api.netsuite.com/app/site/hosting/restle
 const h=o.toHeader(o.authorize({url,method:'POST'},{key:process.env.NETSUITE_TOKEN_ID,secret:process.env.NETSUITE_TOKEN_SECRET}));
 const u=new URL(url);
 const req=https.request({hostname:u.hostname,path:u.pathname+u.search,method:'POST',headers:{'Content-Type':'application/json','Content-Length':54,'Authorization':h.Authorization}},(res)=>{let d='';res.on('data',c=>d+=c);res.on('end',()=>console.log('STATUS:',res.statusCode,'BODY:',d))});
-req.write(JSON.stringify({searchId:'customsearch3434',limit:10,start:0}));
+req.write(JSON.stringify({searchId:'customsearch3672',limit:10,start:0}));
 req.end();
 "
 ```
@@ -1456,7 +1548,7 @@ Sin espacios, sin slash final, con `https://`. Redeploy.
 ### 9.6 Las IFs no aparecen / dan error al cargar
 
 1. Verificar que el Token TBA tenga permiso para ejecutar el script 2217.
-2. Verificar que la búsqueda `customsearch3434` exista y devuelva resultados para la ubicación del usuario.
+2. Verificar que la búsqueda `customsearch3672` exista y devuelva resultados para la ubicación del usuario.
 3. Probar el RESTlet directamente:
    ```bash
    docker exec wms-backend node -e "<el script de §9.1>"
@@ -1483,7 +1575,7 @@ curl https://api.marblock.shop/validate
 
 **Síntoma**: un usuario con `ubicacion_id = 5` (GDL) no ve las IFs que en NetSuite están asignadas a la ubicación `GDL:OUTLET GDL` (id=6). Captura típica: la tabla muestra `GDL:OUTLET GDL` en la columna "Ubicación" pero la IF no aparece en el dropdown de la UI.
 
-**Causa**: el campo `location` que devuelve la búsqueda guardada en NetSuite (`customsearch3672` o `customsearch3434`) es un string multi-valor como `GDL:OUTLET GDL`, donde se listan **dos** ubicaciones concatenadas (el outlet y su sucursal padre). Un comparador `===` rechazaba esas IFs para el usuario de la sucursal padre.
+**Causa**: el campo `location` que devuelve la búsqueda guardada en NetSuite (`customsearch3672`) es un string multi-valor como `GDL:OUTLET GDL`, donde se listan **dos** ubicaciones concatenadas (el outlet y su sucursal padre). Un comparador `===` rechazaba esas IFs para el usuario de la sucursal padre.
 
 **Fix (aplicado)**: `backend/controllers/netsuiteController.js:25-34` ahora divide el string por `[\s:]+` y hace `includes`. Un usuario de `GDL` ve tanto IFs `GDL` como IFs `GDL:OUTLET GDL`, pero **no** ve IFs `MTY:OUTLET MTY`.
 
@@ -1608,6 +1700,119 @@ console.log(filtra(['GDL','GDL:OUTLET GDL','MEX:OUTLET MEX','TIJUANA','PUEBLA','
 
 Salida esperada: `['GDL', 'GDL:OUTLET GDL', 'TIJUANA', 'PUEBLA', 'TEMPORAL', 'BODEGA_CENTRAL', 'MATRIZ']` (excluye `MEX:OUTLET MEX` porque el usuario es GDL).
 
+### 9.12 Cómo agregar un nuevo campo al API de IFs
+
+**Síntoma / necesidad**: quieres exponer un campo nuevo de la IF en el frontend (ej: el documento de origen, una fecha custom, un campo de texto, etc.).
+
+**Procedimiento completo** (3 archivos + redeploy):
+
+**Paso 1 — Agregar la columna a `customsearch3672` en NetSuite**
+1. `Reports → Saved Searches → All Saved Searches` → abrir `customsearch3672`.
+2. Pestaña **Results** → agregar la columna (puede ser un campo del record, una fórmula, o un join).
+3. Si es fórmula de texto y no le pones nombre custom, NetSuite la llamará `formulatext` (es la key que verás en el JSON).
+4. **Save** arriba a la derecha.
+5. Esperar 5-10 minutos por cache de NetSuite (a veces menos, a veces más).
+
+**Paso 2 — Mapear en `formatIFRecord`**
+- Editar `backend/controllers/netsuiteController.js:38-48`.
+- Agregar la nueva key con un nombre semántico (no uses la key cruda de NetSuite en el resto del código):
+  ```js
+  function formatIFRecord(ifRecord) {
+    return {
+      // ... campos existentes ...
+      sourceDoc: ifRecord.formulatext,   // ← ejemplo
+    };
+  }
+  ```
+- Considerar fallback `|| ''` si el campo podría no existir en todos los IFs:
+  ```js
+  sourceDoc: ifRecord.formulatext || '',
+  ```
+
+**Paso 3 — Mostrar en el frontend**
+- **Dropdown** (`js/netsuite-client.js:46-52`): incluir el campo en el `textContent` del `<option>`.
+- **Modal de warning** (`js/signatures.js:77-102`): incluir el campo en el `ifDisplay` que se setea en `#confirmIFText`.
+- **Badge superior** (opcional, `js/netsuite-client.js:69`): si quieres que también se vea al seleccionar.
+
+**Paso 4 — Redeploy**
+- Commit + push → Dokploy redeploy automático del backend.
+- Refrescar el frontend (Ctrl+F5 si hace falta para limpiar cache del navegador).
+
+**Verificación rápida** (sin esperar al frontend):
+```bash
+docker exec wms-backend sh -c \
+  "curl -s -X POST http://localhost:3001/auth/login \
+   -H 'Content-Type: application/json' \
+   -d '{\"email\":\"test@marblock.com\",\"password\":\"xxx\"}' | jq ."
+# tomar el token y usarlo en la siguiente llamada
+docker exec wms-backend sh -c \
+  "curl -s -X GET 'http://localhost:3001/netsuite/ifs' \
+   -H 'Authorization: Bearer <token>' | jq '.ifs[0]'"
+```
+Deberías ver el campo nuevo en el JSON.
+
+### 9.13 Una columna nueva de `customsearch3672` no aparece en el frontend
+
+**Síntoma**: agregaste una columna a la búsqueda, redeployaste, recargaste el frontend, y el campo no aparece. Network tab muestra el response del backend (`/netsuite/ifs`) sin el campo nuevo.
+
+**Diagnóstico en orden de probabilidad**:
+
+1. **Falta el paso 2 (`formatIFRecord`)**:
+   - El 90% de las veces es esto. La columna SÍ llega a NetSuite, pero `formatIFRecord` no la incluye, así que el backend no la expone.
+   - Verificar `backend/controllers/netsuiteController.js:38-48`.
+   - **Solución**: agregar el mapeo y redeploy.
+
+2. **La columna no está en la pestaña Results de la búsqueda**:
+   - Abrir `customsearch3672` en NetSuite → ir a **Results** (no Available Filters ni Filters).
+   - Si la columna está en Available Filters, moverla a Results.
+   - **Solución**: mover + Save.
+
+3. **Cache de NetSuite**:
+   - NetSuite cachea los resultados de saved search agresivamente.
+   - **Solución**: esperar 5-10 minutos. Si sigue sin aparecer, en NetSuite abrir la búsqueda → click "Refresh" (a veces hay un botón explícito) o re-guardar.
+
+4. **La fórmula está mal escrita y devuelve null**:
+   - En NetSuite, abrir la fórmula → "Set Formula" → probar con un valor literal (ej: `'TEST'`) para descartar error de sintaxis.
+   - Si con valor literal aparece y con la fórmula real no, hay error en la fórmula.
+
+5. **No se hizo Save en NetSuite**:
+   - El botón **Save** arriba a la derecha. Sin save, los cambios no se publican.
+
+**Verificación rápida para distinguir "no llega a NetSuite" de "no se mapea en backend"**:
+
+Agregar un `console.log` temporal en `backend/controllers/netsuiteController.js:82-83` (justo antes de `formatIFRecord`):
+```js
+const allIFs = searchResponse.data.data || [];
+console.log('🔍 [DEBUG] Keys crudas:', Object.keys(allIFs[0] || {}));
+console.log('🔍 [DEBUG] Primer IF:', JSON.stringify(allIFs[0], null, 2));
+```
+Hacer restart del backend, login en el frontend, y revisar `docker logs --tail 30 wms-backend`. Si la key nueva aparece aquí pero no en Network, el problema es `formatIFRecord`. Si no aparece aquí, el problema es la búsqueda o el cache de NetSuite. **Recordar revertir los `console.log` después.**
+
+### 9.14 El modal de confirmación de salida de placas no aparece
+
+**Síntoma**: el usuario hace click en "Completar registro" pero el modal con "Se registrarán N placas para la IF..." no se muestra. No hay error en consola.
+
+**Causas posibles**:
+
+1. **No hay IF seleccionada** → `startSignatureCapture()` muestra `showToast('Selecciona una IF antes de completar el registro', 'error')` y hace `return` antes del modal.
+   - **Fix**: el usuario debe seleccionar una IF del dropdown antes de completar.
+
+2. **No hay placas escaneadas** → toast "Escanea al menos una placa antes de capturar firmas" + return.
+   - **Fix**: escanear al menos una placa.
+
+3. **Error de JavaScript en `askExitConfirmation`**:
+   - Abrir DevTools → Console.
+   - Buscar errores tipo `Cannot read properties of null` o `selectedIF is undefined`.
+   - Verificar que `selectedIF` no fue limpiado entre el `onchange` del select y el click del botón (revisar `clearIF()` en `js/netsuite-client.js:87-91`).
+
+4. **El modal existe en el DOM pero su CSS no lo muestra**:
+   - Verificar que el CSS de `.confirm-modal` y `.confirm-modal.active` existe en `css/styles.css:956-1016`.
+   - Verificar que `z-index: 1001` está seteado (debe ser mayor que el del signature modal, que es 1000).
+
+5. **El backend no está exponiendo `sourceDoc` correctamente**:
+   - Si `selectedIF.sourceDoc` es `undefined`, el `ifDisplay` cae al fallback `selectedIF.tranid` y se ve "para la IF14580", no "para la IF14580 (SO14548)".
+   - Verificar que `formatIFRecord` incluye `sourceDoc` y que la columna de NetSuite está bien configurada (ver §9.13).
+
 ---
 
 ## 10. Anexos
@@ -1623,7 +1828,9 @@ Salida esperada: `['GDL', 'GDL:OUTLET GDL', 'TIJUANA', 'PUEBLA', 'TEMPORAL', 'BO
 | **realm** | Identificador de la cuenta NetSuite dentro del header OAuth 1.0a.   |
 | **File Cabinet** | Sistema de archivos de NetSuite donde se suben los PNG de firma. |
 | **Item Fulfillment** | Tipo de registro en NetSuite para salidas de inventario.     |
-| **shipstatus** | Estado del IF. Valores: `A` Pending Approval, `B` Pending Fulfillment, `C` Shipped, `D` Partially Shipped, `E` Pending Billing, `F` Billed, `G` Closed. |
+| **shipstatus** | Nombre del campo nativo de NetSuite en el record `Item Fulfillment`. Valores: `A` Pending Approval, `B` Pending Fulfillment, `C` Shipped, `D` Partially Shipped, `E` Pending Billing, `F` Billed, `G` Closed. En el response de la búsqueda guardada (RESTlet 2217) este campo llega como `statusref` (`{value, text}`). |
+| **statusref** | Nombre de la key en el JSON de respuesta del RESTlet 2217. Contiene `{ value: "packed", text: "Empaquetado" }`. Mapeado a `status` en el response del backend por `formatIFRecord`. |
+| **formulatext** | Nombre por default que NetSuite asigna a una columna de fórmula de texto en una búsqueda guardada. Si no le pusiste un nombre custom, el RESTlet 2217 la devuelve bajo esta key. Mapeado a `sourceDoc` en el response del backend. |
 
 ### 10.2 Pendientes y mejoras
 
@@ -1636,13 +1843,14 @@ Salida esperada: `['GDL', 'GDL:OUTLET GDL', 'TIJUANA', 'PUEBLA', 'TEMPORAL', 'BO
 | 5  | Considerar agregar `package-lock.json` al repo para builds reproducibles.                 |
 | 6  | Mover el `BACKEND_URL` a una variable de entorno del frontend (requiere `sub_filter` en nginx). |
 | 7  | Refactor del `WEBHOOK_URL` de n8n: está hardcodeado en `js/webhook.js:10` y no se usa.   |
-| 8  | Documentar el script 2217 (no está en el repo, solo existe en NetSuite).                  |
+| 8  | ~~Documentar el script 2217 (no está en el repo, solo existe en NetSuite).~~ Resuelto parcialmente en §6.13 (se documenta el contrato y el flujo, no el código fuente del RESTlet). |
 | 9  | Internacionalización (i18n) — hoy todo en español-MX.                                     |
 | 10 | Tests automatizados (no hay suite de tests).                                              |
-| 11 | Ajustar los `folderId` (12848/12849/11772/11773) en `wms_link_firmas.js:16-21` cuando se promuevan a producción (deben coincidir con los de `backend/config/environments.js`). |
+| 11 | ~~Ajustar los `folderId` (12848/12849/11772/11773) en `wms_link_firmas.js:16-21` cuando se promuevan a producción (deben coincidir con los de `backend/config/environments.js`).~~ Documentado en §6.11 con warning explícito. |
 | 12 | Agregar `wms_link_firmas.js` y `wms_firma_template.xml` al File Cabinet de producción y desplegar script + asignar template al record Item Fulfillment. |
 | 13 | Considerar extraer el helper de filtrado de location a un módulo separado (`backend/utils/locationFilter.js`) para que sea testeable aisladamente. |
 | 14 | Mover `RESTRICTED_LOCATION_PREFIXES` (`['MEX', 'MTY', 'GDL']`) y `SHARED_LOCATIONS` (`['TEMPORAL', 'PROYECTOS', 'Material Transformado', 'MATRIZ']`) a `backend/config/environments.js` (junto a `UBICACIONES`) para que sean configurables sin tocar el controller. |
+| 15 | Cuando se cambie el nombre de la columna fórmula en NetSuite (de `formulatext` a un ID custom como `custbody_num_doc_origen`), actualizar `formatIFRecord` y §6.5.5. Mientras siga como `formulatext` default, no requiere cambio. |
 
 ### 10.3 Comandos útiles
 
@@ -1681,4 +1889,13 @@ curl -X POST https://api.marblock.shop/auth/login \
 ---
 
 **Mantenido por**: equipo WMS Marblock.
-**Última actualización**: junio 2026 (regla de ubicaciones compartidas por default en `netsuiteController.js:5-25`; whitelist de `Material Transformado` y `MATRIZ`; fix de filtrado de outlets; documentación de `wms_link_firmas.js` y `wms_firma_template.xml`).
+**Última actualización**: junio 2026
+- Modal de confirmación de salida de placas (`#confirmExitModal`) con conteo + IF + doc origen
+- Campo `sourceDoc` agregado al API (mapea `ifRecord.formulatext` en `formatIFRecord`)
+- Dropdown y modal de warning muestran formato `IF14580 (SO14548)`
+- Validaciones en cascada en `startSignatureCapture()` (records + selectedIF)
+- §6.13 nueva: flujo completo de data de NetSuite al frontend (para evitar debug futuro)
+- §9.12-9.14 nuevas: cómo agregar un campo nuevo, diagnosticar columnas faltantes, diagnosticar modal que no aparece
+- §6.5.5 nueva: equivalencia campos NetSuite → keys JSON
+- Correcciones: `shipstatus` → `statusref`, `formulatext` documentado, unificación de `customsearch3672` en todo el doc
+- Regla de ubicaciones compartidas por default en `netsuiteController.js:5-25`; whitelist de `Material Transformado` y `MATRIZ`; fix de filtrado de outlets; documentación de `wms_link_firmas.js` y `wms_firma_template.xml`
