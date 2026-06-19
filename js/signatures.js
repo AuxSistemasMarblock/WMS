@@ -71,6 +71,37 @@ function getRequiredSignatures() {
 }
 
 /**
+ * Mostrar modal de confirmación para salida de placas
+ * Resuelve true si confirman, false si cancelan
+ */
+function askExitConfirmation(count, selectedIF) {
+  return new Promise((resolve) => {
+    document.getElementById('confirmPlacaCount').textContent = count;
+    const ifDisplay = selectedIF
+      ? (selectedIF.sourceDoc
+          ? `${selectedIF.tranid} (${selectedIF.sourceDoc})`
+          : selectedIF.tranid)
+      : '—';
+    document.getElementById('confirmIFText').textContent = ifDisplay;
+    const modal = document.getElementById('confirmExitModal');
+    const btnConfirm = document.getElementById('btnConfirmExit');
+    const btnCancel = document.getElementById('btnCancelExit');
+
+    modal.classList.add('active');
+
+    const close = (val) => {
+      modal.classList.remove('active');
+      btnConfirm.onclick = null;
+      btnCancel.onclick = null;
+      resolve(val);
+    };
+
+    btnConfirm.onclick = () => close(true);
+    btnCancel.onclick = () => close(false);
+  });
+}
+
+/**
  * Iniciar proceso de captura de firmas
  */
 async function startSignatureCapture() {
@@ -78,6 +109,14 @@ async function startSignatureCapture() {
     showToast('Escanea al menos una placa antes de capturar firmas', 'error');
     return;
   }
+
+  if (!selectedIF) {
+    showToast('Selecciona una IF antes de completar el registro', 'error');
+    return;
+  }
+
+  const confirmed = await askExitConfirmation(records.length, selectedIF);
+  if (!confirmed) return;
 
   collectedSignatures = {};
   const required = getRequiredSignatures();

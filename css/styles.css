@@ -953,6 +953,68 @@ td {
     display: flex;
 }
 
+/* ─────────────────────────────────────────────────────────
+   MODAL DE CONFIRMACIÓN DE SALIDA DE PLACAS
+   ───────────────────────────────────────────────────────── */
+
+.confirm-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1001;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.confirm-modal.active {
+    display: flex;
+}
+
+.confirm-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px 24px;
+    max-width: 360px;
+    width: 100%;
+    text-align: center;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+.confirm-icon {
+    font-size: 36px;
+    margin-bottom: 8px;
+}
+
+.confirm-title {
+    margin: 0 0 8px;
+    font-size: 18px;
+    color: var(--text);
+}
+
+.confirm-text {
+    margin: 0 0 20px;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.confirm-text strong {
+    color: var(--text);
+    font-size: 16px;
+}
+
+.confirm-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+
 .signature-card {
     background: var(--surface);
     border: 1px solid var(--border);

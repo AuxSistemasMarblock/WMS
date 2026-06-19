@@ -39,9 +39,10 @@ function formatIFRecord(ifRecord) {
   return {
     internalId: ifRecord.id,
     tranid: ifRecord.tranid,
+    sourceDoc: ifRecord.formulatext,
     description: ifRecord.memo || ifRecord.description || '',
     location: ifRecord.location,
-    status: ifRecord.shipstatus,
+    status: ifRecord.statusref,
     date: ifRecord.trandate
   };
 }
