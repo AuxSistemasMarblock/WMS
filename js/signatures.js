@@ -87,6 +87,8 @@ function askExitConfirmation(count, selectedIF) {
     const btnConfirm = document.getElementById('btnConfirmExit');
     const btnCancel = document.getElementById('btnCancelExit');
 
+    // Mientras el modal está abierto, descartar lo que la pistola emita
+    if (typeof clearScanBuffer === 'function') clearScanBuffer();
     modal.classList.add('active');
 
     const close = (val) => {
@@ -150,6 +152,9 @@ async function captureNextSignature() {
 
   // Inicializar SignaturePad
   initSignaturePad();
+
+  // Descartar buffer de pistola antes de mostrar el modal
+  if (typeof clearScanBuffer === 'function') clearScanBuffer();
 
   // Mostrar modal
   document.getElementById('signatureModal').classList.add('active');

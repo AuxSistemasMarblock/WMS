@@ -112,6 +112,7 @@ function showMainView() {
   document.getElementById('currentUserName').textContent = currentUser.nombre;
   document.getElementById('currentUserLocation').textContent = currentUser.ubicacion.nombre;
   document.getElementById('currentUserRole').textContent = getRoleLabel(currentUser.cargo);
+  // La pistola se auto-arranca desde scanner.js (DOMContentLoaded)
 }
 
 /**

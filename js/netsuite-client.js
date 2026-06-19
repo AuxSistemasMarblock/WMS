@@ -56,6 +56,19 @@ function updateIFSelect() {
  */
 function handleIFSelect(event) {
   const tranid = event.target.value;
+  const activeRecords = typeof getActiveRecords === 'function' ? getActiveRecords() : [];
+
+  // Si hay placas escaneadas para la IF actual, pedir confirmación antes de cambiar
+  if (tranid && selectedIF && tranid !== selectedIF.tranid && activeRecords.length > 0) {
+    const ok = confirm(
+      `Tienes ${activeRecords.length} placa(s) escaneada(s) para ${selectedIF.tranid}.\n\n` +
+      `Si cambias de IF, esas placas NO se enviarán con la nueva IF. ¿Continuar?`
+    );
+    if (!ok) {
+      event.target.value = selectedIF.tranid;
+      return;
+    }
+  }
 
   if (!tranid) {
     selectedIF = null;
@@ -75,6 +88,14 @@ function handleIFSelect(event) {
  * Botón para recargar IFs
  */
 async function reloadIFs() {
+  const activeRecords = typeof getActiveRecords === 'function' ? getActiveRecords() : [];
+  if (selectedIF && activeRecords.length > 0) {
+    const ok = confirm(
+      `Tienes ${activeRecords.length} placa(s) escaneada(s) para ${selectedIF.tranid}.\n\n` +
+      `Recargar IFs NO borra los registros, pero perderás la selección actual. ¿Continuar?`
+    );
+    if (!ok) return;
+  }
   document.getElementById('ifSelect').value = '';
   selectedIF = null;
   document.getElementById('ifBadge').style.display = 'none';
