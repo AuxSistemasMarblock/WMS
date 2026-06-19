@@ -74,9 +74,10 @@ function getRequiredSignatures() {
  * Mostrar modal de confirmación para salida de placas
  * Resuelve true si confirman, false si cancelan
  */
-function askExitConfirmation(count) {
+function askExitConfirmation(count, ifTranid) {
   return new Promise((resolve) => {
     document.getElementById('confirmPlacaCount').textContent = count;
+    document.getElementById('confirmIFText').textContent = ifTranid || '—';
     const modal = document.getElementById('confirmExitModal');
     const btnConfirm = document.getElementById('btnConfirmExit');
     const btnCancel = document.getElementById('btnCancelExit');
@@ -104,7 +105,12 @@ async function startSignatureCapture() {
     return;
   }
 
-  const confirmed = await askExitConfirmation(records.length);
+  if (!selectedIF) {
+    showToast('Selecciona una IF antes de completar el registro', 'error');
+    return;
+  }
+
+  const confirmed = await askExitConfirmation(records.length, selectedIF.tranid);
   if (!confirmed) return;
 
   collectedSignatures = {};
