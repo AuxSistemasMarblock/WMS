@@ -29,7 +29,7 @@ function parseQR(raw, mode) {
         return {
             tipo: 'placa',
             sku,
-            lote: parts.slice(1, loteEndIdx).join('-'),
+            lote: parts.slice(1, loteEndIdx).join(' '),
             ubicacion: parts.slice(loteEndIdx).join(' '),
         };
     }
