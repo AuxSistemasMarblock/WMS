@@ -30,7 +30,7 @@
    - 6.4 Token TBA (Token-Based Authentication)
    - 6.5 Búsqueda guardada
    - 6.6 RESTlet 2217 (`searchResults.js`) — Búsqueda de IFs
-   - 6.7 RESTlet 2976 (`wms_restlet.js`) — Subida de archivos y status
+   - 6.7 RESTlet 2860 (`wms_restlet.js`) — Subida de archivos y status
    - 6.8 File Cabinet — Estructura
    - 6.9 Estrategias de autenticación
    - 6.10 Procedimiento de regeneración tras pérdida de credenciales
@@ -386,6 +386,42 @@ app.use('/validate',       require('./routes/validation'));
 
 > Los endpoints `/firmas/*` son legacy. El flujo principal usa `/netsuite/submit` que también sube firmas. Se mantienen para compatibilidad.
 
+**`POST /firmas/upload`** — Request:
+```jsonc
+{
+  "ifNumber": "IF-2026-001",
+  "location": "MEX",
+  "signatures": {
+    "cliente":     "data:image/png;base64,iVBORw0KGgo...",
+    "almacen":     "data:image/png;base64,iVBORw0KGgo...",
+    "jefe_almacen":"data:image/png;base64,iVBORw0KGgo..."
+  }
+}
+```
+
+**`POST /firmas/upload`** — Response 200/207:
+```jsonc
+{
+  "status": "success" | "partial_success",
+  "ifNumber": "IF-2026-001",
+  "location": "MEX",
+  "uploaded": [ { "type": "cliente", "label": "Cliente", "filename": "IF-2026-001_cliente.png", "size": 12345, "fileId": "...", "folderId": 12849, "url": "..." } ],
+  "failed":   undefined,            // presente si hubo failures
+  "summary":  { "total": 2, "success": 2, "failures": 0 },
+  "timestamp": "2026-06-09T20:30:00.000Z"
+}
+```
+
+**`POST /firmas/upload/single`** — Request:
+```jsonc
+{ "filename": "IF-2026-001_cliente.png", "fileContent": "data:image/png;base64,...", "folderId": 12849 }
+```
+
+**`POST /firmas/upload/single`** — Response 200:
+```jsonc
+{ "success": true, "fileName": "...", "fileId": "...", "folderId": 12849, "url": "...", "size": 12345, "uploaded": "2026-06-09T..." }
+```
+
 #### `/validate` — Validación de configuración
 
 | Método | Path        | Auth | Descripción                                                                  |
@@ -476,9 +512,11 @@ app.use('/validate',       require('./routes/validation'));
   "ifInternalId": 12345,
   "location": "MEX",
   "itemsCount": 1,
-  "uploadedFiles": [ { "type": "auxAlmacen", "label": "Aux. de Almacén", "filename": "IF-2026-001_auxAlmacen.png", "size": 12345, "success": true, "fileId": "...", "folderId": 11765, "url": "...", "uploaded": "..." } ],
+  "uploadedFiles": [ { "type": "auxAlmacen", "label": "Aux. de Almacén", "filename": "IF-2026-001_auxAlmacen.png", "size": 12345, "success": true, "fileId": "...", "folderId": 12848, "url": "...", "uploaded": "..." } ],
   "failedFiles": undefined,
   "ifStatusUpdated": true,
+  "ifStatusError": undefined,         // presente si el update de status falló (string con el error)
+  "timestamp": "2026-06-09T20:30:00.000Z",
   "summary": { "totalSignatures": 2, "successCount": 2, "failureCount": 0 }
 }
 ```
@@ -516,10 +554,10 @@ req.user = {
 |--------------------|--------|-----------------------------------------------------------------------------------------------------------------------|
 | `getIFs`           | 54-97  | Llama al RESTlet 2217 con `searchId=customsearch3672`, filtra por ubicación del usuario, mapea a formato simplificado |
 | `formatIFRecord`   | 38-48  | Helper que toma la fila cruda del RESTlet 2217 y devuelve el objeto que consume el frontend. Mapea por nombre (no por índice). |
-| `submitData`       | 165-323| Por cada firma: sube PNG al File Cabinet (script 2860). Si todas OK, actualiza status del IF a `C`                   |
-| `diagnosticTest`   | 332-454| Valida env vars, prueba conexión sin OAuth y con OAuth a `/record/salesorder/1`                                      |
+| `submitData`       | 166-324| Por cada firma: sube PNG al File Cabinet (script 2860). Si todas OK, actualiza status del IF a `C`                   |
+| `diagnosticTest`   | 333-436| Valida env vars, prueba conexión con OAuth al RESTlet 2860 (dummy upload)                                            |
 
-**Lógica de filtrado de IFs** (`filterIFsByUserLocation`, líneas 27-36, más helpers `isSharedLocation` y `startsWithRestrictedPrefix`):
+**Helpers de filtrado de IFs** (`filterIFsByUserLocation`, líneas 27-36, más helpers `extractLocation` línea 8, `isSharedLocation` y `startsWithRestrictedPrefix`):
 
 ```js
 // Constantes de configuración:
@@ -596,7 +634,7 @@ netsuiteRestletClient.interceptors.request.use((request) => { ... });
 
 #### `config/netsuiteOAuth2.js` y `config/_legacy/`
 
-`netsuiteOAuth2.js` implementa el flujo Authorization Code de OAuth 2.0 (en desarrollo, solo se usa desde los endpoints `/auth/netsuite/oauth/*`). Los clientes `netsuiteAuth.js`, `netsuiteOAuth.js` y `netsuite.js` se movieron a `config/_legacy/` porque no participan en el flujo principal (RESTlets 2217/2976/2860) y solo quedaban como referencia. Ver §6.9.
+`netsuiteOAuth2.js` implementa el flujo Authorization Code de OAuth 2.0 (en desarrollo, solo se usa desde los endpoints `/auth/netsuite/oauth/*`). Los clientes `netsuiteAuth.js`, `netsuiteOAuth.js` y `netsuite.js` se movieron a `config/_legacy/` porque no participan en el flujo principal (RESTlets 2217/2860) y solo quedaban como referencia. Ver §6.9.
 
 ### 4.10 Logging y errores
 
@@ -623,7 +661,6 @@ netsuiteRestletClient.interceptors.request.use((request) => { ... });
 ```
 WMS/
 ├── index.html              # Entry point, carga 9 scripts (con ?v=N)
-├── test-scanner.html       # Página standalone para verificar la pistola sin login
 ├── css/
 │   ├── variables.css       # Variables CSS (colores, fonts)
 │   └── styles.css          # Estilos completos
@@ -715,6 +752,9 @@ Todas las variables compartidas son globales (declaradas con `var` en cada scrip
 | `pistolActive`          | `scanner.js`             | bool       | `scanner.js`                                                              |
 | `cameraActive`          | `scanner.js`             | bool       | `scanner.js`                                                              |
 | `scanBuffer`            | `scanner.js`             | string     | `scanner.js`                                                              |
+| `lastCode`              | `scanner.js`             | string     | `scanner.js` (dedupe 3s: mismo QR dentro de 3s se ignora)                |
+| `lastTime`              | `scanner.js`             | number     | `scanner.js` (timestamp ms del último scan aceptado)                     |
+| `lastKeyTime`           | `scanner.js`             | number     | `scanner.js` (timestamp ms de la última tecla, para detectar timing)    |
 | `scanner`               | `scanner.js`             | Html5Qrcode | `scanner.js`                                                            |
 
 **API expuesta vía `window`** (para que los `onclick` inline en el HTML la encuentren):
@@ -1026,7 +1066,7 @@ function _setClass(id, cls) { var e = _el(id); if (e) e.className = cls; }
 - `downloadJSONFallback(payload)` — `<a download>` con Blob.
 - `lockFromResend()` / `unlockForResend()` — bloquea el botón "Completar registro" después de un envío exitoso.
 
-> El frontend hoy **no llama a `exportJSON()`** (no hay botón que la invoque). La función existe para compatibilidad pero el flujo activo es `submitToNetSuite()`. Ver §10.2.
+> `exportJSON()` **sí se invoca** como fallback paralelo desde `js/signatures.js:201` (`submitWithSignatures`), después de un submit exitoso a NetSuite. Es decir, el frontend siempre intenta publicar al webhook de n8n además de NetSuite; si el webhook falla, descarga el JSON local. `lockFromResend()` se llama en ambos casos (NetSuite OK o webhook OK).
 
 #### `js/app.js`
 - `initApp()` — llama a `renderEmpty()`. Listener `DOMContentLoaded`.
@@ -1062,7 +1102,7 @@ function _setClass(id, cls) { var e = _el(id); if (e) e.className = cls; }
 | Token TBA         | `WMS - Rogelio García Aguilar, WMS` | Aplicación `WMS`, Usuario `auxsistemas@marblock.com`, Rol `WMS` |
 | Saved Search      | `customsearch3672`      | Devuelve IFs con `Tipo = Ejecución de orden de artículo`, `Estado = Empaquetado`, `Línea principal = verdadero` |
 | RESTlet 2217      | `CUSTOMSCRIPT2217`, deploy 1 | Recibe `{searchId, limit, start}` y devuelve IFs         |
-| RESTlet 2976      | `CUSTOMSCRIPT2976`, deploy 1 | Sube PNG a File Cabinet y actualiza status del IF (`updateIFStatus`) |
+| RESTlet 2860      | `CUSTOMSCRIPT2860`, deploy 1 | Sube PNG a File Cabinet y actualiza status del IF (`updateIFStatus`) |
 
 ### 6.2 Rol `WMS` — Permisos requeridos
 
@@ -1112,14 +1152,14 @@ El rol `WMS` debe existir y tener asignados los siguientes permisos. Sin ellos, 
 
 #### 6.2.4 Audiencia del Deployment de cada RESTlet
 
-Cada RESTlet (`CUSTOMSCRIPT2217` y `CUSTOMSCRIPT2976`) tiene un Deployment asociado. El campo **Audience** del deployment **debe incluir el rol `WMS`** o estar configurado como "All Roles". Si el rol `WMS` no está en el Audience, el RESTlet rechaza las llamadas del TBA con `INVALID_LOGIN_ATTEMPT` aunque las credenciales sean válidas.
+Cada RESTlet (`CUSTOMSCRIPT2217` y `CUSTOMSCRIPT2860`) tiene un Deployment asociado. El campo **Audience** del deployment **debe incluir el rol `WMS`** o estar configurado como "All Roles". Si el rol `WMS` no está en el Audience, el RESTlet rechaza las llamadas del TBA con `INVALID_LOGIN_ATTEMPT` aunque las credenciales sean válidas.
 
 Procedimiento para verificar:
 1. `Customization → Scripting → Scripts → [2217] → Deployments`.
 2. Abrir el deployment activo.
 3. Pestaña **Audience** → confirmar que el rol `WMS` está en "Selected Roles" o que está configurado como "All Roles".
 4. Save.
-5. Repetir para el script 2976.
+5. Repetir para el script 2860.
 
 ### 6.3 Integration Record
 
@@ -1321,13 +1361,15 @@ Authorization: OAuth 1.0a ...
 | 400    | Rol sin permiso sobre el record type                | Agregar `Ejecución de orden de artículos = Completo` al rol `WMS` |
 | 500    | Error de sintaxis en `searchResults.js`             | Revisar Execution Log del RESTlet en NetSuite                  |
 
-### 6.7 RESTlet 2976 (`wms_restlet.js`) — Subida de archivos y status de IF
+### 6.7 RESTlet 2860 (`wms_restlet.js`) — Subida de archivos y status de IF
+
+> **Nota de versionado**: este RESTlet está declarado con `@NApiVersion 2.x` (no `2.1` como `wms_link_firmas.js`).
 
 #### 6.7.1 Metadatos
 
 | Campo           | Valor                |
 |-----------------|----------------------|
-| Internal ID     | `CUSTOMSCRIPT2976`   |
+| Internal ID     | `CUSTOMSCRIPT2860`   |
 | Deploy ID       | `CUSTOMDEPLOY1`      |
 | Audience        | Rol `WMS`            |
 | Script          | `wms_restlet.js` (versionado en el repo) |
@@ -1336,7 +1378,7 @@ Authorization: OAuth 1.0a ...
 
 **Request — Subir firma**:
 ```json
-POST /app/site/hosting/restlet.nl?script=2976&deploy=1
+POST /app/site/hosting/restlet.nl?script=2860&deploy=1
 Content-Type: application/json
 Authorization: OAuth 1.0a ...
 
@@ -1397,8 +1439,8 @@ La estructura física del File Cabinet se simplificó a una sola carpeta raíz `
 /Firmas/
 ├── auxAlmacen/        # Folder ID: 12848
 ├── Cliente/           # Folder ID: 12849
-├── GerenteSucursal/   # Folder ID: 11773
-└── JefeAlmacen/       # Folder ID: 11772
+├── GerenteSucursal/   # Folder ID: 12851
+└── JefeAlmacen/       # Folder ID: 12850
 ```
 
 > **Mapa plano en backend**: el backend ahora usa 4 env vars únicas (`NETSUITE_FOLDER_AUXALMACEN`, `NETSUITE_FOLDER_CLIENTE`, `NETSUITE_FOLDER_JEFE`, `NETSUITE_FOLDER_GERENTE`) en lugar de las 12 vars previas `NETSUITE_FOLDER_<UBICACION>_<TIPO>`. La ubicación del usuario **no determina el folder físico**: el helper `config.netsuite.getFolderId(tipoFirma)` resuelve el folder únicamente por tipo de firma. La ubicación se sigue usando para **filtrar las IFs visibles** por usuario (ej: un usuario de GDL ve GDL + GDL:OUTLET + TEMPORAL + PROYECTOS; TEMPORAL y PROYECTOS son visibles para todos).
@@ -1494,12 +1536,12 @@ Si NetSuite sandbox se actualiza o las credenciales TBA dejan de funcionar (esce
 const FIRMAS = [
     { tipo: 'auxAlmacen',  folderId: 12848, fieldId: 'custbody60' },
     { tipo: 'cliente',     folderId: 12849, fieldId: 'custbody61' },
-    { tipo: 'jefeAlmacen', folderId: 11772, fieldId: 'custbody62' },
-    { tipo: 'gerente',     folderId: 11773, fieldId: 'custbody63' }
+    { tipo: 'jefeAlmacen', folderId: 12850, fieldId: 'custbody62' },
+    { tipo: 'gerente',     folderId: 12851, fieldId: 'custbody63' }
 ];
 ```
 
-> ⚠️ **Importante**: los `folderId` (12848 / 12849 / 11772 / 11773) son los del sandbox actual. **Antes de promover a producción, ajustar a los folder IDs de producción** (los mismos definidos en `backend/config/environments.js §6.8`).
+> ⚠️ **Importante**: los `folderId` (12848 / 12849 / 12850 / 12851) son los del sandbox actual. **Antes de promover a producción, ajustar a los folder IDs de producción** (los mismos definidos en `backend/config/environments.js §6.8`).
 
 **Lógica de búsqueda**:
 
@@ -1752,16 +1794,16 @@ Ambos registros deben apuntar a la IP del VPS. Traefik (gestionado por Dokploy) 
 | `NETSUITE_TOKEN_ID`                       | **Sí**    | `30f96ce0...`                                      | Token ID del TBA                            |
 | `NETSUITE_TOKEN_SECRET`                   | **Sí**    | `44be223e...`                                      | Token secret del TBA                        |
 | `NETSUITE_SEARCH_ID`                      | **Sí**    | `customsearch3672`                                  | ID de la búsqueda guardada                 |
-| `NETSUITE_RESTLET_URL`                    | **Sí**    | `https://9080139-sb1.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=2976&deploy=1` | URL completa del RESTlet 2976 (upload) |
-| `NETSUITE_RESTLET_SCRIPT_ID`              | No        | `2976`                                             | ID del script (upload + updateIFStatus)    |
+| `NETSUITE_RESTLET_URL`                    | **Sí**    | `https://9080139-sb1.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=2860&deploy=1` | URL completa del RESTlet 2860 (upload) |
+| `NETSUITE_RESTLET_SCRIPT_ID`              | No        | `2860`                                             | ID del script (upload + updateIFStatus)    |
 | `NETSUITE_RESTLET_DEPLOY_ID`              | No        | `1`                                                | Deploy del script                           |
 | `NETSUITE_SEARCH_RESTLET_URL`             | **Sí**    | `https://9080139-sb1.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=2217&deploy=1` | URL completa del RESTlet 2217 (search) |
 | `NETSUITE_SEARCH_RESTLET_SCRIPT_ID`       | No        | `2217`                                             | ID del script (búsqueda de IFs)            |
 | `NETSUITE_SEARCH_RESTLET_DEPLOY_ID`       | No        | `1`                                                | Deploy del script                           |
 | `NETSUITE_FOLDER_AUXALMACEN`              | **Sí**    | `12848`                                            | Folder ID `auxAlmacen` (compartido)         |
 | `NETSUITE_FOLDER_CLIENTE`                 | **Sí**    | `12849`                                            | Folder ID `Cliente` (compartido)            |
-| `NETSUITE_FOLDER_JEFE`                    | **Sí**    | `11772`                                            | Folder ID `JefeAlmacen` (compartido)        |
-| `NETSUITE_FOLDER_GERENTE`                 | **Sí**    | `11773`                                            | Folder ID `GerenteSucursal` (compartido)    |
+| `NETSUITE_FOLDER_JEFE`                    | **Sí**    | `12850`                                            | Folder ID `JefeAlmacen` (compartido)        |
+| `NETSUITE_FOLDER_GERENTE`                 | **Sí**    | `12851`                                            | Folder ID `GerenteSucursal` (compartido)    |
 | `NETSUITE_FILECABINET_PATH_PREFIX`        | No        | `/Firmas`                                          | Prefijo conceptual de path                  |
 | `NETSUITE_FILECABINET_SIGNATURE_FOLDER_PATTERN` | No  | `{LOCATION}/{TYPE}`                                | Patrón de carpeta                           |
 | `NETSUITE_FILECABINET_FILE_PATTERN`       | No        | `{IF}_{TYPE}.png`                                  | Patrón de filename                          |
@@ -2266,7 +2308,7 @@ addRecord({ tipo: 'placa', sku: 'TEST', lote: 'TEST', ubicacion: 'TEST' })
 | 8  | ✅     | ~~Documentar el script 2217 (no está en el repo, solo existe en NetSuite).~~ Resuelto en §6.13. |
 | 9  | ⏳     | Internacionalización (i18n) — hoy todo en español-MX.                                     |
 | 10 | ⏳     | Tests automatizados (no hay suite de tests).                                              |
-| 11 | ✅     | ~~Ajustar los `folderId` (12848/12849/11772/11773) en `wms_link_firmas.js` cuando se promuevan a producción.~~ Documentado en §6.11 con warning explícito. |
+| 11 | ✅     | ~~Ajustar los `folderId` (12848/12849/12850/12851) en `wms_link_firmas.js` cuando se promuevan a producción.~~ Documentado en §6.11 con warning explícito. |
 | 12 | ⏳     | Agregar `wms_link_firmas.js` y `wms_firma_template.xml` al File Cabinet de producción y desplegar script + asignar template al record Item Fulfillment. |
 | 13 | ⏳     | Considerar extraer el helper de filtrado de location a un módulo separado (`backend/utils/locationFilter.js`) para que sea testeable aisladamente. |
 | 14 | ⏳     | Mover `RESTRICTED_LOCATION_PREFIXES` y `SHARED_LOCATIONS` a `backend/config/environments.js` para que sean configurables sin tocar el controller. |
@@ -2307,7 +2349,7 @@ curl -X POST https://api.marblock.shop/auth/login \
 - `lib/signature_pad.min.js` — librería externa, no inspeccionada.
 - `docker-compose.yml` (raíz) — versión local/dev, no usada en Dokploy.
 - `backend/package-lock.json` — no se commitea (está en `.gitignore`).
-- `test-scanner.html` — página standalone para verificar la pistola sin login. Útil como smoke test manual (cargar la URL, click "Activar pistola", disparar). No es parte del flujo productivo.
+- `test-scanner.html` — *(eliminado del repo, ya no existe en la raíz)*. Era una página standalone para verificar la pistola sin login.
 
 **Archivos documentados a profundidad** (referencias cruzadas):
 - `wms_restlet.js` → §6.7 (RESTlet 2860)

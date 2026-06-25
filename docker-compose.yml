@@ -13,7 +13,7 @@ services:
       context: .
       args:
         BACKEND_URL: http://localhost:3001
-        ENVIRONMENT: development
+        ENVIRONMENT: production
     container_name: wms-frontend
     restart: always
     ports:
