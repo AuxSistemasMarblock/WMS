@@ -843,7 +843,9 @@ Todas las variables compartidas son globales (declaradas con `var` en cada scrip
 - `submitToNetSuite(signatures)` — POST a `/netsuite/submit` con `{ifTranid, ifInternalId, ubicacion_id, items, signatures}`.
 
 #### `js/signatures.js`
-- `initSignaturePad()` — instancia `new SignaturePad(canvas, ...)`.
+- `lockBodyScroll()` / `unlockBodyScroll()` — setean `document.body.style.overflow` para evitar que el body scrollee detrás del modal en mobile.
+- `syncCanvasSize(canvas, cssW, cssH)` — sincroniza el tamaño interno del canvas con su tamaño CSS (mapeo 1:1, sin `ctx.scale`). Es la pieza clave para que la firma aparezca donde se traza.
+- `initSignaturePad()` — instancia `new SignaturePad(canvas, ...)` y registra un `ResizeObserver` sobre el canvas que dispara `syncCanvasSize()` ante cualquier cambio de tamaño (apertura del modal, rotación, resize de ventana).
 - `getRequiredSignatures()` — devuelve objeto con firmas requeridas según `records.length`:
   - siempre: `auxAlmacen` y `cliente`
   - si `> 3`: `jefeAlmacen`
@@ -853,10 +855,12 @@ Todas las variables compartidas son globales (declaradas con `var` en cada scrip
   2. `!selectedIF` → toast "Selecciona una IF antes…" + return.
   3. Llama `clearScanBuffer()` (defensivo) y muestra `#confirmExitModal`.
 - `askExitConfirmation(count, selectedIF)` — modal con "Se registrarán N placas para IF14580 (SO14548). ¿Deseas continuar?".
-- `captureNextSignature()` — saca la siguiente firma de la cola y muestra `#signatureModal`. Llama `clearScanBuffer()` antes de mostrar.
+- `captureNextSignature()` — saca la siguiente firma de la cola y muestra `#signatureModal`. Llama `lockBodyScroll()` + `syncCanvasSize()` (sincronización inmediata antes del primer toque del usuario).
 - `clearSignature()` — limpia el canvas.
-- `submitSignature()` — toma `toDataURL('image/png')` y guarda en `collectedSignatures`.
+- `submitSignature()` — toma `toDataURL('image/png')` y guarda en `collectedSignatures`. Llama `unlockBodyScroll()` al cerrar.
 - `submitWithSignatures()` — llama a `submitToNetSuite(collectedSignatures)`. Si OK, limpia tabla y llama `clearIF()`.
+
+> **Decisión de diseño del canvas**: el canvas usa mapeo 1:1 entre tamaño CSS y tamaño interno (sin `ctx.scale` ni HiDPI supersampling). Esto elimina el riesgo de offset por desincronización entre `ctx.scale` y `canvas.width`. En pantallas Retina/HiDPI la firma se ve ligeramente menos nítida; si se necesita sharpness, ver §10.2 pendiente #23.
 
 #### `js/qr-parser.js`
 - `parseQR(raw, mode)` — devuelve `{tipo:'placa', sku, lote, ubicacion}` si tiene 3+ partes separadas por espacio, o `{tipo:'folio', valor}` si 1 parte. Modo `folio` siempre devuelve `folio`. La app solo usa modo `placa`.
@@ -2320,6 +2324,7 @@ addRecord({ tipo: 'placa', sku: 'TEST', lote: 'TEST', ubicacion: 'TEST' })
 | 20 | ⏳     | Cuando se cambie la pistola de modelo, verificar que el terminador siga siendo `Enter` (algunas pistolas usan `Tab`). Configurable vía `SCAN_TERMINATOR_KEYS` en `js/scanner.js:24`. |
 | 21 | ⏳     | Considerar agregar feedback visual/sonoro al recibir un scan (toast verde, beep, vibración). Por ahora solo se actualiza `#lastScanText`. |
 | 22 | ⏳     | Documentar y automatizar la regeneración de credenciales NetSuite (script `scripts/regen-netsuite-creds.sh`?). |
+| 23 | ⏳     | Mejorar nitidez de la firma en pantallas Retina/HiDPI: hoy el canvas usa mapeo 1:1 entre CSS y píxeles internos (sin supersampling) para garantizar 0 offset. Si se quiere sharpness, usar `ResizeObserver` para ajustar `canvas.width = cssWidth * devicePixelRatio` + `ctx.scale(dpr, dpr)` validando primero que el layout esté estable. |
 
 ### 10.3 Comandos útiles
 
@@ -2374,6 +2379,13 @@ curl -X POST https://api.marblock.shop/auth/login \
 - §9.15-9.18 nuevas: troubleshooting específico del escáner (foco en select, toggle, LED, no aparece en tabla)
 - §10.1 glosario extendido: HID Keyboard, scanSource, buffer de scan
 - §10.2 actualizadas: marcadores ✅/⏳; 7 ítems nuevos (#16-22) reflejando lo hecho y los pendientes del escáner
+
+**Firma responsiva (móvil/tablet)**:
+- §5.7 `js/signatures.js`: agregadas `lockBodyScroll()` / `unlockBodyScroll()` y `syncCanvasSize()`; `initSignaturePad()` ahora usa `ResizeObserver` para sincronizar el canvas ante cambios de tamaño. Decisión documentada: mapeo 1:1 entre CSS y píxeles internos (sin `ctx.scale`) para garantizar 0 offset.
+- §5.7 CSS: `.signature-canvas` con `max-width: 100%; height: auto` + `touch-action: none` + `user-select: none`.
+- §5.7 modales: `100dvh` + `overscroll-behavior: contain` + `lockBodyScroll` mientras están abiertos.
+- §5.7 layout: `body { overflow-x: hidden }`, `header` con `flex-wrap: wrap`, media queries para ≤600px / 601-900px / 901-1100px.
+- §10.2 #23 nuevo: pendiente mejorar nitidez en Retina/HiDPI (sigue en 1:1 a propósito).
 
 **Otros cambios pendientes de documentar** (en futuras revisiones):
 - v1.x: Modal de confirmación de salida de placas (`#confirmExitModal`) con conteo + IF + doc origen

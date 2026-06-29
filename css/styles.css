@@ -1244,6 +1244,8 @@ td {
     user-select: none;
     -webkit-user-select: none;
     -webkit-tap-highlight-color: transparent;
+    max-width: 100%;
+    height: auto;
 }
 
 .signature-actions {

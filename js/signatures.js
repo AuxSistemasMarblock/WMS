@@ -19,46 +19,29 @@ function unlockBodyScroll() {
   document.body.style.overflow = '';
 }
 
+// ResizeObserver: se inicializa una vez y reacciona automáticamente a cualquier
+// cambio de tamaño del canvas (apertura del modal, rotación, resize de ventana).
+// Es más robusto que requestAnimationFrame + getBoundingClientRect porque no
+// depende del timing del frame y dispara solo cuando el tamaño REAL cambia.
+let signatureCanvasObserver = null;
+
 /**
- * Recalcular el tamaño del canvas de firma para que se ajuste al contenedor.
+ * Sincronizar el tamaño INTERNO del canvas con su tamaño CSS.
+ * Mapeo 1:1 sin escala: la firma aparece exactamente donde se traza.
  *
- * CRÍTICO: la primera vez se hace en 2 pasos:
- *   1) style.width = '100%' + style.height = 'auto' → deja que CSS determine el tamaño
- *   2) getBoundingClientRect() → lee el tamaño REAL que el browser renderizó
- * Sin este truco, hay un mismatch entre canvas.width (interno) y canvas.style.width (CSS)
- * y la firma aparece offset. También diferimos con requestAnimationFrame para
- * asegurar que el modal ya esté en el layout antes de medir.
+ * Trade-off: en pantallas Retina/HiDPI la firma se ve ligeramente menos nítida
+ * (1 pixel CSS = 1 pixel interno, sin supersampling). Esto es aceptable para
+ * una firma y elimina COMPLETAMENTE el riesgo de offset por desincronización
+ * entre ctx.scale y canvas.width.
  */
-function resizeSignatureCanvas() {
-  const canvas = document.getElementById('signatureCanvas');
+function syncCanvasSize(canvas, cssWidth, cssHeight) {
   if (!canvas) return;
-
-  // Paso 1: dejar que CSS determine el tamaño (el padre ya debe estar visible)
-  canvas.style.width = '100%';
-  canvas.style.height = 'auto';
-
-  // Paso 2: leer el tamaño real que el browser ya computó
-  const rect = canvas.getBoundingClientRect();
-  if (rect.width === 0) return;  // padre aún no está en layout, abortar
-
-  const ratio = Math.max(window.devicePixelRatio || 1, 1);
-  const cssWidth = Math.max(rect.width, 240);
-  const cssHeight = Math.round(cssWidth * (200 / 450));
-
-  // Paso 3: fijar tamaño CSS explícito
-  canvas.style.width = cssWidth + 'px';
-  canvas.style.height = cssHeight + 'px';
-
-  // Paso 4: resolución interna para HiDPI (2x o 3x para nitidez en Retina)
-  canvas.width = Math.round(cssWidth * ratio);
-  canvas.height = Math.round(cssHeight * ratio);
-
-  // Paso 5: aplicar escala al contexto para que signature_pad dibuje en coords CSS
-  //         (es decir, los puntos del usuario se traducen 1:1 al pixel visual)
-  const ctx = canvas.getContext('2d');
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.scale(ratio, ratio);
-
+  if (cssWidth <= 0 || cssHeight <= 0) return;
+  const w = Math.round(cssWidth);
+  const h = Math.round(cssHeight);
+  if (canvas.width === w && canvas.height === h) return;
+  canvas.width = w;
+  canvas.height = h;
   if (signaturePad) signaturePad.clear();
 }
 
@@ -73,7 +56,6 @@ function initSignaturePad() {
   }
 
   console.log('✅ Canvas encontrado:', canvas);
-  console.log('📏 Dimensiones canvas rect:', canvas.getBoundingClientRect());
 
   signaturePad = new SignaturePad(canvas, {
     backgroundColor: '#ffffff',
@@ -83,8 +65,17 @@ function initSignaturePad() {
     throttle: 10
   });
 
-  // No llamamos resizeSignatureCanvas() acá: el modal está oculto y el canvas
-  // no tiene layout. El resize ocurre en captureNextSignature() cuando se muestra.
+  // ResizeObserver: detecta cambios de tamaño del canvas automáticamente.
+  // Cubre: apertura del modal, rotación de pantalla, resize de ventana.
+  if (window.ResizeObserver && !signatureCanvasObserver) {
+    signatureCanvasObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        syncCanvasSize(canvas, entry.contentRect.width, entry.contentRect.height);
+      }
+    });
+    signatureCanvasObserver.observe(canvas);
+  }
+
   console.log('✅ SignaturePad inicializado:', signaturePad);
 }
 
@@ -219,12 +210,12 @@ async function captureNextSignature() {
   // Bloquear scroll del body para que no se mueva el canvas en mobile
   lockBodyScroll();
 
-  // Diferir el resize al siguiente frame para asegurar que el browser ya calculó
-  // el layout del modal. Sin esto, getBoundingClientRect() lee dimensiones viejas
-  // y la firma aparece offset a un costado.
-  requestAnimationFrame(() => {
-    resizeSignatureCanvas();
-  });
+  // Sync inmediato del tamaño del canvas (ResizeObserver también disparará
+  // cuando el browser termine de hacer layout, pero esto asegura que el canvas
+  // esté sincronizado antes del primer toque del usuario).
+  const canvas = document.getElementById('signatureCanvas');
+  const rect = canvas.getBoundingClientRect();
+  syncCanvasSize(canvas, rect.width, rect.height);
 }
 
 /**
@@ -275,6 +266,11 @@ async function submitWithSignatures() {
       signatureQueue = [];
       currentSignatureType = null;
 
+      // Resetear el preview "Última placa leída" del card del escáner
+      if (typeof updateLastScanPreview === 'function') {
+        updateLastScanPreview({});
+      }
+
       // Actualizar UI
       document.getElementById('tableBody').innerHTML = '<tr id="emptyRow"><td colspan="6"><div class="empty-state"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>Sin registros. Escanea un QR de placa para comenzar.</div></td></tr>';
       document.getElementById('rowCount').textContent = '0';
@@ -291,16 +287,5 @@ document.addEventListener('DOMContentLoaded', () => {
   setTimeout(initSignaturePad, 100);
 });
 
-// Recalcular el canvas cuando cambia el tamaño de la ventana o la orientación
-window.addEventListener('resize', () => {
-  if (document.getElementById('signatureModal').classList.contains('active')) {
-    resizeSignatureCanvas();
-  }
-});
-window.addEventListener('orientationchange', () => {
-  setTimeout(() => {
-    if (document.getElementById('signatureModal').classList.contains('active')) {
-      resizeSignatureCanvas();
-    }
-  }, 150);
-});
+// NOTA: el resize/orientationchange ya lo cubre el ResizeObserver configurado
+// en initSignaturePad(). No se necesitan listeners manuales de window.

@@ -73,7 +73,12 @@ function clearTable() {
     records = [];
     updateRowCount();
     renderEmpty();
-    
+
+    // Resetear el preview "Última placa leída" del card del escáner
+    if (typeof updateLastScanPreview === 'function') {
+        updateLastScanPreview({});
+    }
+
     // Desbloquea el botón para permitir nuevos envíos
     unlockForResend();
 }
