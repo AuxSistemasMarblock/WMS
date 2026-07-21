@@ -81,13 +81,9 @@ function handleIFSelect(event) {
   if (selectedIF) {
     document.getElementById('ifBadgeText').textContent = selectedIF.tranid;
     document.getElementById('ifBadge').style.display = 'flex';
-  }
-
-  // Quitar foco del <select> para que el próximo keydown del scanner
-  // no llegue con e.target=<select>, evitando que onPistolaKeydown
-  // descarte el primer caracter por la regla "humano vs escáner".
-  if (event && event.target && typeof event.target.blur === 'function') {
-    event.target.blur();
+    if (event && event.target && typeof event.target.blur === 'function') {
+      event.target.blur();
+    }
   }
 }
 
