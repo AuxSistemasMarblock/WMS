@@ -24,6 +24,12 @@ var SCAN_MAX_LENGTH = 200;
 var SCAN_BUFFER_TIMEOUT = 500;
 var lastKeyTime = 0;
 
+// Normalización de caracteres por layout de teclado (móvil/Android).
+// En layout ES-LATAM, la tecla física que en US-English produce '-'
+// produce "'" (apóstrofo). Como en lotes/ubicaciones nunca va a haber
+// un "'", el reemplazo es seguro.
+var SCAN_CHAR_FIXES = { "'": '-' };
+
 /* ─────────────────────────────────────────────────────────
    HELPERS
    ───────────────────────────────────────────────────────── */
@@ -74,7 +80,18 @@ function setGunLedActive(active) {
    ───────────────────────────────────────────────────────── */
 
 function handleScan(text) {
-    console.log('[WMS-SCAN] handleScan:', text);
+    console.log('[WMS-SCAN] handleScan (raw):', text);
+    // Red de seguridad: normalizar caracteres de layout de teclado
+    // (por si llega texto por un camino que no pasó por onPistolaKeydown,
+    // por ejemplo desde la cámara o desde un futuro integrador).
+    if (text && typeof text === 'string' && typeof SCAN_CHAR_FIXES === 'object') {
+        for (var src in SCAN_CHAR_FIXES) {
+            if (SCAN_CHAR_FIXES.hasOwnProperty(src) && text.indexOf(src) !== -1) {
+                text = text.split(src).join(SCAN_CHAR_FIXES[src]);
+            }
+        }
+    }
+    console.log('[WMS-SCAN] handleScan (normalized):', text);
     var now = Date.now();
     if (text === lastCode && (now - lastTime) < 3000) {
         console.log('[WMS-SCAN] dedupe (3s)');
@@ -151,9 +168,26 @@ function onPistolaKeydown(e) {
     lastKeyTime = now;
     var isRapid = dt < 50; // pistola: <30ms entre teclas; humano: >100ms
 
-    // Si el target es un form field Y los eventos son lentos (humano tipeando),
-    // dejar pasar al form field (no capturar) y resetear el buffer.
-    if (isFormField(e.target) && !isRapid && !isTerminator) {
+    // Log de diagnóstico: primer keydown de cada escaneo (buffer vacío).
+    // event.code no depende del layout; event.key sí.
+    if (scanBuffer.length === 0 && !isTerminator) {
+        console.log('[WMS-SCAN] first keydown:', {
+            key: e.key,
+            code: e.code,
+            target: e.target && e.target.tagName,
+            targetId: e.target && e.target.id,
+            dt: Math.round(dt),
+        });
+    }
+
+    // Si el target es un form field tipable (INPUT/TEXTAREA), los eventos
+    // son lentos (humano tipeando) y ya hay un buffer previo, dejar pasar
+    // al form field (no capturar) y resetear el buffer.
+    // Importante: si el buffer está vacío NO se descarta el primer keydown,
+    // porque en ese caso es casi seguro el inicio de un escaneo (un humano
+    // no tipea de a un caracter en un campo). Esto evita perder el primer
+    // caracter cuando hay foco residual en el <select> de IF.
+    if (isFormField(e.target) && !isRapid && !isTerminator && scanBuffer.length > 0) {
         scanBuffer = '';
         return;
     }
@@ -186,7 +220,13 @@ function onPistolaKeydown(e) {
         if (scanBuffer && dt > SCAN_BUFFER_TIMEOUT) {
             scanBuffer = '';
         }
-        scanBuffer += e.key;
+        // Normalizar caracteres por layout de teclado (ej: ES-LATAM produce
+        // "'" en lugar de "-").
+        var ch = e.key;
+        if (SCAN_CHAR_FIXES[ch] !== undefined) {
+            ch = SCAN_CHAR_FIXES[ch];
+        }
+        scanBuffer += ch;
         if (scanBuffer.length > SCAN_MAX_LENGTH) scanBuffer = '';
     }
 }
