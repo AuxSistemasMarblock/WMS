@@ -81,6 +81,9 @@ function handleIFSelect(event) {
   if (selectedIF) {
     document.getElementById('ifBadgeText').textContent = selectedIF.tranid;
     document.getElementById('ifBadge').style.display = 'flex';
+    if (event && event.target && typeof event.target.blur === 'function') {
+      event.target.blur();
+    }
   }
 }
 

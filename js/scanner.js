@@ -24,6 +24,9 @@ var SCAN_MAX_LENGTH = 200;
 var SCAN_BUFFER_TIMEOUT = 500;
 var lastKeyTime = 0;
 
+// Normalización de caracteres por layout de teclado (Android HID ES-LATAM vs US English)
+var SCAN_CHAR_FIXES = { "'": "-" };
+
 /* ─────────────────────────────────────────────────────────
    HELPERS
    ───────────────────────────────────────────────────────── */
@@ -153,7 +156,9 @@ function onPistolaKeydown(e) {
 
     // Si el target es un form field Y los eventos son lentos (humano tipeando),
     // dejar pasar al form field (no capturar) y resetear el buffer.
-    if (isFormField(e.target) && !isRapid && !isTerminator) {
+    // Solo aplica si ya hay buffer previo: el primer keydown en un form field
+    // no-tipable (ej. <select>) es casi seguro el inicio de un escaneo.
+    if (isFormField(e.target) && !isRapid && !isTerminator && scanBuffer.length > 0) {
         scanBuffer = '';
         return;
     }
@@ -174,6 +179,16 @@ function onPistolaKeydown(e) {
         scanBuffer = '';
 
         if (cleanBuf.length > 0) {
+            // Normalizar caracteres por layout de teclado Android (ES-LATAM → US)
+            var originalBuf = cleanBuf;
+            for (var bad in SCAN_CHAR_FIXES) {
+                if (cleanBuf.indexOf(bad) !== -1) {
+                    cleanBuf = cleanBuf.split(bad).join(SCAN_CHAR_FIXES[bad]);
+                }
+            }
+            if (cleanBuf !== originalBuf) {
+                console.log('[WMS-SCAN] chars normalizados:', JSON.stringify(originalBuf), '→', JSON.stringify(cleanBuf));
+            }
             console.log('[WMS-SCAN] ESCANEO:', cleanBuf);
             handleScan(cleanBuf);
         }
@@ -182,6 +197,16 @@ function onPistolaKeydown(e) {
 
     // Acumular caracteres imprimibles
     if (e.key && e.key.length === 1) {
+        // Log diagnóstico del primer key de un escaneo (key = layout-dependiente, code = físico)
+        if (scanBuffer.length === 0) {
+            console.log('[WMS-SCAN] primer key de escaneo', {
+                key: e.key,
+                code: e.code,
+                target: e.target && e.target.tagName,
+                targetId: e.target && e.target.id,
+                isRapid: isRapid
+            });
+        }
         // Si pasó mucho tiempo entre teclas, descartar buffer previo
         if (scanBuffer && dt > SCAN_BUFFER_TIMEOUT) {
             scanBuffer = '';
