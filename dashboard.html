@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="css/variables.css" />
   <link rel="stylesheet" href="css/styles.css" />
   <link rel="stylesheet" href="css/dashboard.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
 </head>
 <body>
 
@@ -101,6 +102,27 @@
     </div>
   </section>
 
+  <!-- GRÁFICAS: Tasa de exactitud + Top 5 artículos con más salidas -->
+  <section class="charts-section">
+    <div class="chart-card">
+      <div class="chart-header">
+        <span class="chart-title">Tasa de exactitud</span>
+        <span class="chart-subtitle" id="tasaExactitudTexto">–</span>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="chartExactitud"></canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-header">
+        <span class="chart-title">Top 5 artículos con más salidas</span>
+        <span class="chart-subtitle" id="topArticulosTotal">–</span>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="chartTopArticulos"></canvas>
+      </div>
+    </div>
+  </section>
 
   <!-- IFs MAL SACADAS -->
   <section class="table-card">

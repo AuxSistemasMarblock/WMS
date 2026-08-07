@@ -210,6 +210,7 @@ function cargarTodo() {
   cargarDiscrepancias();
   cargarTopErrores();
   cargarIFsOK();
+  cargarTopArticulos();
 }
 
 // =================== KPIs ===================
@@ -226,7 +227,7 @@ async function cargarKPIs() {
     }
     $('kpiDiscrepancias').textContent = k.total_discrepancias;
     $('kpiOK').textContent = k.ifs_ok;
-
+    renderChartExactitud(k.ifs_ok, k.ifs_con_errores, k.tasa_exactitud);
   } catch (e) {
     showToast('Error cargando KPIs: ' + e.message, 'error');
   }
@@ -236,6 +237,116 @@ function buildParams() {
   const p = new URLSearchParams({ desde: state.desde, hasta: state.hasta });
   if (state.sucursal) p.append('sucursal', state.sucursal);
   return p;
+}
+
+// =================== GRÁFICAS ===================
+function renderChartExactitud(ok, errores, tasa) {
+  const ctx = $('chartExactitud');
+  if (!ctx) return;
+
+  $('tasaExactitudTexto').textContent = tasa.toFixed(1) + '%';
+
+  if (chartExactitud) chartExactitud.destroy();
+  chartExactitud = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['IFs OK', 'IFs con error'],
+      datasets: [{
+        data: [ok, errores],
+        backgroundColor: ['#10b981', '#dc2626'],
+        borderWidth: 2,
+        borderColor: '#fff'
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '60%',
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: { font: { size: 11 }, padding: 6, boxWidth: 12 }
+        },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const total = ok + errores;
+              const pct = total > 0 ? ((ctx.parsed / total) * 100).toFixed(1) : 0;
+              return `${ctx.label}: ${ctx.parsed} (${pct}%)`;
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+async function cargarTopArticulos() {
+  try {
+    const params = buildParams();
+    const data = await apiFetch('/api/dashboard/ifs-mal-sacadas?' + params);
+    // Los "artículos con más salidas" requieren un endpoint dedicado.
+    // Por ahora usamos el endpoint de top-errores con dimension sku, o
+    // añadimos uno nuevo si el controller lo soporta. Aquí lo derivamos
+    // del endpoint existente con dimension sku (escaneos).
+    // Cuando esté el endpoint /articulos-mas-salidas, lo usamos:
+    const articulos = await apiFetch('/api/dashboard/articulos-mas-salidas?' + params);
+    renderChartTopArticulos(articulos.top || []);
+  } catch (e) {
+    // fallback: si el endpoint no existe, dejamos el chart vacío
+    renderChartTopArticulos([]);
+  }
+}
+
+function renderChartTopArticulos(items) {
+  const ctx = $('chartTopArticulos');
+  if (!ctx) return;
+
+  if (chartTopArticulos) chartTopArticulos.destroy();
+
+  const top5 = (items || []).slice(0, 5);
+  const labels = top5.map(i => i.key);
+  const data = top5.map(i => i.count);
+  const total = data.reduce((a, b) => a + b, 0);
+
+  // Subtitle con el total
+  const subtitleEl = $('topArticulosTotal');
+  if (subtitleEl) subtitleEl.textContent = total > 0 ? `${total} placas` : '–';
+
+  chartTopArticulos = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Placas escaneadas',
+        data,
+        backgroundColor: '#1e40af',
+        borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => `${ctx.parsed.y} placas`
+          }
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: { precision: 0, font: { size: 11 } },
+          title: { display: true, text: 'Placas', font: { size: 10 } }
+        },
+        x: {
+          ticks: { font: { size: 10 }, maxRotation: 30, minRotation: 0 }
+        }
+      }
+    }
+  });
 }
 
 // =================== IFs MAL SACADAS ===================
