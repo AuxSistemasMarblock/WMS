@@ -1,6 +1,8 @@
 /**
  * WMS Dashboard — Entry point
- * Orquesta: KPIs, IFs mal sacadas, discrepancias, top errores, IFs OK.
+ *
+ * Asume que la sesión ya está activa (el login se hace en index.html).
+ * Si no hay token, redirige a index.html.
  */
 
 // =================== ESTADO ===================
@@ -8,8 +10,15 @@ const state = {
   desde: null,
   hasta: null,
   sucursal: null,
-  loading: false
+  periodo: 'mes',
+  loading: false,
+  sucursales: [],
+  sucursalUsuario: null
 };
+
+// Charts (inicializados lazy)
+let chartExactitud = null;
+let chartTopArticulos = null;
 
 // =================== HELPERS ===================
 function $(id) { return document.getElementById(id); }
@@ -51,52 +60,30 @@ function badgeTipo(tipo) {
   return `<span class="tipo-badge ${cls}">${tipo.replace(/_/g, ' ')}</span>`;
 }
 
-// =================== AUTH ===================
-async function handleLogin(event) {
-  event.preventDefault();
-  const email = $('loginEmail').value.trim();
-  const password = $('loginPassword').value;
+function formatearFecha(s) {
+  if (!s) return '—';
+  return s;
+}
 
-  try {
-    const res = await fetch((window.BACKEND_URL || 'http://localhost:3001') + '/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || 'Login fallido');
-    }
-    const data = await res.json();
-    localStorage.setItem('wms_token', data.token);
-    if (data.user) {
-      localStorage.setItem('wms_user', JSON.stringify(data.user));
-      $('currentUserName').textContent = data.user.nombre || data.user.email;
-      $('currentUserLocation').textContent = data.user.ubicacion_nombre || 'N/A';
-      $('currentUserRole').textContent = data.user.cargo || 'N/A';
-    }
-    $('loginContainer').style.display = 'none';
-    $('mainApp').style.display = 'block';
-    initFiltrosDefault();
-    cargarTodo();
-  } catch (e) {
-    showToast('Error: ' + e.message, 'error');
-  }
+// =================== AUTH ===================
+function getToken() {
+  return sessionStorage.getItem('authToken');
+}
+
+function getCurrentUser() {
+  const s = sessionStorage.getItem('currentUser');
+  return s ? JSON.parse(s) : null;
 }
 
 function handleLogout() {
-  localStorage.removeItem('wms_token');
-  localStorage.removeItem('wms_user');
-  location.reload();
-}
-
-function getToken() {
-  return localStorage.getItem('wms_token');
+  sessionStorage.removeItem('authToken');
+  sessionStorage.removeItem('currentUser');
+  window.location.href = 'index.html';
 }
 
 async function apiFetch(path, opts = {}) {
   const token = getToken();
-  if (!token) throw new Error('No autenticado');
+  if (!token) { handleLogout(); throw new Error('No autenticado'); }
   const res = await fetch((window.BACKEND_URL || 'http://localhost:3001') + path, {
     ...opts,
     headers: {
@@ -105,10 +92,7 @@ async function apiFetch(path, opts = {}) {
       ...(opts.headers || {})
     }
   });
-  if (res.status === 401) {
-    handleLogout();
-    throw new Error('Sesión expirada');
-  }
+  if (res.status === 401) { handleLogout(); throw new Error('Sesión expirada'); }
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.error || res.statusText);
@@ -116,22 +100,107 @@ async function apiFetch(path, opts = {}) {
   return res.json();
 }
 
-// =================== FILTROS ===================
-function initFiltrosDefault() {
-  // Default: último mes
+// =================== PERÍODOS PRESET ===================
+function ymd(d) { return d.toISOString().split('T')[0]; }
+
+function calcularPeriodo(preset) {
   const hoy = new Date();
-  const haceUnMes = new Date();
-  haceUnMes.setDate(haceUnMes.getDate() - 30);
-  state.desde = haceUnMes.toISOString().split('T')[0];
-  state.hasta = hoy.toISOString().split('T')[0];
-  $('filtroDesde').value = state.desde;
-  $('filtroHasta').value = state.hasta;
+  const desde = new Date();
+  let hasta = new Date();
+
+  switch (preset) {
+    case 'hoy':
+      // desde = hoy
+      break;
+    case 'semana':
+      // lunes de esta semana
+      const day = hoy.getDay() || 7; // lunes=1, domingo=7
+      desde.setDate(hoy.getDate() - (day - 1));
+      break;
+    case 'mes':
+      desde.setDate(1);
+      break;
+    case 'mes_pasado':
+      desde.setMonth(hoy.getMonth() - 1, 1);
+      hasta.setDate(0); // último día del mes anterior
+      break;
+    case 'personalizado':
+      return null; // se usan los inputs
+    default:
+      desde.setMonth(hoy.getMonth() - 1);
+  }
+
+  return { desde: ymd(desde), hasta: ymd(hasta) };
 }
 
+function setPeriodo(preset) {
+  state.periodo = preset;
+  document.querySelectorAll('.preset-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.preset === preset);
+  });
+
+  if (preset === 'personalizado') {
+    $('customRange').style.display = 'flex';
+    return;
+  } else {
+    $('customRange').style.display = 'none';
+  }
+
+  const r = calcularPeriodo(preset);
+  if (r) {
+    state.desde = r.desde;
+    state.hasta = r.hasta;
+    $('filtroDesde').value = r.desde;
+    $('filtroHasta').value = r.hasta;
+  }
+}
+
+// =================== SUCURSALES ===================
+async function cargarSucursales() {
+  try {
+    const data = await apiFetch('/api/dashboard/sucursales');
+    state.sucursales = data.sucursales || [];
+    const user = getCurrentUser();
+    state.sucursalUsuario = user?.ubicacion?.nombre || null;
+
+    const sel = $('filtroSucursal');
+    sel.innerHTML = '';
+
+    // Opción "Todas" solo si NO es admin (los admins pueden ver todo por default)
+    if (user?.cargo === 'admin') {
+      const optTodas = el('option', { value: '' }, 'Todas las sucursales');
+      sel.appendChild(optTodas);
+    }
+
+    state.sucursales.forEach(s => {
+      const opt = el('option', { value: s.nombre }, s.nombre);
+      sel.appendChild(opt);
+    });
+
+    // Default: la ubicación del usuario
+    if (state.sucursalUsuario && state.sucursales.some(s => s.nombre === state.sucursalUsuario)) {
+      sel.value = state.sucursalUsuario;
+      state.sucursal = state.sucursalUsuario;
+    } else {
+      sel.value = '';
+      state.sucursal = null;
+    }
+  } catch (e) {
+    showToast('Error cargando sucursales: ' + e.message, 'error');
+  }
+}
+
+// =================== FILTROS ===================
 function aplicarFiltros() {
-  state.desde = $('filtroDesde').value;
-  state.hasta = $('filtroHasta').value;
-  state.sucursal = $('filtroSucursal').value.trim() || null;
+  if (state.periodo === 'personalizado') {
+    state.desde = $('filtroDesde').value;
+    state.hasta = $('filtroHasta').value;
+    if (!state.desde || !state.hasta) {
+      showToast('Selecciona un rango personalizado válido', 'error');
+      return;
+    }
+  }
+  state.sucursal = $('filtroSucursal').value || null;
   cargarTodo();
 }
 
@@ -146,18 +215,27 @@ function cargarTodo() {
 // =================== KPIs ===================
 async function cargarKPIs() {
   try {
-    const params = new URLSearchParams({ desde: state.desde, hasta: state.hasta });
-    if (state.sucursal) params.append('sucursal', state.sucursal);
+    const params = buildParams();
     const data = await apiFetch('/api/dashboard/resumen?' + params);
-    $('kpiTasa').textContent = data.kpis.tasa_exactitud.toFixed(1) + '%';
-    $('kpiErrores').textContent = data.kpis.ifs_con_errores;
-    $('kpiLineas').textContent = data.kpis.lineas_con_error + ' / ' + data.kpis.lineas_totales;
-    $('kpiPlacas').textContent = data.kpis.placas_escaneadas + ' / ' + data.kpis.placas_esperadas;
-    $('kpiDiscrepancias').textContent = data.kpis.total_discrepancias;
-    $('kpiOK').textContent = data.kpis.ifs_ok;
+    const k = data.kpis;
+    $('kpiErrores').textContent = k.ifs_con_errores;
+    $('kpiLineas').textContent = k.lineas_con_error + ' / ' + k.lineas_totales;
+    $('kpiPlacas').textContent = k.placas_escaneadas + ' / ' + k.placas_esperadas;
+    if (k.placas_escaneadas_huerfanas > 0) {
+      $('kpiPlacas').title = `${k.placas_escaneadas_matcheadas} matchearon con IFs, ${k.placas_escaneadas_huerfanas} no matchearon (huérfanas)`;
+    }
+    $('kpiDiscrepancias').textContent = k.total_discrepancias;
+    $('kpiOK').textContent = k.ifs_ok;
+
   } catch (e) {
     showToast('Error cargando KPIs: ' + e.message, 'error');
   }
+}
+
+function buildParams() {
+  const p = new URLSearchParams({ desde: state.desde, hasta: state.hasta });
+  if (state.sucursal) p.append('sucursal', state.sucursal);
+  return p;
 }
 
 // =================== IFs MAL SACADAS ===================
@@ -165,9 +243,7 @@ async function cargarMalSacadas() {
   const tbody = $('tbodyMalSacadas');
   tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state">Cargando…</div></td></tr>';
   try {
-    const params = new URLSearchParams({ desde: state.desde, hasta: state.hasta });
-    if (state.sucursal) params.append('sucursal', state.sucursal);
-    const data = await apiFetch('/api/dashboard/ifs-mal-sacadas?' + params);
+    const data = await apiFetch('/api/dashboard/ifs-mal-sacadas?' + buildParams());
     $('badCount').textContent = data.total;
     if (data.ifs.length === 0) {
       tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state">✅ Sin IFs mal sacadas en este período</div></td></tr>';
@@ -198,9 +274,7 @@ async function verDetalle(tranid) {
   $('detalleBody').innerHTML = '<div class="empty-state">Cargando…</div>';
   $('detalleModal').style.display = 'flex';
   try {
-    const params = new URLSearchParams({ desde: state.desde, hasta: state.hasta });
-    if (state.sucursal) params.append('sucursal', state.sucursal);
-    const data = await apiFetch(`/api/dashboard/if/${encodeURIComponent(tranid)}/detalle?` + params);
+    const data = await apiFetch(`/api/dashboard/if/${encodeURIComponent(tranid)}/detalle?` + buildParams());
     renderDetalle(data.if);
   } catch (e) {
     $('detalleBody').innerHTML = `<div class="empty-state">Error: ${escapeHTML(e.message)}</div>`;
@@ -244,10 +318,7 @@ function renderDetalle(ifDoc) {
   html.push('</div>');
 
   if (ifDoc.discrepancias && ifDoc.discrepancias.length > 0) {
-    html.push(`
-      <div class="detalle-section">
-        <h4>Discrepancias (${ifDoc.discrepancias.length})</h4>
-    `);
+    html.push('<div class="detalle-section"><h4>Discrepancias (' + ifDoc.discrepancias.length + ')</h4>');
     ifDoc.discrepancias.forEach(d => {
       let detalle = '';
       if (d.tipo === 'cantidad_faltante') {
@@ -263,7 +334,7 @@ function renderDetalle(ifDoc) {
       } else if (d.tipo === 'sin_medidas') {
         detalle = d.mensaje;
       }
-      html.push(`<div style="margin: 4px 0;">${badgeTipo(d.tipo)} ${escapeHTML(detalle)}</div>`);
+      html.push('<div style="margin: 4px 0;">' + badgeTipo(d.tipo) + ' ' + escapeHTML(detalle) + '</div>');
     });
     html.push('</div>');
   }
@@ -279,11 +350,10 @@ async function cargarDiscrepancias() {
   const tbody = $('tbodyDiscrepancias');
   tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state">Cargando…</div></td></tr>';
   try {
-    const params = new URLSearchParams({ desde: state.desde, hasta: state.hasta });
-    if (state.sucursal) params.append('sucursal', state.sucursal);
+    const p = buildParams();
     const tipo = $('filtroTipoDisc').value;
-    if (tipo) params.append('tipo', tipo);
-    const data = await apiFetch('/api/dashboard/discrepancias?' + params);
+    if (tipo) p.append('tipo', tipo);
+    const data = await apiFetch('/api/dashboard/discrepancias?' + p);
     $('discCount').textContent = data.total;
     if (data.discrepancias.length === 0) {
       tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state">Sin discrepancias</div></td></tr>';
@@ -312,7 +382,7 @@ async function cargarDiscrepancias() {
       tbody.appendChild(tr);
     });
     if (data.discrepancias.length > 200) {
-      tbody.appendChild(el('tr', {}, el('td', { colspan: '7', class: 'empty-state' }, `(mostrando primeras 200 de ${data.total})`)));
+      tbody.appendChild(el('tr', {}, el('td', { colspan: '7', class: 'empty-state' }, '(mostrando primeras 200 de ' + data.total + ')')));
     }
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state">Error: ${escapeHTML(e.message)}</div></td></tr>`;
@@ -322,15 +392,12 @@ async function cargarDiscrepancias() {
 // =================== TOP ERRORES ===================
 async function cargarTopErrores() {
   try {
-    const params = new URLSearchParams({ desde: state.desde, hasta: state.hasta });
-    if (state.sucursal) params.append('sucursal', state.sucursal);
-
+    const p = buildParams();
     const [skus, lotes, operadores] = await Promise.all([
-      apiFetch('/api/dashboard/top-errores?' + params + '&dimension=sku'),
-      apiFetch('/api/dashboard/top-errores?' + params + '&dimension=lote'),
-      apiFetch('/api/dashboard/top-errores?' + params + '&dimension=operador')
+      apiFetch('/api/dashboard/top-errores?' + p + '&dimension=sku'),
+      apiFetch('/api/dashboard/top-errores?' + p + '&dimension=lote'),
+      apiFetch('/api/dashboard/top-errores?' + p + '&dimension=operador')
     ]);
-
     renderTopList('topSkus', skus.top);
     renderTopList('topLotes', lotes.top);
     renderTopList('topOperadores', operadores.top);
@@ -355,9 +422,9 @@ async function cargarIFsOK() {
   const tbody = $('tbodyOK');
   tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state">Cargando…</div></td></tr>';
   try {
-    const params = new URLSearchParams({ desde: state.desde, hasta: state.hasta, limit: '50' });
-    if (state.sucursal) params.append('sucursal', state.sucursal);
-    const data = await apiFetch('/api/dashboard/ifs-ok?' + params);
+    const p = buildParams();
+    p.append('limit', '50');
+    const data = await apiFetch('/api/dashboard/ifs-ok?' + p);
     $('okCount').textContent = data.total;
     if (data.ifs.length === 0) {
       tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state">Sin IFs OK en este período</div></td></tr>';
@@ -381,16 +448,44 @@ async function cargarIFsOK() {
 }
 
 // =================== INIT ===================
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   const token = getToken();
-  if (token) {
-    const user = JSON.parse(localStorage.getItem('wms_user') || '{}');
-    $('currentUserName').textContent = user.nombre || user.email || 'Usuario';
-    $('currentUserLocation').textContent = user.ubicacion_nombre || 'N/A';
-    $('currentUserRole').textContent = user.cargo || 'N/A';
-    $('loginContainer').style.display = 'none';
-    $('mainApp').style.display = 'block';
-    initFiltrosDefault();
-    cargarTodo();
+  if (!token) {
+    window.location.href = 'index.html';
+    return;
   }
+
+  const user = getCurrentUser();
+  if (user) {
+    $('currentUserName').textContent = user.nombre || user.email || 'Usuario';
+    $('currentUserLocation').textContent = user.ubicacion?.nombre || 'N/A';
+    $('currentUserRole').textContent = getRoleLabel(user.cargo);
+  }
+
+  // Preset buttons
+  document.querySelectorAll('.preset-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      setPeriodo(btn.dataset.preset);
+      if (state.periodo !== 'personalizado') {
+        aplicarFiltros();
+      }
+    });
+  });
+
+  // Período default: este mes
+  setPeriodo('mes');
+
+  // Cargar sucursales (necesario para el select)
+  await cargarSucursales();
+
+  $('mainApp').style.display = 'block';
+  cargarTodo();
 });
+
+function getRoleLabel(cargo) {
+  const roles = {
+    'aux_almacen': 'Aux. Almacén',
+    'admin': 'Administrador'
+  };
+  return roles[cargo] || cargo;
+}

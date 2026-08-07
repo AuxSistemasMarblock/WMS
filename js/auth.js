@@ -47,6 +47,12 @@ async function handleLogin(event) {
     sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
 
     showToast(`¡Bienvenido ${currentUser.nombre}!`, 'success');
+    // Roles con acceso al dashboard
+    const rolesDashboard = ['admin'];
+    if (rolesDashboard.includes(currentUser.cargo)) {
+      window.location.href = 'dashboard.html';
+      return;
+    }
 
 
     showMainView();

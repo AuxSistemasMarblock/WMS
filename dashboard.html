@@ -17,35 +17,6 @@
 
 <div id="toast" class="toast"></div>
 
-<!-- LOGIN -->
-<div id="loginContainer" class="login-container">
-  <div class="login-card">
-    <div class="login-header">
-      <img src="images/logo.png" alt="Logo Empresa" style="height:40px; width:auto; border-radius:8px;"/>
-      <h1>WMS · Dashboard</h1>
-      <p>Supply Chain &amp; Gerencia de Almacén</p>
-    </div>
-    <form id="loginForm" onsubmit="handleLogin(event)" class="login-form">
-      <div class="form-group">
-        <label for="loginEmail">Email</label>
-        <input id="loginEmail" type="email" placeholder="usuario@marblock.com" required />
-      </div>
-      <div class="form-group">
-        <label for="loginPassword">Contraseña</label>
-        <input id="loginPassword" type="password" placeholder="••••••••" required />
-      </div>
-      <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">
-        Iniciar sesión
-      </button>
-    </form>
-    <div class="login-footer">
-      <p>Sistema seguro de autenticación</p>
-      <p style="font-size: 0.85rem; color: var(--gray-6);">v1.0 — Confronta IFs</p>
-    </div>
-  </div>
-</div>
-
-<!-- DASHBOARD -->
 <div id="mainApp" style="display: none;">
 
 <header>
@@ -72,29 +43,66 @@
 <main>
 
   <!-- FILTROS -->
-  <div class="folio-bar">
-    <label>Período de análisis</label>
-    <div class="folio-input-wrap" style="gap: 8px;">
-      <input type="date" id="filtroDesde" />
-      <span style="color: var(--gray-6);">→</span>
-      <input type="date" id="filtroHasta" />
-      <input type="text" id="filtroSucursal" placeholder="Sucursal (opcional)" style="max-width: 180px;" />
+  <section class="filters-card">
+    <div class="filters-row">
+      <div class="filter-group">
+        <label>Período</label>
+        <div class="preset-buttons" id="presetButtons">
+          <button class="preset-btn" data-preset="hoy">Hoy</button>
+          <button class="preset-btn" data-preset="semana">Esta semana</button>
+          <button class="preset-btn active" data-preset="mes">Este mes</button>
+          <button class="preset-btn" data-preset="mes_pasado">Mes pasado</button>
+          <button class="preset-btn" data-preset="personalizado">Personalizado</button>
+        </div>
+      </div>
+      <div class="filter-group">
+        <label>Sucursal</label>
+        <select id="filtroSucursal" class="filter-select">
+          <option value="">Cargando...</option>
+        </select>
+      </div>
       <button class="btn btn-primary" onclick="aplicarFiltros()">Aplicar</button>
-      <button class="btn btn-ghost" onclick="cargarTodo()" title="Último mes">Último mes</button>
     </div>
-  </div>
-
-  <!-- KPIs -->
-  <section id="kpisSection" class="kpis-grid">
-    <div class="kpi-card"><div class="kpi-label">Tasa de exactitud</div><div class="kpi-value" id="kpiTasa">–</div></div>
-    <div class="kpi-card"><div class="kpi-label">IFs con error</div><div class="kpi-value text-error" id="kpiErrores">–</div></div>
-    <div class="kpi-card"><div class="kpi-label">Líneas afectadas</div><div class="kpi-value" id="kpiLineas">–</div></div>
-    <div class="kpi-card"><div class="kpi-label">Placas escaneadas</div><div class="kpi-value" id="kpiPlacas">–</div></div>
-    <div class="kpi-card"><div class="kpi-label">Discrepancias</div><div class="kpi-value" id="kpiDiscrepancias">–</div></div>
-    <div class="kpi-card"><div class="kpi-label">IFs OK</div><div class="kpi-value text-success" id="kpiOK">–</div></div>
+    <div class="filters-row custom-range" id="customRange" style="display: none;">
+      <div class="filter-group">
+        <label>Desde</label>
+        <input type="date" id="filtroDesde" />
+      </div>
+      <div class="filter-group">
+        <label>Hasta</label>
+        <input type="date" id="filtroHasta" />
+      </div>
+    </div>
   </section>
 
-  <!-- IFs MAL SACADAS (foco principal) -->
+  <!-- KPIs (fila horizontal compacta) -->
+  <section class="kpis-section">
+    <div class="kpis-grid">
+      <div class="kpi-card">
+        <div class="kpi-label">IFs OK</div>
+        <div class="kpi-value text-success" id="kpiOK">–</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">IFs con error</div>
+        <div class="kpi-value text-error" id="kpiErrores">–</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Discrepancias</div>
+        <div class="kpi-value" id="kpiDiscrepancias">–</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Líneas afectadas</div>
+        <div class="kpi-value" id="kpiLineas">–</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Placas escaneadas</div>
+        <div class="kpi-value" id="kpiPlacas">–</div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- IFs MAL SACADAS -->
   <section class="table-card">
     <div class="table-header">
       <div class="table-title">
@@ -141,7 +149,7 @@
         <span class="count-badge" id="discCount">0</span>
       </div>
       <div class="table-actions">
-        <select id="filtroTipoDisc" onchange="cargarDiscrepancias()" style="padding: 6px 8px;">
+        <select id="filtroTipoDisc" onchange="cargarDiscrepancias()" class="filter-select">
           <option value="">Todos los tipos</option>
           <option value="cantidad_faltante">Cantidad faltante</option>
           <option value="cantidad_sobrante">Cantidad sobrante</option>
@@ -222,8 +230,6 @@
 </div>
 
 <script src="js/config.js?v=4"></script>
-<script src="js/utils.js?v=4"></script>
-<script src="js/auth.js?v=4"></script>
 <script src="js/dashboard/app.js?v=4"></script>
 </body>
 </html>
