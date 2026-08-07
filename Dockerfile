@@ -10,6 +10,7 @@ RUN mkdir -p /usr/share/nginx/html/js && \
     envsubst < /tmp/config.template.js > /usr/share/nginx/html/js/config.js
 
 COPY index.html /usr/share/nginx/html/index.html
+COPY dashboard.html /usr/share/nginx/html/dashboard.html
 COPY css/  /usr/share/nginx/html/css/
 COPY js/   /usr/share/nginx/html/js/
 COPY lib/  /usr/share/nginx/html/lib/
