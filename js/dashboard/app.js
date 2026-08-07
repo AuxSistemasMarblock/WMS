@@ -45,7 +45,6 @@ function el(tag, attrs = {}, ...children) {
 }
 
 function showToast(msg, type = 'info') {
-  if (typeof window.showToast === 'function') return window.showToast(msg, type);
   const t = $('toast');
   if (!t) return console.log(`[${type}] ${msg}`);
   t.textContent = msg;
