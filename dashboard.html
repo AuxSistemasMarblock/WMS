@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WMS · Dashboard Supply Chain</title>
+  <link rel="icon" href="images/logo_ico.png" type="image/png" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600;700&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="css/variables.css" />
+  <link rel="stylesheet" href="css/styles.css" />
+  <link rel="stylesheet" href="css/dashboard.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
+</head>
+<body>
+
+<div id="toast" class="toast"></div>
+
+<div id="mainApp" style="display: none;">
+
+<header>
+  <div class="logo">
+    <img src="images/logo.png" alt="Logo Empresa" style="height:30px; width:auto; border-radius:6px; padding:2px;"/>
+    WMS · DASHBOARD
+  </div>
+  <div class="header-right">
+    <a href="index.html" class="btn btn-ghost" title="Ir al scanner">Scanner</a>
+    <div class="user-info">
+      <div class="user-details">
+        <div class="user-name" id="currentUserName">Usuario</div>
+        <div class="user-meta">
+          <span id="currentUserLocation">Ubicación</span> ·
+          <span id="currentUserRole">Rol</span>
+        </div>
+      </div>
+      <button class="btn btn-ghost" onclick="handleLogout()" title="Cerrar sesión">Logout</button>
+    </div>
+  </div>
+  <span class="badge">CONFRONTA v1.0</span>
+</header>
+
+<main>
+
+  <!-- FILTROS -->
+  <section class="filters-card">
+    <div class="filters-row">
+      <div class="filter-group">
+        <label>Período</label>
+        <div class="preset-buttons" id="presetButtons">
+          <button class="preset-btn" data-preset="hoy">Hoy</button>
+          <button class="preset-btn" data-preset="semana">Esta semana</button>
+          <button class="preset-btn active" data-preset="mes">Este mes</button>
+          <button class="preset-btn" data-preset="mes_pasado">Mes pasado</button>
+          <button class="preset-btn" data-preset="personalizado">Personalizado</button>
+        </div>
+      </div>
+      <div class="filter-group">
+        <label>Sucursal</label>
+        <select id="filtroSucursal" class="filter-select">
+          <option value="">Cargando...</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" onclick="aplicarFiltros()">Aplicar</button>
+    </div>
+    <div class="filters-row custom-range" id="customRange" style="display: none;">
+      <div class="filter-group">
+        <label>Desde</label>
+        <input type="date" id="filtroDesde" />
+      </div>
+      <div class="filter-group">
+        <label>Hasta</label>
+        <input type="date" id="filtroHasta" />
+      </div>
+    </div>
+  </section>
+
+  <!-- KPIs (fila horizontal compacta) -->
+  <section class="kpis-section">
+    <div class="kpis-grid">
+      <div class="kpi-card">
+        <div class="kpi-label">IFs OK</div>
+        <div class="kpi-value text-success" id="kpiOK">–</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">IFs con error</div>
+        <div class="kpi-value text-error" id="kpiErrores">–</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Discrepancias</div>
+        <div class="kpi-value" id="kpiDiscrepancias">–</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Líneas afectadas</div>
+        <div class="kpi-value" id="kpiLineas">–</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Placas escaneadas</div>
+        <div class="kpi-value" id="kpiPlacas">–</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- GRÁFICAS: Tasa de exactitud + Top 5 artículos con más salidas -->
+  <section class="charts-section">
+    <div class="chart-card">
+      <div class="chart-header">
+        <span class="chart-title">Tasa de exactitud</span>
+        <span class="chart-subtitle" id="tasaExactitudTexto">–</span>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="chartExactitud"></canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-header">
+        <span class="chart-title">Top 5 artículos con más salidas</span>
+        <span class="chart-subtitle" id="topArticulosTotal">–</span>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="chartTopArticulos"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <!-- IFs MAL SACADAS -->
+  <section class="table-card">
+    <div class="table-header">
+      <div class="table-title">
+        🔴 IFs mal sacadas
+        <span class="count-badge" id="badCount">0</span>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>IF</th>
+            <th>SO</th>
+            <th>Sucursal</th>
+            <th>Operador</th>
+            <th>Errores</th>
+            <th>Tipos</th>
+            <th>Acción</th>
+          </tr>
+        </thead>
+        <tbody id="tbodyMalSacadas">
+          <tr><td colspan="7"><div class="empty-state">Cargando…</div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- DETALLE (modal) -->
+  <div id="detalleModal" class="confirm-modal" style="display: none;">
+    <div class="confirm-card" style="max-width: 900px; text-align: left;">
+      <h3 class="confirm-title" id="detalleTitle">Detalle de IF</h3>
+      <div id="detalleBody" style="max-height: 60vh; overflow: auto;"></div>
+      <div class="confirm-actions">
+        <button class="btn btn-ghost" onclick="cerrarDetalle()">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- DISCREPANCIAS A RESOLVER -->
+  <section class="table-card">
+    <div class="table-header">
+      <div class="table-title">
+        📋 Discrepancias a resolver
+        <span class="count-badge" id="discCount">0</span>
+      </div>
+      <div class="table-actions">
+        <select id="filtroTipoDisc" onchange="cargarDiscrepancias()" class="filter-select">
+          <option value="">Todos los tipos</option>
+          <option value="cantidad_faltante">Cantidad faltante</option>
+          <option value="cantidad_sobrante">Cantidad sobrante</option>
+          <option value="ubicacion_incorrecta">Ubicación incorrecta</option>
+          <option value="linea_faltante">Línea faltante</option>
+          <option value="sku_lote_no_esperado">SKU/lote no esperado</option>
+        </select>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>IF</th>
+            <th>SO</th>
+            <th>Sucursal</th>
+            <th>SKU</th>
+            <th>Lote</th>
+            <th>Tipo</th>
+            <th>Detalle</th>
+          </tr>
+        </thead>
+        <tbody id="tbodyDiscrepancias">
+          <tr><td colspan="7"><div class="empty-state">Cargando…</div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- TOP ERRORES -->
+  <section class="table-card">
+    <div class="table-header">
+      <div class="table-title">🏆 Top errores</div>
+    </div>
+    <div class="top-grid">
+      <div>
+        <h4 style="margin: 8px 0;">Por SKU</h4>
+        <ol id="topSkus" class="top-list"></ol>
+      </div>
+      <div>
+        <h4 style="margin: 8px 0;">Por lote</h4>
+        <ol id="topLotes" class="top-list"></ol>
+      </div>
+      <div>
+        <h4 style="margin: 8px 0;">Por operador</h4>
+        <ol id="topOperadores" class="top-list"></ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- IFs OK (refuerzo) -->
+  <section class="table-card">
+    <div class="table-header">
+      <div class="table-title">
+        ✅ IFs bien sacadas
+        <span class="count-badge text-success" id="okCount">0</span>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>IF</th>
+            <th>SO</th>
+            <th>Sucursal</th>
+            <th>Operador</th>
+            <th>Líneas</th>
+          </tr>
+        </thead>
+        <tbody id="tbodyOK">
+          <tr><td colspan="5"><div class="empty-state">Cargando…</div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+</main>
+</div>
+
+<script src="js/config.js?v=4"></script>
+<script src="js/dashboard/app.js?v=4"></script>
+</body>
+</html>

@@ -47,6 +47,13 @@ async function handleLogin(event) {
     sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
 
     showToast(`¡Bienvenido ${currentUser.nombre}!`, 'success');
+    // Roles con acceso al dashboard
+    const rolesDashboard = ['admin'];
+    if (rolesDashboard.includes(currentUser.cargo)) {
+      window.location.href = 'dashboard.html';
+      return;
+    }
+
 
     showMainView();
 
@@ -118,6 +125,12 @@ function showMainView() {
   document.getElementById('currentUserName').textContent = currentUser.nombre;
   document.getElementById('currentUserLocation').textContent = currentUser.ubicacion.nombre;
   document.getElementById('currentUserRole').textContent = getRoleLabel(currentUser.cargo);
+
+  // Mostrar link al dashboard si el rol es admin
+  const link = document.getElementById('linkDashboard');
+  if (link && currentUser.cargo === 'admin') {
+    link.style.display = 'inline-flex';
+  }
   // La pistola se auto-arranca desde scanner.js (DOMContentLoaded)
 }
 
@@ -127,9 +140,7 @@ function showMainView() {
 function getRoleLabel(cargo) {
   const roles = {
     'aux_almacen': 'Aux. Almacén',
-    'jefe_almacen': 'Jefe de Almacén',
-    'gerente': 'Gerente',
-    'cliente': 'Cliente'
+    'admin': 'Administrador'
   };
   return roles[cargo] || cargo;
 }

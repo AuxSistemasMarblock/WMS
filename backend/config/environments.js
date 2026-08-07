@@ -12,7 +12,8 @@ const requiredVars = [
   'NETSUITE_TOKEN_SECRET',
   'SUPABASE_URL',
   'SUPABASE_SERVICE_ROLE_KEY',
-  'JWT_SECRET'
+  'JWT_SECRET',
+  'GOOGLE_SHEETS_SPREADSHEET_ID'
 ];
 
 // Validar variables requeridas al cargar
@@ -48,6 +49,12 @@ const UBICACIONES = {
   'TEMPORAL':    { id: 7, nombre: 'TEMPORAL' },
   'PROYECTOS':   { id: 8, nombre: 'PROYECTOS' }
 };
+
+// ===== UBICACIONES PRINCIPALES (para el dashboard) =====
+// Cuando el dashboard filtra por "MEX", también incluye "MEX:OUTLET", "MEX : OUTLET MEX", etc.
+// (mismo patrón que netsuiteController.js:filterIFsByUserLocation)
+const RESTRICTED_LOCATION_PREFIXES = ['MEX', 'MTY', 'GDL'];
+const SHARED_LOCATIONS = ['TEMPORAL', 'PROYECTOS', 'Material Transformado', 'MATRIZ'];
 
 /**
  * Obtener ID de carpeta para un tipo de firma
@@ -100,7 +107,10 @@ module.exports = {
       url: process.env.NETSUITE_SEARCH_RESTLET_URL || 'https://9080139-sb1.restlets.api.netsuite.com/app/site/hosting/restlet.nl?script=2217&deploy=1',
       scriptId: process.env.NETSUITE_SEARCH_RESTLET_SCRIPT_ID || '2217',
       deployId: process.env.NETSUITE_SEARCH_RESTLET_DEPLOY_ID || '1',
-      searchId: process.env.NETSUITE_SEARCH_ID || 'customsearch3678'
+      // Saved search de IFs pendientes a sacar (la que usa el controller del scanner)
+      searchId: process.env.NETSUITE_SEARCH_ID || 'customsearch3678',
+      // Saved search de IFs ya enviadas (la que usa el dashboard para confronta)
+      searchIdEnviadas: process.env.NETSUITE_SEARCH_IFS_ENVIADAS_ID || 'customsearch3675'
     },
 
     // Función helper para obtener URL del RESTlet
@@ -122,6 +132,10 @@ module.exports = {
     firmasCarpetas: FIRMAS_CARPETAS,
     // Mapa de ubicaciones (solo para filtrado de IFs por usuario, no para folders)
     ubicaciones: UBICACIONES,
+    // Prefijos restringidos (sucursales principales: MEX, MTY, GDL)
+    RESTRICTED_LOCATION_PREFIXES,
+    // Ubicaciones compartidas (visibles para todos)
+    SHARED_LOCATIONS,
     getFolderId
   },
 
