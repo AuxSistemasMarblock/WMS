@@ -37,6 +37,7 @@
    - 6.11 UserEvent Script `wms_link_firmas.js` — Vinculación de firmas
    - 6.12 Advanced PDF/HTML Template `wms_firma_template.xml` — Render de firmas
    - 6.13 Cómo fluye la data de NetSuite al frontend
+   - 6.14 Integración con Google Sheets (Service Account)
 7. [Despliegue (Dokploy)](#7-despliegue-dokploy)
 8. [Variables de entorno](#8-variables-de-entorno)
 9. [Runbook / Troubleshooting](#9-runbook--troubleshooting)
@@ -67,15 +68,16 @@ WMS Scanner es la herramienta móvil/web que utilizan los operadores de almacén
 
 ### 1.2 Roles y permisos
 
-| `cargo` en `usuarios`           | Permisos visibles en la app          |
-|--------------------------------|---------------------------------------|
-| `aux_almacen`                  | Escanear, firmar como "Aux. Almacén"  |
-| `cliente`                      | Firmar como "Cliente"                 |
-| `jefe_almacen`                 | Firma obligatoria si > 3 placas        |
-| `gerente`                      | Firma obligatoria si > 10 placas       |
-| `administrador`                | Diagnóstico y testing (endpoints)      |
+El sistema maneja **dos roles** en la tabla `usuarios` de Supabase:
 
-> **Nota**: los cargos `jefe_almacen` y `gerente` no son filtro en backend, solo disparan firmas adicionales en el frontend (`js/signatures.js:38-71`).
+| `cargo` en `usuarios` | Destino post-login | Permisos |
+|---|---|---|
+| `aux_almacen` | Scanner (`index.html`) | Escanear placas, capturar firmas |
+| `admin` | Dashboard (`dashboard.html`) | Ver KPIs, IFs mal sacadas, discrepancias, top errores, IFs OK |
+
+> **Redirect post-login**: `js/auth.js:51-56` evalúa `currentUser.cargo` y redirige a `dashboard.html` si es `admin`, o muestra el scanner si es `aux_almacen`.
+>
+> **Firmas físicas (`jefeAlmacen`, `gerente`)** que se capturan al sacar placas NO son roles de usuario: son **etiquetas de firma** que se piden según el número de placas (>3 → jefe, >10 → gerente). Las dispara `js/signatures.js:101-115` independientemente de quién esté logueado. Ver §1.5.
 
 ### 1.3 Ubicaciones
 
@@ -1711,6 +1713,159 @@ Esta sección existe para evitar tener que debuguear de nuevo el camino de los d
 
 ---
 
+### 6.14 Integración con Google Sheets (Service Account)
+
+> **Propósito**: el backend del WMS necesita **leer** la hoja de Google Sheets donde n8n (vía webhook) registra cada escaneo de placa. Esa hoja es la **fuente de verdad de lo escaneado** y se cruza contra lo esperado de NetSuite para la confronta del dashboard (ver §6.13 y el Sprint 1 del plan de dashboard).
+
+#### 6.14.1 ¿Por qué Service Account y no API Key?
+
+| Método | ¿Funciona con hoja privada? | Token expira | Adecuado para backend |
+|---|---|---|---|
+| API Key simple | ❌ Solo hojas públicas | No | Limitado |
+| OAuth 2.0 User Flow | ✅ Sí | ✅ Sí (refresh) | ❌ Requiere login humano |
+| **Service Account** | ✅ Sí | ❌ No (hasta que la claves) | ✅ **Recomendado** |
+
+Una API Key simple **no sirve** si la hoja de Sheets es privada (que es el caso normal con datos de negocio). La Service Account es el mecanismo estándar de Google para que un backend lea recursos privados **sin intervención humana**.
+
+#### 6.14.2 Componentes creados en Google Cloud
+
+1. **Proyecto GCP**: `wms-dashboard-sheets` (o el nombre que hayas elegido).
+2. **API habilitada**: `Google Sheets API` (en el proyecto).
+3. **Service Account**: `wms-sheets-reader@<proyecto>.iam.gserviceaccount.com`.
+4. **Clave JSON**: descargada una sola vez y montada en el contenedor del backend. **No se rota automáticamente**; si se pierde o compromete, se genera una nueva y se redeploya.
+
+#### 6.14.3 Procedimiento de creación (ya ejecutado)
+
+> **Estado**: creado. Si necesitas regenerar la clave (pérdida, rotación, cambio de proyecto), repite estos pasos.
+
+1. **Crear/seleccionar proyecto** en [console.cloud.google.com](https://console.cloud.google.com).
+2. **Habilitar API**: Menú → *APIs y servicios* → *Biblioteca* → buscar `Google Sheets API` → *Habilitar*.
+3. **Crear Service Account**: *APIs y servicios* → *Credenciales* → *+ Crear credenciales* → *Cuenta de servicio* → nombre sugerido `wms-sheets-reader` → *Crear y continuar* → *Listo* (sin asignar roles IAM).
+4. **Generar clave JSON**: clic en la SA recién creada → pestaña *Claves* → *Agregar clave* → *Crear clave nueva* → tipo *JSON* → *Crear*. Se descarga un archivo `wms-dashboard-sheets-xxxxxx.json`. Guardarlo en lugar seguro.
+5. **Compartir el Sheet con la SA**: abrir la hoja de Sheets donde n8n deposita los escaneos → *Compartir* → pegar el `client_email` de la SA (algo como `wms-sheets-reader@wms-dashboard-sheets.iam.gserviceaccount.com`) → permiso **Lector** → *Compartir* (desmarcar "Notificar a las personas").
+6. **Obtener `spreadsheetId`**: de la URL de la hoja, copiar el segmento entre `/d/` y `/edit`.
+
+#### 6.14.4 Estructura esperada del Sheet
+
+| Columna | Campo normalizado | Notas |
+|---|---|---|
+| `Fecha` | `fecha` | `YYYY-MM-DD` |
+| `Ubicacion` | `ubicacion` | Nombre de la sucursal (ej: `MTY`, `MEX`, `GDL`) |
+| `Creado desde` | `so` | Tran ID de la SO origen |
+| `IF` | `if_tranid` | Tran ID del Item Fulfillment |
+| `Responsable` | `responsable` | Usuario que ejecutó el escaneo |
+| `SKU` | `sku` | Código del item |
+| `Lote` | `lote` | Lote (formato `{id}-{largo}X{ancho}`, ej: `15760-3.14X1.96`) |
+| `Ubicacion lote` | `ubicacion_lote` | Ubicación física de la placa |
+| `Hora de salida` | `hora_salida` | `HH:MM:SS` |
+
+> El normalizador de headers (`googleSheetsService.js`) lower-casea, reemplaza espacios por `_` y quita acentos, por lo que variaciones como `Ubicación` / `Ubicacion` / `UBICACION` se mapean al mismo campo `ubicacion`.
+
+**Rango configurado**: `Hoja 1!A:I` (la pestaña por defecto y las 9 columnas).
+
+#### 6.14.5 Alcance de permisos (OAuth scope)
+
+Scope utilizado:
+
+```
+https://www.googleapis.com/auth/spreadsheets.readonly
+```
+
+- **Solo lectura**. La SA no puede modificar el Sheet aunque alguien se la robe.
+- Si en el futuro se necesita escribir (ej: marcar filas como "conciliadas"), se cambia a `spreadsheets` (sin `.readonly`).
+
+#### 6.14.6 Inyección de credenciales al contenedor
+
+El JSON **nunca** se commitea al repo. Se inyecta como **archivo montado por volumen en el contenedor**.
+
+Estructura en el repo (la carpeta `secrets/` está en `.gitignore`):
+
+```
+backend/
+├── secrets/
+│   └── gcp-service-account.json    ← montado por volumen, lectura only
+├── config/
+│   └── googleSheets.js
+└── services/
+    └── googleSheetsService.js
+```
+
+`docker-compose.dokploy.yml` (fragmento del servicio backend):
+
+```yaml
+services:
+  wms-backend:
+    # ... tu config actual ...
+    volumes:
+      - ./secrets/gcp-service-account.json:/app/backend/secrets/gcp-service-account.json:ro
+    environment:
+      - GOOGLE_SHEETS_SA_PATH=/app/backend/secrets/gcp-service-account.json
+      - GOOGLE_SHEETS_SPREADSHEET_ID=${GOOGLE_SHEETS_SPREADSHEET_ID}
+      - GOOGLE_SHEETS_RANGE=Hoja 1!A:I
+```
+
+En local, basta con colocar el JSON en `backend/secrets/gcp-service-account.json` (carpeta gitignored) y la variable `GOOGLE_SHEETS_SA_PATH` apuntará al path por defecto.
+
+#### 6.14.7 Variables de entorno (referencia rápida)
+
+| Variable | Requerida | Default | Descripción |
+|---|---|---|---|
+| `GOOGLE_SHEETS_SA_PATH` | No | `backend/secrets/gcp-service-account.json` | Ruta absoluta al JSON de la SA dentro del contenedor |
+| `GOOGLE_SHEETS_SPREADSHEET_ID` | **Sí** | — | ID del spreadsheet (segmento de la URL) |
+| `GOOGLE_SHEETS_RANGE` | No | `Hoja 1!A:I` | Rango A1 notation. Ajustar si la pestaña o columnas cambian |
+
+Ver detalle completo en [§8.1](#81-backend).
+
+#### 6.14.8 Cliente: `googleapis` con Service Account
+
+Se usa la librería oficial `googleapis` (no `axios` directo) porque maneja la autenticación JWT, el handshake OAuth y la rotación de tokens automáticamente.
+
+```js
+// backend/services/googleSheetsService.js (fragmento)
+const { google } = require('googleapis');
+const config = require('../config/googleSheets');
+
+const auth = new google.auth.GoogleAuth({
+  keyFile: config.serviceAccountPath,
+  scopes: config.scopes,
+});
+const authClient = await auth.getClient();
+const sheets = google.sheets({ version: 'v4', auth: authClient });
+```
+
+#### 6.14.9 Procedimiento de rotación de credenciales
+
+Si la clave JSON se compromete o se quiere rotar:
+
+1. Google Cloud Console → *IAM y administración* → *Cuentas de servicio* → seleccionar `wms-sheets-reader`.
+2. Pestaña *Claves* → clic en la clave existente → *Eliminar* (o *Inhabilitar* primero para grace period).
+3. *Agregar clave* → *Crear clave nueva* → JSON → descargar.
+4. Reemplazar el archivo `gcp-service-account.json` en el volumen del backend.
+5. Redeploy del servicio backend.
+6. Verificar con un test puntual (curl a un endpoint que use el servicio) o el script de prueba del Sprint 1.
+
+> **Tip**: la SA sigue activa entre rotaciones. No es necesario volver a compartir el Sheet con el `client_email` (que no cambia), solo reemplazar la clave.
+
+#### 6.14.10 Troubleshooting
+
+| Error | Causa probable | Fix |
+|---|---|---|
+| `Error: ENOENT: no such file or directory ... gcp-service-account.json` | Path mal configurado o volumen no montado | Verificar `GOOGLE_SHEETS_SA_PATH` y que el volumen esté en el `docker-compose` |
+| `403 The caller does not have permission` | Sheet no compartido con la SA, o la SA no tiene la API habilitada | Compartir el Sheet con el `client_email` de la SA; verificar que la API `Google Sheets API` esté habilitada en el proyecto |
+| `400 Unable to parse range: Hoja 1!A:I` | Nombre de pestaña distinto (espacios, acentos) | Confirmar el nombre exacto de la pestaña y actualizar `GOOGLE_SHEETS_RANGE` |
+| `403 Google Sheets API has not been used in project ... before or it is disabled` | API no habilitada | Habilitar `Google Sheets API` en el proyecto GCP |
+| `invalid_grant` / `JWT signature is invalid` | JSON corrupto o regenerado | Reemplazar el archivo con una clave recién descargada |
+
+#### 6.14.11 Seguridad
+
+- La Service Account tiene **scope `readonly`**: no puede modificar el Sheet.
+- El JSON de la clave se monta **read-only** (`:ro` en el docker-compose).
+- El archivo vive **fuera del repo** (carpeta `secrets/` en `.gitignore`).
+- **No** se loguea el contenido del JSON ni el path completo en producción.
+- En Dokploy, las env vars se configuran en el panel (no en el repo).
+
+---
+
 
 
 ### 7.1 Provider
@@ -1811,6 +1966,9 @@ Ambos registros deben apuntar a la IP del VPS. Traefik (gestionado por Dokploy) 
 | `NETSUITE_FILECABINET_PATH_PREFIX`        | No        | `/Firmas`                                          | Prefijo conceptual de path                  |
 | `NETSUITE_FILECABINET_SIGNATURE_FOLDER_PATTERN` | No  | `{LOCATION}/{TYPE}`                                | Patrón de carpeta                           |
 | `NETSUITE_FILECABINET_FILE_PATTERN`       | No        | `{IF}_{TYPE}.png`                                  | Patrón de filename                          |
+| `GOOGLE_SHEETS_SA_PATH`                   | No        | `backend/secrets/gcp-service-account.json`         | Ruta al JSON de Service Account (volumen). Ver §6.14 |
+| `GOOGLE_SHEETS_SPREADSHEET_ID`            | **Sí**    | `1aBcD...`                                         | ID del spreadsheet (segmento de la URL). Ver §6.14 |
+| `GOOGLE_SHEETS_RANGE`                     | No        | `Hoja 1!A:I`                                       | Rango A1 notation del Sheet de escaneos. Ver §6.14 |
 | `ALLOWED_ORIGINS`                         | **Sí**    | `https://wms.marblock.shop`                        | CSV de orígenes permitidos por CORS         |
 
 ### 8.2 Validación al boot
@@ -1823,7 +1981,8 @@ const requiredVars = [
   'NETSUITE_CLIENT_ID', 'NETSUITE_CLIENT_SECRET',
   'NETSUITE_TOKEN_ID', 'NETSUITE_TOKEN_SECRET',
   'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY',
-  'JWT_SECRET'
+  'JWT_SECRET',
+  'GOOGLE_SHEETS_SPREADSHEET_ID'
 ];
 ```
 
