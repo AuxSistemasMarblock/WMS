@@ -20,6 +20,14 @@ const state = {
 let chartExactitud = null;
 let chartTopArticulos = null;
 
+// =================== CONFIG ===================
+// Misma convención que js/auth.js: el URL se lee de window.APP_CONFIG.BACKEND_URL
+// (config.js lo setea en el build de Docker). Fallback a localhost solo para dev.
+const BACKEND_URL = window.APP_CONFIG?.BACKEND_URL || 'http://localhost:3001';
+if (!window.APP_CONFIG?.BACKEND_URL) {
+  console.error('APP_CONFIG.BACKEND_URL no definido. Verifica js/config.js.');
+}
+
 // =================== HELPERS ===================
 function $(id) { return document.getElementById(id); }
 function el(tag, attrs = {}, ...children) {
@@ -84,7 +92,7 @@ function handleLogout() {
 async function apiFetch(path, opts = {}) {
   const token = getToken();
   if (!token) { handleLogout(); throw new Error('No autenticado'); }
-  const res = await fetch((window.BACKEND_URL || 'http://localhost:3001') + path, {
+  const res = await fetch(BACKEND_URL + path, {
     ...opts,
     headers: {
       'Authorization': 'Bearer ' + token,
