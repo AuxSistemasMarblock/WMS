@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WMS · Dashboard Supply Chain</title>
+  <link rel="icon" href="images/logo_ico.png" type="image/png" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600;700&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="css/variables.css" />
+  <link rel="stylesheet" href="css/styles.css" />
+  <link rel="stylesheet" href="css/dashboard.css" />
+</head>
+<body>
+
+<div id="toast" class="toast"></div>
+
+<!-- LOGIN -->
+<div id="loginContainer" class="login-container">
+  <div class="login-card">
+    <div class="login-header">
+      <img src="images/logo.png" alt="Logo Empresa" style="height:40px; width:auto; border-radius:8px;"/>
+      <h1>WMS · Dashboard</h1>
+      <p>Supply Chain &amp; Gerencia de Almacén</p>
+    </div>
+    <form id="loginForm" onsubmit="handleLogin(event)" class="login-form">
+      <div class="form-group">
+        <label for="loginEmail">Email</label>
+        <input id="loginEmail" type="email" placeholder="usuario@marblock.com" required />
+      </div>
+      <div class="form-group">
+        <label for="loginPassword">Contraseña</label>
+        <input id="loginPassword" type="password" placeholder="••••••••" required />
+      </div>
+      <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">
+        Iniciar sesión
+      </button>
+    </form>
+    <div class="login-footer">
+      <p>Sistema seguro de autenticación</p>
+      <p style="font-size: 0.85rem; color: var(--gray-6);">v1.0 — Confronta IFs</p>
+    </div>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div id="mainApp" style="display: none;">
+
+<header>
+  <div class="logo">
+    <img src="images/logo.png" alt="Logo Empresa" style="height:30px; width:auto; border-radius:6px; padding:2px;"/>
+    WMS · DASHBOARD
+  </div>
+  <div class="header-right">
+    <a href="index.html" class="btn btn-ghost" title="Ir al scanner">Scanner</a>
+    <div class="user-info">
+      <div class="user-details">
+        <div class="user-name" id="currentUserName">Usuario</div>
+        <div class="user-meta">
+          <span id="currentUserLocation">Ubicación</span> ·
+          <span id="currentUserRole">Rol</span>
+        </div>
+      </div>
+      <button class="btn btn-ghost" onclick="handleLogout()" title="Cerrar sesión">Logout</button>
+    </div>
+  </div>
+  <span class="badge">CONFRONTA v1.0</span>
+</header>
+
+<main>
+
+  <!-- FILTROS -->
+  <div class="folio-bar">
+    <label>Período de análisis</label>
+    <div class="folio-input-wrap" style="gap: 8px;">
+      <input type="date" id="filtroDesde" />
+      <span style="color: var(--gray-6);">→</span>
+      <input type="date" id="filtroHasta" />
+      <input type="text" id="filtroSucursal" placeholder="Sucursal (opcional)" style="max-width: 180px;" />
+      <button class="btn btn-primary" onclick="aplicarFiltros()">Aplicar</button>
+      <button class="btn btn-ghost" onclick="cargarTodo()" title="Último mes">Último mes</button>
+    </div>
+  </div>
+
+  <!-- KPIs -->
+  <section id="kpisSection" class="kpis-grid">
+    <div class="kpi-card"><div class="kpi-label">Tasa de exactitud</div><div class="kpi-value" id="kpiTasa">–</div></div>
+    <div class="kpi-card"><div class="kpi-label">IFs con error</div><div class="kpi-value text-error" id="kpiErrores">–</div></div>
+    <div class="kpi-card"><div class="kpi-label">Líneas afectadas</div><div class="kpi-value" id="kpiLineas">–</div></div>
+    <div class="kpi-card"><div class="kpi-label">Placas escaneadas</div><div class="kpi-value" id="kpiPlacas">–</div></div>
+    <div class="kpi-card"><div class="kpi-label">Discrepancias</div><div class="kpi-value" id="kpiDiscrepancias">–</div></div>
+    <div class="kpi-card"><div class="kpi-label">IFs OK</div><div class="kpi-value text-success" id="kpiOK">–</div></div>
+  </section>
+
+  <!-- IFs MAL SACADAS (foco principal) -->
+  <section class="table-card">
+    <div class="table-header">
+      <div class="table-title">
+        🔴 IFs mal sacadas
+        <span class="count-badge" id="badCount">0</span>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>IF</th>
+            <th>SO</th>
+            <th>Sucursal</th>
+            <th>Operador</th>
+            <th>Errores</th>
+            <th>Tipos</th>
+            <th>Acción</th>
+          </tr>
+        </thead>
+        <tbody id="tbodyMalSacadas">
+          <tr><td colspan="7"><div class="empty-state">Cargando…</div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- DETALLE (modal) -->
+  <div id="detalleModal" class="confirm-modal" style="display: none;">
+    <div class="confirm-card" style="max-width: 900px; text-align: left;">
+      <h3 class="confirm-title" id="detalleTitle">Detalle de IF</h3>
+      <div id="detalleBody" style="max-height: 60vh; overflow: auto;"></div>
+      <div class="confirm-actions">
+        <button class="btn btn-ghost" onclick="cerrarDetalle()">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- DISCREPANCIAS A RESOLVER -->
+  <section class="table-card">
+    <div class="table-header">
+      <div class="table-title">
+        📋 Discrepancias a resolver
+        <span class="count-badge" id="discCount">0</span>
+      </div>
+      <div class="table-actions">
+        <select id="filtroTipoDisc" onchange="cargarDiscrepancias()" style="padding: 6px 8px;">
+          <option value="">Todos los tipos</option>
+          <option value="cantidad_faltante">Cantidad faltante</option>
+          <option value="cantidad_sobrante">Cantidad sobrante</option>
+          <option value="ubicacion_incorrecta">Ubicación incorrecta</option>
+          <option value="linea_faltante">Línea faltante</option>
+          <option value="sku_lote_no_esperado">SKU/lote no esperado</option>
+        </select>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>IF</th>
+            <th>SO</th>
+            <th>Sucursal</th>
+            <th>SKU</th>
+            <th>Lote</th>
+            <th>Tipo</th>
+            <th>Detalle</th>
+          </tr>
+        </thead>
+        <tbody id="tbodyDiscrepancias">
+          <tr><td colspan="7"><div class="empty-state">Cargando…</div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- TOP ERRORES -->
+  <section class="table-card">
+    <div class="table-header">
+      <div class="table-title">🏆 Top errores</div>
+    </div>
+    <div class="top-grid">
+      <div>
+        <h4 style="margin: 8px 0;">Por SKU</h4>
+        <ol id="topSkus" class="top-list"></ol>
+      </div>
+      <div>
+        <h4 style="margin: 8px 0;">Por lote</h4>
+        <ol id="topLotes" class="top-list"></ol>
+      </div>
+      <div>
+        <h4 style="margin: 8px 0;">Por operador</h4>
+        <ol id="topOperadores" class="top-list"></ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- IFs OK (refuerzo) -->
+  <section class="table-card">
+    <div class="table-header">
+      <div class="table-title">
+        ✅ IFs bien sacadas
+        <span class="count-badge text-success" id="okCount">0</span>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>IF</th>
+            <th>SO</th>
+            <th>Sucursal</th>
+            <th>Operador</th>
+            <th>Líneas</th>
+          </tr>
+        </thead>
+        <tbody id="tbodyOK">
+          <tr><td colspan="5"><div class="empty-state">Cargando…</div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+</main>
+</div>
+
+<script src="js/config.js?v=4"></script>
+<script src="js/utils.js?v=4"></script>
+<script src="js/auth.js?v=4"></script>
+<script src="js/dashboard/app.js?v=4"></script>
+</body>
+</html>
