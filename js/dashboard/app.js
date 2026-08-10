@@ -415,7 +415,7 @@ function renderChartTopArticulos(items) {
       datasets: [{
         label: 'Placas escaneadas',
         data,
-        backgroundColor: '#1e40af',
+        backgroundColor: ['#1e40af', '#0ea5e9', '#10b981', '#f59e0b', '#8b5cf6'],
         borderRadius: 4
       }]
     },
