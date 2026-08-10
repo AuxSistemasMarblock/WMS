@@ -132,7 +132,7 @@ const getIFsMalSacadas = async (req, res) => {
     // Compactar para la respuesta (sin escaneos completos)
     const compact = ifs.map(i => ({
       tranid: i.tranid,
-      so: i.sourceDoc,
+      so: i.so,
       trandate: i.trandate,
       location: i.location,
       operador: i.operador,
@@ -248,7 +248,7 @@ const getIFsOK = async (req, res) => {
 
     let compact = resultado.ifs_ok.map(i => ({
       tranid: i.tranid,
-      so: i.sourceDoc,
+      so: i.so,
       trandate: i.trandate,
       location: i.location,
       operador: i.operador,
