@@ -176,8 +176,10 @@ function normalizarFechaNS(fecha) {
  *   inventorynumber.text     -> lotnumber (lote con medidas, ej: "65135 3.31X1.95")
  *   quantity                 -> quantity (m²)
  *
- * NOTA: este saved search NO incluye la SO origen (campo "Creado desde").
- * Si se requiere, hay que agregarlo como columna adicional a customsearch3675.
+ * NOTA: la saved search no incluye la SO origen ("Creado desde") por defecto.
+ * Si se agrega la columna a la saved search, se mapea automáticamente vía
+ * createdfrom/creado_desde; mientras tanto, el SO se completa en la confronta
+ * a partir de los escaneos de Google Sheets (campo `so`).
  */
 function normalizarLineaEsperada(fila) {
   const extract = (val) => {
@@ -202,11 +204,12 @@ function normalizarLineaEsperada(fila) {
   }
 
   return {
-    internalid: extract(fila.id),
+    internalid: extract(fila.id) || extract(fila.internalid),
     tranid: extract(fila.tranid),
     trandate: normalizarFechaNS(extract(fila.trandate)),
     location: extract(fila.location),
-    sourceDoc: null, // No incluido en customsearch3675
+    sourceDoc: extract(fila.createdfrom) || extract(fila.createdFrom)
+      || extract(fila.creado_desde) || extract(fila.so) || null,
     sku: extract(fila.formulatext), // En este saved search, formulatext = SKU
     lote: lotnumber,  // unificado: igual que el Sheets para match directo
     expectedLocation: null, // No incluido en customsearch3675

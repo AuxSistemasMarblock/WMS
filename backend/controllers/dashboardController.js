@@ -243,10 +243,10 @@ const getTopErrores = async (req, res) => {
 const getIFsOK = async (req, res) => {
   try {
     const filtros = normalizarFiltros(req);
-    const { limit = 50 } = req.query;
+    const { limit } = req.query;
     const resultado = await ejecutarConfronta(filtros);
 
-    const compact = resultado.ifs_ok.slice(0, parseInt(limit, 10)).map(i => ({
+    let compact = resultado.ifs_ok.map(i => ({
       tranid: i.tranid,
       so: i.sourceDoc,
       trandate: i.trandate,
@@ -254,6 +254,10 @@ const getIFsOK = async (req, res) => {
       operador: i.operador,
       total_lineas: i.total_lineas
     }));
+
+    if (limit !== undefined && limit !== '') {
+      compact = compact.slice(0, parseInt(limit, 10) || compact.length);
+    }
 
     res.json({
       filtros,
