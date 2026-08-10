@@ -135,20 +135,22 @@
       <table>
         <thead>
           <tr>
-            <th>IF</th>
-            <th>SO</th>
-            <th>Sucursal</th>
-            <th>Operador</th>
-            <th>Errores</th>
+            <th class="sortable" data-table="malSacadas" data-sort="tranid">IF</th>
+            <th class="sortable" data-table="malSacadas" data-sort="trandate">Fecha</th>
+            <th class="sortable" data-table="malSacadas" data-sort="so">SO</th>
+            <th class="sortable" data-table="malSacadas" data-sort="location">Sucursal</th>
+            <th class="sortable" data-table="malSacadas" data-sort="operador">Operador</th>
+            <th class="sortable" data-table="malSacadas" data-sort="errores">Errores</th>
             <th>Tipos</th>
             <th>Acción</th>
           </tr>
         </thead>
         <tbody id="tbodyMalSacadas">
-          <tr><td colspan="7"><div class="empty-state">Cargando…</div></td></tr>
+          <tr><td colspan="8"><div class="empty-state">Cargando…</div></td></tr>
         </tbody>
       </table>
     </div>
+    <div class="pagination" id="pagMalSacadas"></div>
   </section>
 
   <!-- DETALLE (modal) -->
@@ -184,20 +186,22 @@
       <table>
         <thead>
           <tr>
-            <th>IF</th>
-            <th>SO</th>
-            <th>Sucursal</th>
-            <th>SKU</th>
-            <th>Lote</th>
-            <th>Tipo</th>
+            <th class="sortable" data-table="discrepancias" data-sort="if_tranid">IF</th>
+            <th class="sortable" data-table="discrepancias" data-sort="if_fecha">Fecha</th>
+            <th class="sortable" data-table="discrepancias" data-sort="if_so">SO</th>
+            <th class="sortable" data-table="discrepancias" data-sort="if_location">Sucursal</th>
+            <th class="sortable" data-table="discrepancias" data-sort="sku">SKU</th>
+            <th class="sortable" data-table="discrepancias" data-sort="lote">Lote</th>
+            <th class="sortable" data-table="discrepancias" data-sort="tipo">Tipo</th>
             <th>Detalle</th>
           </tr>
         </thead>
         <tbody id="tbodyDiscrepancias">
-          <tr><td colspan="7"><div class="empty-state">Cargando…</div></td></tr>
+          <tr><td colspan="8"><div class="empty-state">Cargando…</div></td></tr>
         </tbody>
       </table>
     </div>
+    <div class="pagination" id="pagDiscrepancias"></div>
   </section>
 
   <!-- TOP ERRORES -->
@@ -233,18 +237,21 @@
       <table>
         <thead>
           <tr>
-            <th>IF</th>
-            <th>SO</th>
-            <th>Sucursal</th>
-            <th>Operador</th>
-            <th>Líneas</th>
+            <th class="sortable" data-table="ifsOK" data-sort="tranid">IF</th>
+            <th class="sortable" data-table="ifsOK" data-sort="trandate">Fecha</th>
+            <th class="sortable" data-table="ifsOK" data-sort="so">SO</th>
+            <th class="sortable" data-table="ifsOK" data-sort="location">Sucursal</th>
+            <th class="sortable" data-table="ifsOK" data-sort="operador">Operador</th>
+            <th class="sortable" data-table="ifsOK" data-sort="total_lineas">Líneas</th>
+            <th>Acción</th>
           </tr>
         </thead>
         <tbody id="tbodyOK">
-          <tr><td colspan="5"><div class="empty-state">Cargando…</div></td></tr>
+          <tr><td colspan="7"><div class="empty-state">Cargando…</div></td></tr>
         </tbody>
       </table>
     </div>
+    <div class="pagination" id="pagOK"></div>
   </section>
 
 </main>
