@@ -17,7 +17,7 @@ const state = {
 };
 
 // Estado por tabla: dataset completo + paginación + ordenamiento
-const PAGE_SIZE = 15;
+const PAGE_SIZE = 10;
 const tables = {
   malSacadas:   { data: [], page: 1, sortKey: null, sortDir: 'asc' },
   discrepancias: { data: [], page: 1, sortKey: null, sortDir: 'asc' },
