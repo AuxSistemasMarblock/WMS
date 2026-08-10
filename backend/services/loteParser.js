@@ -92,7 +92,7 @@ function evaluarCantidad(cantidadM2, lote, placasEscaneadas) {
     return {
       status: 'sin_medidas',
       placas_esperadas: null,
-      placas_escaneadas,
+      placas_escaneadas: placasEscaneadas,
       diferencia: null,
       mensaje: 'Lote sin formato de medidas ({id}-{largo}X{ancho})'
     };
