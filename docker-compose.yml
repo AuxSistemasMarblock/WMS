@@ -4,7 +4,7 @@ services:
     container_name: wms-backend
     restart: always
     env_file:
-      - backend/.env
+      - ${ENV_FILE:-backend/.env}
     volumes:
       # Service Account JSON de Google Sheets (read-only)
       - ./backend/secrets/spry-spanner-452018-s7-2e21e9a0fb5d.json:/app/backend/secrets/spry-spanner-452018-s7-2e21e9a0fb5d.json:ro

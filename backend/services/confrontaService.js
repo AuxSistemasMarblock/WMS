@@ -39,8 +39,9 @@ function agruparEscaneos(escaneos) {
  * @param {string} ifTranid - tranid de la IF dueña (para adjuntar a cada discrepancia)
  * @param {string} ifSo     - SO origen de la IF
  * @param {string} ifLocation - ubicación de la IF
+ * @param {string} ifFecha  - fecha de la IF (trandate)
  */
-function evaluarLinea(ifTranid, ifSo, ifLocation, lineaEsperada, escaneosDeEstaLinea) {
+function evaluarLinea(ifTranid, ifSo, ifLocation, ifFecha, lineaEsperada, escaneosDeEstaLinea) {
   const discrepancias = [];
   const cantEscaneada = escaneosDeEstaLinea.length;
 
@@ -52,7 +53,8 @@ function evaluarLinea(ifTranid, ifSo, ifLocation, lineaEsperada, escaneosDeEstaL
       mensaje: 'No se escaneó ninguna placa de este item',
       if_tranid: ifTranid,
       if_so: ifSo,
-      if_location: ifLocation
+      if_location: ifLocation,
+      if_fecha: ifFecha
     });
     return {
       ...lineaEsperada,
@@ -78,7 +80,8 @@ function evaluarLinea(ifTranid, ifSo, ifLocation, lineaEsperada, escaneosDeEstaL
       mensaje: evalCantidad.mensaje,
       if_tranid: ifTranid,
       if_so: ifSo,
-      if_location: ifLocation
+      if_location: ifLocation,
+      if_fecha: ifFecha
     });
   } else if (evalCantidad.status === 'faltante') {
     discrepancias.push({
@@ -93,7 +96,8 @@ function evaluarLinea(ifTranid, ifSo, ifLocation, lineaEsperada, escaneosDeEstaL
       id_lote: evalCantidad.id_lote,
       if_tranid: ifTranid,
       if_so: ifSo,
-      if_location: ifLocation
+      if_location: ifLocation,
+      if_fecha: ifFecha
     });
   } else if (evalCantidad.status === 'sobrante') {
     discrepancias.push({
@@ -108,7 +112,8 @@ function evaluarLinea(ifTranid, ifSo, ifLocation, lineaEsperada, escaneosDeEstaL
       id_lote: evalCantidad.id_lote,
       if_tranid: ifTranid,
       if_so: ifSo,
-      if_location: ifLocation
+      if_location: ifLocation,
+      if_fecha: ifFecha
     });
   }
 
@@ -127,7 +132,8 @@ function evaluarLinea(ifTranid, ifSo, ifLocation, lineaEsperada, escaneosDeEstaL
         escaneo_operador: esc.operador,
         if_tranid: ifTranid,
         if_so: ifSo,
-        if_location: ifLocation
+        if_location: ifLocation,
+        if_fecha: ifFecha
       });
     }
   }
@@ -145,7 +151,7 @@ function evaluarLinea(ifTranid, ifSo, ifLocation, lineaEsperada, escaneosDeEstaL
 /**
  * Detecta escaneos huérfanos (sku/lote que se escaneó pero no estaba en la IF).
  */
-function detectarHuerfanos(ifTranid, ifSo, ifLocation, lineasEsperadas, todosLosEscaneos) {
+function detectarHuerfanos(ifTranid, ifSo, ifLocation, ifFecha, lineasEsperadas, todosLosEscaneos) {
   const esperadosKeys = new Set(
     lineasEsperadas.map(l => `${ifTranid}|${l.sku}|${l.lote}`)
   );
@@ -164,7 +170,8 @@ function detectarHuerfanos(ifTranid, ifSo, ifLocation, lineasEsperadas, todosLos
         escaneo_operador: esc.operador,
         if_tranid: ifTranid,
         if_so: ifSo,
-        if_location: ifLocation
+        if_location: ifLocation,
+        if_fecha: ifFecha
       });
     }
   }
@@ -251,6 +258,17 @@ function agregarTopArticulosMasSalidas(todosLosEscaneos) {
  */
 function confrontar(ifsEsperadas, escaneos) {
   const escaneosAgrupados = agruparEscaneos(escaneos);
+
+  // Backfill de SO origen: la saved search de NS no incluye "Creado desde",
+  // pero los escaneos de Google Sheets sí (campo `so`). Si la IF no trae
+  // sourceDoc de NetSuite, lo completamos con el SO de sus escaneos.
+  const soPorIF = new Map();
+  for (const e of escaneos) {
+    if (e.if_tranid && e.so && !soPorIF.has(e.if_tranid)) {
+      soPorIF.set(e.if_tranid, e.so);
+    }
+  }
+
   const resultado = {
     ifs: [],
     ifs_ok: [],
@@ -272,13 +290,19 @@ function confrontar(ifsEsperadas, escaneos) {
     const lineasEvaluadas = [];
     const discrepanciasDeEstaIF = [];
 
+    // SO resuelto: prioridad al de NetSuite (si algún día la saved search lo trae),
+    // fallback al SO de los escaneos (Sheets).
+    const soResuelto = ifDoc.sourceDoc || soPorIF.get(ifDoc.tranid) || null;
+    const ifFecha = ifDoc.trandate || null;
+
     for (const lineaEsperada of ifDoc.lineas) {
       const key = `${ifDoc.tranid}|${lineaEsperada.sku}|${lineaEsperada.lote}`;
       const escaneosDeEstaLinea = escaneosAgrupados.get(key) || [];
       const lineaEvaluada = evaluarLinea(
         ifDoc.tranid,
-        ifDoc.sourceDoc,
+        soResuelto,
         ifDoc.location,
+        ifFecha,
         lineaEsperada,
         escaneosDeEstaLinea
       );
@@ -299,8 +323,9 @@ function confrontar(ifsEsperadas, escaneos) {
     // Detectar huérfanos (sku/lote escaneado que no estaba en la IF)
     const huerfanos = detectarHuerfanos(
       ifDoc.tranid,
-      ifDoc.sourceDoc,
+      soResuelto,
       ifDoc.location,
+      ifFecha,
       ifDoc.lineas,
       escaneos
     );
@@ -308,16 +333,17 @@ function confrontar(ifsEsperadas, escaneos) {
       discrepanciasDeEstaIF.push(...huerfanos);
     }
 
-    // Determinar operador (tomar del primer escaneo de cualquier línea, si existe)
-    const operador = lineasEvaluadas
-      .flatMap(l => l.escaneos)
+    // Determinar operador: de TODOS los escaneos de la IF (incluidos huérfanos),
+    // no solo los que matchearon alguna línea esperada.
+    const operador = escaneos
+      .filter(e => e.if_tranid === ifDoc.tranid)
       .map(e => e.operador)
       .find(Boolean) || null;
 
     const ifResultado = {
       internalid: ifDoc.internalid,
       tranid: ifDoc.tranid,
-      so: ifDoc.sourceDoc,
+      so: soResuelto,
       trandate: ifDoc.trandate,
       location: ifDoc.location,
       operador,

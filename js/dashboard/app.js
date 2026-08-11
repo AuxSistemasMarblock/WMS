@@ -16,6 +16,14 @@ const state = {
   sucursalUsuario: null
 };
 
+// Estado por tabla: dataset completo + paginación + ordenamiento
+const PAGE_SIZE = 10;
+const tables = {
+  malSacadas:   { data: [], page: 1, sortKey: null, sortDir: 'asc' },
+  discrepancias: { data: [], page: 1, sortKey: null, sortDir: 'asc' },
+  ifsOK:        { data: [], page: 1, sortKey: null, sortDir: 'asc' }
+};
+
 // Charts (inicializados lazy)
 let chartExactitud = null;
 let chartTopArticulos = null;
@@ -70,6 +78,86 @@ function badgeTipo(tipo) {
 function formatearFecha(s) {
   if (!s) return '—';
   return s;
+}
+
+// =================== TABLAS: ORDENAMIENTO Y PAGINACIÓN ===================
+
+function valorOrdenable(row, key) {
+  if (key === 'errores') return row.discrepancias ? row.discrepancias.length : 0;
+  const v = row[key];
+  if (v === null || v === undefined) return '';
+  if (typeof v === 'object' && v.text) return v.text;
+  return v;
+}
+
+function ordenarFilas(rows, key, dir) {
+  const mult = dir === 'asc' ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    const va = valorOrdenable(a, key);
+    const vb = valorOrdenable(b, key);
+    if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * mult;
+    return String(va).localeCompare(String(vb), 'es') * mult;
+  });
+}
+
+function paginarFilas(rows, page) {
+  const start = (page - 1) * PAGE_SIZE;
+  return rows.slice(start, start + PAGE_SIZE);
+}
+
+function renderPaginador(tableKey) {
+  const t = tables[tableKey];
+  const container = $('pag' + (tableKey === 'malSacadas' ? 'MalSacadas' : tableKey === 'discrepancias' ? 'Discrepancias' : 'OK'));
+  if (!container) return;
+  const total = t.data.length;
+  const totalPaginas = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  if (total <= PAGE_SIZE) {
+    container.innerHTML = '';
+    return;
+  }
+
+  container.innerHTML = '';
+  const prev = el('button', { class: 'btn btn-ghost' }, '‹ Anterior');
+  prev.disabled = t.page <= 1;
+  prev.onclick = () => { t.page--; renderTabla(tableKey); };
+
+  const info = el('span', { class: 'pagination-info' }, `Página ${t.page} de ${totalPaginas} · ${total} registros`);
+
+  const next = el('button', { class: 'btn btn-ghost' }, 'Siguiente ›');
+  next.disabled = t.page >= totalPaginas;
+  next.onclick = () => { t.page++; renderTabla(tableKey); };
+
+  container.appendChild(prev);
+  container.appendChild(info);
+  container.appendChild(next);
+}
+
+function renderTabla(tableKey) {
+  if (tableKey === 'malSacadas') renderMalSacadas();
+  else if (tableKey === 'discrepancias') renderDiscrepancias();
+  else if (tableKey === 'ifsOK') renderIFsOK();
+}
+
+function initSortableHeaders() {
+  document.querySelectorAll('th.sortable').forEach(th => {
+    th.addEventListener('click', () => {
+      const tableKey = th.dataset.table;
+      const sortKey = th.dataset.sort;
+      const t = tables[tableKey];
+      if (t.sortKey === sortKey) {
+        t.sortDir = t.sortDir === 'asc' ? 'desc' : 'asc';
+      } else {
+        t.sortKey = sortKey;
+        t.sortDir = 'asc';
+      }
+      t.page = 1;
+      // Quitar indicadores previos y marcar el actual
+      document.querySelectorAll(`th[data-table="${tableKey}"]`).forEach(h => h.classList.remove('sorted-asc', 'sorted-desc'));
+      th.classList.add(t.sortDir === 'asc' ? 'sorted-asc' : 'sorted-desc');
+      renderTabla(tableKey);
+    });
+  });
 }
 
 // =================== AUTH ===================
@@ -327,7 +415,7 @@ function renderChartTopArticulos(items) {
       datasets: [{
         label: 'Placas escaneadas',
         data,
-        backgroundColor: '#1e40af',
+        backgroundColor: ['#1e40af', '#0ea5e9', '#10b981', '#f59e0b', '#8b5cf6'],
         borderRadius: 4
       }]
     },
@@ -359,31 +447,49 @@ function renderChartTopArticulos(items) {
 // =================== IFs MAL SACADAS ===================
 async function cargarMalSacadas() {
   const tbody = $('tbodyMalSacadas');
-  tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state">Cargando…</div></td></tr>';
+  tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state">Cargando…</div></td></tr>';
   try {
     const data = await apiFetch('/api/dashboard/ifs-mal-sacadas?' + buildParams());
     $('badCount').textContent = data.total;
-    if (data.ifs.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state">✅ Sin IFs mal sacadas en este período</div></td></tr>';
-      return;
-    }
-    tbody.innerHTML = '';
-    data.ifs.forEach(i => {
-      const tr = el('tr');
-      tr.innerHTML = `
-        <td><strong>${escapeHTML(i.tranid)}</strong></td>
-        <td>${escapeHTML(i.so || '—')}</td>
-        <td>${escapeHTML(i.location || '—')}</td>
-        <td>${escapeHTML(i.operador || '—')}</td>
-        <td>${i.discrepancias.length}</td>
-        <td>${(i.tipos_error || []).map(t => badgeTipo(t)).join(' ')}</td>
-        <td><button class="btn btn-ghost" onclick="verDetalle('${i.tranid}')">Ver detalle</button></td>
-      `;
-      tbody.appendChild(tr);
-    });
+    tables.malSacadas.data = data.ifs || [];
+    tables.malSacadas.page = 1;
+    tables.malSacadas.sortKey = null;
+    tables.malSacadas.sortDir = 'asc';
+    document.querySelectorAll('th[data-table="malSacadas"]').forEach(h => h.classList.remove('sorted-asc', 'sorted-desc'));
+    renderMalSacadas();
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state">Error: ${escapeHTML(e.message)}</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state">Error: ${escapeHTML(e.message)}</div></td></tr>`;
   }
+}
+
+function renderMalSacadas() {
+  const tbody = $('tbodyMalSacadas');
+  const t = tables.malSacadas;
+  let filas = ordenarFilas(t.data, t.sortKey, t.sortDir);
+  const paginadas = paginarFilas(filas, t.page);
+
+  if (t.data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state">✅ Sin IFs mal sacadas en este período</div></td></tr>';
+    renderPaginador('malSacadas');
+    return;
+  }
+
+  tbody.innerHTML = '';
+  paginadas.forEach(i => {
+    const tr = el('tr');
+    tr.innerHTML = `
+      <td><strong>${escapeHTML(i.tranid)}</strong></td>
+      <td>${escapeHTML(i.trandate || '—')}</td>
+      <td>${escapeHTML(i.so || '—')}</td>
+      <td>${escapeHTML(i.location || '—')}</td>
+      <td>${escapeHTML(i.operador || '—')}</td>
+      <td>${i.discrepancias.length}</td>
+      <td>${(i.tipos_error || []).map(t => badgeTipo(t)).join(' ')}</td>
+      <td><button class="btn btn-ghost" onclick="verDetalle('${i.tranid}')">Ver detalle</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
+  renderPaginador('malSacadas');
 }
 
 // =================== DETALLE ===================
@@ -404,7 +510,7 @@ function renderDetalle(ifDoc) {
   html.push(`
     <div class="detalle-section">
       <h4>Cabecera</h4>
-      <div><strong>SO origen:</strong> ${escapeHTML(ifDoc.sourceDoc || '—')}</div>
+      <div><strong>SO origen:</strong> ${escapeHTML(ifDoc.so || ifDoc.sourceDoc || '—')}</div>
       <div><strong>Fecha:</strong> ${escapeHTML(ifDoc.trandate || '—')}</div>
       <div><strong>Ubicación:</strong> ${escapeHTML(ifDoc.location || '—')}</div>
       <div><strong>Operador:</strong> ${escapeHTML(ifDoc.operador || '—')}</div>
@@ -466,45 +572,60 @@ function cerrarDetalle() {
 // =================== DISCREPANCIAS ===================
 async function cargarDiscrepancias() {
   const tbody = $('tbodyDiscrepancias');
-  tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state">Cargando…</div></td></tr>';
+  tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state">Cargando…</div></td></tr>';
   try {
     const p = buildParams();
     const tipo = $('filtroTipoDisc').value;
     if (tipo) p.append('tipo', tipo);
     const data = await apiFetch('/api/dashboard/discrepancias?' + p);
     $('discCount').textContent = data.total;
-    if (data.discrepancias.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state">Sin discrepancias</div></td></tr>';
-      return;
-    }
-    tbody.innerHTML = '';
-    data.discrepancias.slice(0, 200).forEach(d => {
-      let detalle = '';
-      if (d.placas_esperadas !== undefined) {
-        detalle = `Esp: ${d.placas_esperadas} / Esc: ${d.placas_escaneadas}`;
-      } else if (d.ubicacion_esperada) {
-        detalle = `${d.ubicacion_esperada} → ${d.ubicacion_escaneada}`;
-      } else {
-        detalle = d.mensaje || '—';
-      }
-      const tr = el('tr');
-      tr.innerHTML = `
-        <td><strong>${escapeHTML(d.if_tranid || '—')}</strong></td>
-        <td>${escapeHTML(d.if_so || '—')}</td>
-        <td>${escapeHTML(d.if_location || '—')}</td>
-        <td>${escapeHTML(d.sku || '—')}</td>
-        <td>${escapeHTML(d.lote || '—')}</td>
-        <td>${badgeTipo(d.tipo)}</td>
-        <td>${escapeHTML(detalle)}</td>
-      `;
-      tbody.appendChild(tr);
-    });
-    if (data.discrepancias.length > 200) {
-      tbody.appendChild(el('tr', {}, el('td', { colspan: '7', class: 'empty-state' }, '(mostrando primeras 200 de ' + data.total + ')')));
-    }
+    tables.discrepancias.data = data.discrepancias || [];
+    tables.discrepancias.page = 1;
+    tables.discrepancias.sortKey = null;
+    tables.discrepancias.sortDir = 'asc';
+    document.querySelectorAll('th[data-table="discrepancias"]').forEach(h => h.classList.remove('sorted-asc', 'sorted-desc'));
+    renderDiscrepancias();
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state">Error: ${escapeHTML(e.message)}</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state">Error: ${escapeHTML(e.message)}</div></td></tr>`;
   }
+}
+
+function renderDiscrepancias() {
+  const tbody = $('tbodyDiscrepancias');
+  const t = tables.discrepancias;
+  let filas = ordenarFilas(t.data, t.sortKey, t.sortDir);
+  const paginadas = paginarFilas(filas, t.page);
+
+  if (t.data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state">Sin discrepancias</div></td></tr>';
+    renderPaginador('discrepancias');
+    return;
+  }
+
+  tbody.innerHTML = '';
+  paginadas.forEach(d => {
+    let detalle = '';
+    if (d.placas_esperadas !== undefined) {
+      detalle = `Esp: ${d.placas_esperadas} / Esc: ${d.placas_escaneadas}`;
+    } else if (d.ubicacion_esperada) {
+      detalle = `${d.ubicacion_esperada} → ${d.ubicacion_escaneada}`;
+    } else {
+      detalle = d.mensaje || '—';
+    }
+    const tr = el('tr');
+    tr.innerHTML = `
+      <td><strong>${escapeHTML(d.if_tranid || '—')}</strong></td>
+      <td>${escapeHTML(d.if_fecha || '—')}</td>
+      <td>${escapeHTML(d.if_so || '—')}</td>
+      <td>${escapeHTML(d.if_location || '—')}</td>
+      <td>${escapeHTML(d.sku || '—')}</td>
+      <td>${escapeHTML(d.lote || '—')}</td>
+      <td>${badgeTipo(d.tipo)}</td>
+      <td>${escapeHTML(detalle)}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+  renderPaginador('discrepancias');
 }
 
 // =================== TOP ERRORES ===================
@@ -538,31 +659,48 @@ function renderTopList(id, items) {
 // =================== IFs OK ===================
 async function cargarIFsOK() {
   const tbody = $('tbodyOK');
-  tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state">Cargando…</div></td></tr>';
+  tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state">Cargando…</div></td></tr>';
   try {
-    const p = buildParams();
-    p.append('limit', '50');
-    const data = await apiFetch('/api/dashboard/ifs-ok?' + p);
+    const data = await apiFetch('/api/dashboard/ifs-ok?' + buildParams());
     $('okCount').textContent = data.total;
-    if (data.ifs.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state">Sin IFs OK en este período</div></td></tr>';
-      return;
-    }
-    tbody.innerHTML = '';
-    data.ifs.forEach(i => {
-      const tr = el('tr');
-      tr.innerHTML = `
-        <td><strong>${escapeHTML(i.tranid)}</strong></td>
-        <td>${escapeHTML(i.so || '—')}</td>
-        <td>${escapeHTML(i.location || '—')}</td>
-        <td>${escapeHTML(i.operador || '—')}</td>
-        <td>${i.total_lineas}</td>
-      `;
-      tbody.appendChild(tr);
-    });
+    tables.ifsOK.data = data.ifs || [];
+    tables.ifsOK.page = 1;
+    tables.ifsOK.sortKey = null;
+    tables.ifsOK.sortDir = 'asc';
+    document.querySelectorAll('th[data-table="ifsOK"]').forEach(h => h.classList.remove('sorted-asc', 'sorted-desc'));
+    renderIFsOK();
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state">Error: ${escapeHTML(e.message)}</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state">Error: ${escapeHTML(e.message)}</div></td></tr>`;
   }
+}
+
+function renderIFsOK() {
+  const tbody = $('tbodyOK');
+  const t = tables.ifsOK;
+  let filas = ordenarFilas(t.data, t.sortKey, t.sortDir);
+  const paginadas = paginarFilas(filas, t.page);
+
+  if (t.data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state">Sin IFs OK en este período</div></td></tr>';
+    renderPaginador('ifsOK');
+    return;
+  }
+
+  tbody.innerHTML = '';
+  paginadas.forEach(i => {
+    const tr = el('tr');
+    tr.innerHTML = `
+      <td><strong>${escapeHTML(i.tranid)}</strong></td>
+      <td>${escapeHTML(i.trandate || '—')}</td>
+      <td>${escapeHTML(i.so || '—')}</td>
+      <td>${escapeHTML(i.location || '—')}</td>
+      <td>${escapeHTML(i.operador || '—')}</td>
+      <td>${i.total_lineas}</td>
+      <td><button class="btn btn-ghost" onclick="verDetalle('${i.tranid}')">Ver detalle</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
+  renderPaginador('ifsOK');
 }
 
 // =================== INIT ===================
@@ -592,6 +730,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Período default: este mes
   setPeriodo('mes');
+
+  // Headers ordenables de las tablas
+  initSortableHeaders();
 
   // Cargar sucursales (necesario para el select)
   await cargarSucursales();
