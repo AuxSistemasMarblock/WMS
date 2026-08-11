@@ -16,6 +16,19 @@ const envConfig = require('../config/environments');
 
 const CACHE_TTL_MS = 15_000; // 15 segundos
 const cache = new Map(); // key: JSON.stringify(filtros), value: { ts, data }
+const inFlight = new Map(); // key: JSON.stringify(filtros), value: Promise (single-flight)
+
+/**
+ * Loguea un error incluyendo el detalle de la respuesta HTTP (útil para
+ * ver el código/mensaje real de NetSuite, que en el mensaje plano queda oculto).
+ */
+function logError(contexto, e) {
+  console.error(`${contexto} error:`, e.message);
+  if (e.response) {
+    console.error(`${contexto} response data:`, JSON.stringify(e.response.data));
+  }
+  if (process.env.VERBOSE === '1' && e.stack) console.error(e.stack);
+}
 
 /**
  * Construye la clave de caché a partir de los filtros
@@ -46,24 +59,67 @@ function setCached(filtros, data) {
 }
 
 /**
- * Ejecuta la confronta completa con caché.
- * Esta es la función core: la usan casi todos los endpoints.
+ * Ejecuta la confronta completa con caché y single-flight.
+ *
+ * El dashboard dispara ~9 endpoints en paralelo por cada cambio de filtro
+ * (cargarTodo). Sin single-flight, todos fallan el caché a la vez y ejecutan
+ * la confronta completa concurrentemente, generando una ráfaga de llamadas a
+ * NetSuite que deriva en errores transitorios (400). Con single-flight todos
+ * comparten UNA sola ejecución por cache key.
  */
 async function ejecutarConfronta({ desde, hasta, sucursal }) {
   const filtros = { desde, hasta, sucursal };
   const cached = getCached(filtros);
   if (cached) return cached;
 
-  const ifsEsperadas = await netsuiteSearchService.getIFsEsperadasAgrupadas({
-    desde, hasta, sucursal
-  });
-  const escaneos = await googleSheetsService.getEscaneos({
-    desde, hasta, sucursal
-  });
+  const key = cacheKey(filtros);
+  if (inFlight.has(key)) return inFlight.get(key);
 
-  const resultado = confrontaService.confrontar(ifsEsperadas, escaneos);
-  setCached(filtros, resultado);
-  return resultado;
+  const promise = (async () => {
+    try {
+      // 1) Escaneos: la ventana de fechas se aplica sobre la FECHA DE ESCANEO (Sheets).
+      const escaneos = await googleSheetsService.getEscaneos({
+        desde, hasta, sucursal
+      });
+
+      // 2) IFs esperadas: UNA sola llamada a NetSuite que devuelve las IFs del
+      //    período (trandate en ventana, para detectar linea_faltante) Y además
+      //    conserva las IFs escaneadas aunque su trandate quede fuera de la
+      //    ventana (la fecha relevante para la confronta es la del escaneo).
+      const tranidsEscaneados = [...new Set(
+        escaneos.map(e => e.if_tranid).filter(Boolean)
+      )];
+
+      let ifsEsperadas = [];
+      try {
+        ifsEsperadas = await netsuiteSearchService.getIFsEsperadasAgrupadas({
+          desde, hasta, sucursal,
+          tranidsRelevantes: tranidsEscaneados
+        });
+      } catch (e) {
+        // No derribar el dashboard por un error transitorio de NetSuite:
+        // degradamos a sin IFs esperadas (las escaneadas saldrán como
+        // if_no_encontrada en la confronta) y logueamos el detalle real.
+        console.error('[ejecutarConfronta] Error leyendo IFs de NetSuite:', e.message);
+        if (e.response) {
+          console.error('[ejecutarConfronta] NetSuite response:', JSON.stringify(e.response.data));
+        }
+        if (process.env.VERBOSE === '1' && e.stack) console.error(e.stack);
+      }
+
+      const resultado = confrontaService.confrontar(ifsEsperadas, escaneos);
+      if (ifsEsperadas.length === 0 && tranidsEscaneados.length > 0) {
+        resultado.warnings = ['No se pudieron leer las IFs esperadas de NetSuite; se reportan las IFs escaneadas como no localizadas.'];
+      }
+      setCached(filtros, resultado);
+      return resultado;
+    } finally {
+      inFlight.delete(key);
+    }
+  })();
+
+  inFlight.set(key, promise);
+  return promise;
 }
 
 /**
@@ -101,7 +157,7 @@ const getResumen = async (req, res) => {
       generado_en: new Date().toISOString()
     });
   } catch (e) {
-    console.error('getResumen error:', e);
+    logError('getResumen', e);
     res.status(500).json({ error: e.message });
   }
 };
@@ -148,7 +204,7 @@ const getIFsMalSacadas = async (req, res) => {
       ifs: compact
     });
   } catch (e) {
-    console.error('getIFsMalSacadas error:', e);
+    logError('getIFsMalSacadas', e);
     res.status(500).json({ error: e.message });
   }
 };
@@ -170,7 +226,7 @@ const getIFDetalle = async (req, res) => {
 
     res.json({ if: ifDoc });
   } catch (e) {
-    console.error('getIFDetalle error:', e);
+    logError('getIFDetalle', e);
     res.status(500).json({ error: e.message });
   }
 };
@@ -199,7 +255,7 @@ const getDiscrepancias = async (req, res) => {
       discrepancias
     });
   } catch (e) {
-    console.error('getDiscrepancias error:', e);
+    logError('getDiscrepancias', e);
     res.status(500).json({ error: e.message });
   }
 };
@@ -231,7 +287,7 @@ const getTopErrores = async (req, res) => {
       top: top.slice(0, 20)
     });
   } catch (e) {
-    console.error('getTopErrores error:', e);
+    logError('getTopErrores', e);
     res.status(500).json({ error: e.message });
   }
 };
@@ -265,7 +321,7 @@ const getIFsOK = async (req, res) => {
       ifs: compact
     });
   } catch (e) {
-    console.error('getIFsOK error:', e);
+    logError('getIFsOK', e);
     res.status(500).json({ error: e.message });
   }
 };
@@ -296,7 +352,7 @@ const getArticulosMasSalidas = async (req, res) => {
       top: top.slice(0, 20)
     });
   } catch (e) {
-    console.error('getArticulosMasSalidas error:', e);
+    logError('getArticulosMasSalidas', e);
     res.status(500).json({ error: e.message });
   }
 };
@@ -327,7 +383,7 @@ const getSucursales = async (req, res) => {
       .sort((a, b) => a.nombre.localeCompare(b.nombre));
     res.json({ sucursales: principales });
   } catch (e) {
-    console.error('getSucursales error:', e);
+    logError('getSucursales', e);
     res.status(500).json({ error: e.message });
   }
 };

@@ -69,7 +69,7 @@ function escapeHTML(s) {
 }
 
 function badgeTipo(tipo) {
-  const cls = ['cantidad_faltante', 'sku_lote_no_esperado', 'linea_faltante'].includes(tipo) ? 'error'
+  const cls = ['cantidad_faltante', 'sku_lote_no_esperado', 'linea_faltante', 'if_no_encontrada'].includes(tipo) ? 'error'
             : ['cantidad_sobrante', 'ubicacion_incorrecta'].includes(tipo) ? 'warn'
             : '';
   return `<span class="tipo-badge ${cls}">${tipo.replace(/_/g, ' ')}</span>`;
@@ -555,6 +555,8 @@ function renderDetalle(ifDoc) {
         detalle = `SKU/lote no estaba en la IF (operador: ${d.escaneo_operador || '—'})`;
       } else if (d.tipo === 'linea_faltante') {
         detalle = 'No se escaneó ninguna placa de este item';
+      } else if (d.tipo === 'if_no_encontrada') {
+        detalle = d.mensaje || 'IF escaneada pero no localizada en NetSuite';
       } else if (d.tipo === 'sin_medidas') {
         detalle = d.mensaje;
       }
