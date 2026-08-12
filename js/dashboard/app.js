@@ -379,12 +379,6 @@ function renderChartExactitud(ok, errores, tasa) {
 async function cargarTopArticulos() {
   try {
     const params = buildParams();
-    const data = await apiFetch('/api/dashboard/ifs-mal-sacadas?' + params);
-    // Los "artículos con más salidas" requieren un endpoint dedicado.
-    // Por ahora usamos el endpoint de top-errores con dimension sku, o
-    // añadimos uno nuevo si el controller lo soporta. Aquí lo derivamos
-    // del endpoint existente con dimension sku (escaneos).
-    // Cuando esté el endpoint /articulos-mas-salidas, lo usamos:
     const articulos = await apiFetch('/api/dashboard/articulos-mas-salidas?' + params);
     renderChartTopArticulos(articulos.top || []);
   } catch (e) {
