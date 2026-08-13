@@ -132,32 +132,8 @@ async function main() {
       return;
     }
 
-    // 3. Obtener IFs esperadas de NetSuite
-    console.log('\n📥 Leyendo IFs esperadas de NetSuite...');
-    try {
-      ifsEsperadas = await netsuiteSearchService.getIFsEsperadasAgrupadas({
-        desde: DESDE,
-        hasta: HASTA,
-        sucursal: SUCURSAL
-      });
-      ok(`${ifsEsperadas.length} IFs encontradas`);
-
-      if (VERBOSE && ifsEsperadas.length > 0) {
-        info(`Primera IF:`);
-        console.log(JSON.stringify(ifsEsperadas[0], null, 2));
-      } else if (ifsEsperadas.length === 0) {
-        warn('0 IFs. Revisa:');
-        info('  - Que la fecha tenga datos en NS (customsearch3675)');
-        info('  - Que SUCURSAL no esté filtrando demasiado');
-        info('  - Que el saved search devuelva las más recientes primero');
-      }
-    } catch (e) {
-      err(`Error leyendo IFs: ${e.message}`);
-      if (VERBOSE) console.error(e.stack);
-      return;
-    }
-
-    // 4. Obtener escaneos de Google Sheets
+    // 3. Obtener escaneos de Google Sheets (la ventana de fechas se aplica
+    //    sobre la fecha de ESCANEO; son la fuente de verdad de lo escaneado)
     console.log('\n📥 Leyendo escaneos de Google Sheets...');
     try {
       escaneos = await googleSheetsService.getEscaneos({
@@ -175,6 +151,37 @@ async function main() {
       }
     } catch (e) {
       err(`Error leyendo escaneos: ${e.message}`);
+      if (VERBOSE) console.error(e.stack);
+      return;
+    }
+
+    // 4. Obtener IFs esperadas de NetSuite (mismo flujo que el dashboard):
+    //    UNA sola llamada que devuelve las IFs del período (trandate en ventana)
+    //    y además conserva las IFs escaneadas cuyo trandate quedó fuera de la
+    //    ventana (la fecha relevante para la confronta es la del escaneo).
+    console.log('\n📥 Leyendo IFs esperadas de NetSuite...');
+    try {
+      const tranidsEscaneados = [...new Set(
+        escaneos.map(e => e.if_tranid).filter(Boolean)
+      )];
+      if (tranidsEscaneados.length > 0) {
+        info(`Tranids escaneados (relevantes): ${tranidsEscaneados.length}`);
+      }
+
+      ifsEsperadas = await netsuiteSearchService.getIFsEsperadasAgrupadas({
+        desde: DESDE,
+        hasta: HASTA,
+        sucursal: SUCURSAL,
+        tranidsRelevantes: tranidsEscaneados
+      });
+      ok(`${ifsEsperadas.length} IFs totales para confrontar`);
+
+      if (VERBOSE && ifsEsperadas.length > 0) {
+        info(`Primera IF:`);
+        console.log(JSON.stringify(ifsEsperadas[0], null, 2));
+      }
+    } catch (e) {
+      err(`Error leyendo IFs: ${e.message}`);
       if (VERBOSE) console.error(e.stack);
       return;
     }
@@ -334,6 +341,8 @@ function formatearDiscrepancia(disc) {
       return `${disc.sku} / ${disc.lote} → SKU/lote no estaba en la IF (operador: ${disc.escaneo_operador || 's/d'})`;
     case 'linea_faltante':
       return `${disc.sku} / ${disc.lote} → no se escaneó ninguna placa`;
+    case 'if_no_encontrada':
+      return `${disc.mensaje || 'IF escaneada pero no localizada en NetSuite'}`;
     case 'sin_medidas':
       return `${disc.sku} / ${disc.lote} → ${disc.mensaje}`;
     default:

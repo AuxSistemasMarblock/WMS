@@ -118,6 +118,12 @@ function combinarTimestamp(obj) {
   }
 }
 
+// Caché en memoria de los escaneos normalizados (sin filtrar).
+// La API de Sheets no cambia salvo que n8n escriba; con TTL (default 60s)
+// evitamos releer toda la hoja en cada cambio de filtro del dashboard.
+let cacheEscaneos = null; // { ts, data }
+let fetchEscaneosPromise = null; // single-flight: evita doble lectura concurrente
+
 /**
  * Lee todos los escaneos del Sheet, normaliza y los devuelve como array de objetos.
  *
@@ -128,43 +134,76 @@ function combinarTimestamp(obj) {
  * @returns {Promise<Array<Object>>}
  */
 async function getEscaneos({ desde, hasta, sucursal } = {}) {
-  const sheets = await getClient();
+  const objetos = await getEscaneosNormalizados();
 
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: config.spreadsheetId,
-    range: config.range
-  });
+  // Filtrar. Se devuelven COPIES de los objetos cacheados para que ningún
+  // consumidor pueda mutar el caché y corromper otras combinaciones de filtros.
+  return objetos
+    .filter(o => {
+      if (desde && o.fecha && o.fecha < desde) return false;
+      if (hasta && o.fecha && o.fecha > hasta) return false;
+      if (sucursal && !sucursalMatch(o.sucursal, sucursal)) return false;
+      return true;
+    })
+    .map(o => ({ ...o }));
+}
 
-  const rows = res.data.values || [];
-  if (rows.length === 0) return [];
+/**
+ * Lee la hoja UNA vez dentro del TTL configurado y devuelve los escaneos
+ * normalizados SIN filtrar (todas las filas). El filtrado por fechas/sucursal
+ * se hace en getEscaneos, después de este caché, así todas las combinaciones
+ * de filtros comparten la misma lectura de la hoja.
+ *
+ * @returns {Promise<Array<Object>>}
+ */
+async function getEscaneosNormalizados() {
+  const ttlMs = (config.cacheTTL || 60) * 1000;
 
-  if (process.env.VERBOSE === '1') {
-    console.log(`[VERBOSE] Sheets response: ${rows.length} filas (incluyendo header)`);
-    if (rows.length > 1) {
-      console.log(`[VERBOSE] Primera fila de datos:`);
-      console.log(JSON.stringify(rows[1], null, 2));
-    }
+  if (cacheEscaneos && Date.now() - cacheEscaneos.ts < ttlMs) {
+    return cacheEscaneos.data;
   }
 
-  const objetos = filasAObjetos(rows);
+  // Si ya hay una lectura en curso (caché expirado justo con varias llamadas
+  // concurrentes), todas comparten la misma; evita doble lectura de la hoja.
+  if (fetchEscaneosPromise) return fetchEscaneosPromise;
 
-  // Agregar timestamp combinado
-  objetos.forEach(o => {
-    o.timestamp = combinarTimestamp(o);
+  fetchEscaneosPromise = (async () => {
+    const sheets = await getClient();
+
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: config.spreadsheetId,
+      range: config.range
+    });
+
+    const rows = res.data.values || [];
+
+    if (process.env.VERBOSE === '1') {
+      console.log(`[VERBOSE] Sheets response: ${rows.length} filas (incluyendo header)`);
+      if (rows.length > 1) {
+        console.log(`[VERBOSE] Primera fila de datos:`);
+        console.log(JSON.stringify(rows[1], null, 2));
+      }
+    }
+
+    const objetos = filasAObjetos(rows);
+
+    // Agregar timestamp combinado
+    objetos.forEach(o => {
+      o.timestamp = combinarTimestamp(o);
+    });
+
+    // Normalizar fechas antes de filtrar
+    objetos.forEach(o => {
+      o.fecha = normalizarFechaSheets(o.fecha);
+    });
+
+    cacheEscaneos = { ts: Date.now(), data: objetos };
+    return objetos;
+  })().finally(() => {
+    fetchEscaneosPromise = null;
   });
 
-  // Normalizar fechas antes de filtrar
-  objetos.forEach(o => {
-    o.fecha = normalizarFechaSheets(o.fecha);
-  });
-
-  // Filtrar
-  return objetos.filter(o => {
-    if (desde && o.fecha && o.fecha < desde) return false;
-    if (hasta && o.fecha && o.fecha > hasta) return false;
-    if (sucursal && !sucursalMatch(o.sucursal, sucursal)) return false;
-    return true;
-  });
+  return fetchEscaneosPromise;
 }
 
 /**
