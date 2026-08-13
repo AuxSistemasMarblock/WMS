@@ -222,7 +222,6 @@ function calcularPeriodo(preset) {
     case 'personalizado':
       return null; // se usan los inputs
     default:
-      desde.setMonth(hoy.getMonth() - 1);
   }
 
   return { desde: ymd(desde), hasta: ymd(hasta) };
@@ -724,8 +723,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   });
 
-  // Período default: este mes
-  setPeriodo('mes');
+  // Período default: hoy
+  setPeriodo('hoy');
 
   // Headers ordenables de las tablas
   initSortableHeaders();
