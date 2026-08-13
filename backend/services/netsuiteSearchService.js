@@ -34,17 +34,34 @@ const restletPath = `/app/site/hosting/restlet.nl?script=${scriptId}&deploy=${de
  * @param {string} options.desde    - Fecha desde (YYYY-MM-DD)
  * @param {string} options.hasta    - Fecha hasta (YYYY-MM-DD)
  * @param {string} options.sucursal - Filtrar por ubicación
+ * @param {Array<string>} options.tranidsRelevantes - Tranids que deben conservarse
+ *   aunque su trandate quede fuera de la ventana (IFs escaneadas en el período:
+ *   la fecha relevante para la confronta es la del escaneo en Sheets).
  * @param {number} options.maxRegistros - Tope de seguridad (default 5000)
+ * @param {number} options.maxRelevantesRows - Tope de filas a revisar cuando hay
+ *   tranids relevantes pendientes (default 3000). Los escaneos son de IFs
+ *   recientes (números altos, primeras páginas), así que si un tranid relevante
+ *   no aparece en ese tope, casi seguro no existe en NetSuite.
  * @returns {Promise<Array<Object>>} - Filas crudas de la búsqueda
  */
-async function getIFsEsperadas({ desde, hasta, sucursal, maxRegistros = 5000 } = {}) {
+async function getIFsEsperadas({
+  desde, hasta, sucursal, maxRegistros = 5000, maxRelevantesRows = 3000, tranidsRelevantes
+} = {}) {
   const pageSize = 1000;
+  const relevantesSet = new Set(
+    (tranidsRelevantes || []).map(t => String(t).trim()).filter(Boolean)
+  );
+  const encontradosRelevantes = new Set();
+  // Si hay tranids relevantes, acotamos la búsqueda a las filas más recientes
+  // (donde siempre viven los escaneos); si no, usamos el tope normal.
+  const topeRows = relevantesSet.size > 0 ? maxRelevantesRows : maxRegistros;
+
   let todasLasFilas = [];
   let start = 0;
   let podemosParar = false;
   let pagesFetched = 0;
 
-  while (todasLasFilas.length < maxRegistros && !podemosParar) {
+  while (todasLasFilas.length < topeRows && !podemosParar) {
     const payload = {
       searchId: searchIdEnviadas,
       limit: pageSize,
@@ -81,9 +98,18 @@ async function getIFsEsperadas({ desde, hasta, sucursal, maxRegistros = 5000 } =
       trandate: normalizarFechaNS(f.trandate)
     }));
 
-    // Terminación temprana: si la última fila (más antigua de esta página)
-    // ya está antes del `desde`, no necesitamos traer más.
-    if (desde) {
+    // Marcar tranids relevantes encontrados en esta página
+    for (const f of filas) {
+      const tranid = f.tranid != null ? String(f.tranid).trim() : null;
+      if (tranid && relevantesSet.has(tranid)) encontradosRelevantes.add(tranid);
+    }
+
+    // Terminación temprana: solo por fecha si no quedan tranids relevantes
+    // pendientes de localizar (si faltan, seguimos paginando hasta hallarlos).
+    const faltanRelevantes = relevantesSet.size > 0
+      && encontradosRelevantes.size < relevantesSet.size;
+
+    if (desde && !faltanRelevantes) {
       const ultimaFechaPagina = filasNormalizadas[filasNormalizadas.length - 1].trandate;
       if (ultimaFechaPagina && ultimaFechaPagina < desde) {
         // Reemplazar la versión no normalizada en todasLasFilas
@@ -105,7 +131,8 @@ async function getIFsEsperadas({ desde, hasta, sucursal, maxRegistros = 5000 } =
   }
 
   if (process.env.VERBOSE === '1') {
-    console.log(`[VERBOSE] Paginación NS: ${todasLasFilas.length} filas en ${pagesFetched} páginas`);
+    console.log(`[VERBOSE] Paginación NS: ${todasLasFilas.length} filas en ${pagesFetched} páginas`
+      + (relevantesSet.size ? `, relevantes ${encontradosRelevantes.size}/${relevantesSet.size}` : ''));
   }
 
   // Asegurar que trandate está normalizado en todas las filas
@@ -117,9 +144,14 @@ async function getIFsEsperadas({ desde, hasta, sucursal, maxRegistros = 5000 } =
   // Ordenar desc por fecha (defensivo: si el saved search devolvió asc, lo corregimos)
   filas.sort((a, b) => (b.trandate || '').localeCompare(a.trandate || ''));
 
-  // Filtro en memoria (sucursal, o fechas si no se aplicó terminación temprana)
+  // Filtro en memoria (sucursal, o fechas si no se aplicó terminación temprana).
+  // Los tranids relevantes SIEMPRE se conservan, aunque queden fuera de la
+  // ventana de fechas o la sucursal (son globales y ya vienen de escaneos
+  // filtrados por sucursal del lado de Sheets).
   if (desde || hasta || sucursal) {
     filas = filas.filter(f => {
+      const tranid = f.tranid != null ? String(f.tranid).trim() : null;
+      if (tranid && relevantesSet.has(tranid)) return true;
       if (desde && f.trandate && f.trandate < desde) return false;
       if (hasta && f.trandate && f.trandate > hasta) return false;
       if (sucursal) {
@@ -220,10 +252,13 @@ function normalizarLineaEsperada(fila) {
 /**
  * Devuelve IFs esperadas normalizadas y agrupadas por tranid.
  *
+ * @param {Object} options - Mismas opciones que getIFsEsperadas (incluye tranidsRelevantes)
  * @returns {Promise<Array<{tranid, lineas: Array, ...}>>}
  */
-async function getIFsEsperadasAgrupadas({ desde, hasta, sucursal, limit } = {}) {
-  const filas = await getIFsEsperadas({ desde, hasta, sucursal, limit });
+async function getIFsEsperadasAgrupadas({ desde, hasta, sucursal, limit, tranidsRelevantes } = {}) {
+  const filas = await getIFsEsperadas({
+    desde, hasta, sucursal, maxRegistros: limit, tranidsRelevantes
+  });
   const normalizadas = filas.map(normalizarLineaEsperada);
 
   const porIF = new Map();
