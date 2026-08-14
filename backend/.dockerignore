@@ -1,0 +1,25 @@
+# Dependencias
+node_modules
+
+# Variables de entorno (se inyectan vía env_file/runner, NO en la imagen)
+.env
+.env.*
+.env.production
+
+# Secretos (Service Account JSON — se montan por volumen en runtime)
+secrets/
+
+# Control de versiones y metadatos
+.git
+.gitignore
+*.md
+
+# Scripts de desarrollo local (no se ejecutan en la imagen)
+scripts/
+
+# Logs y archivos temporales
+*.log
+npm-debug.log*
+
+# Dockerfile
+Dockerfile
