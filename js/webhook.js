@@ -4,13 +4,15 @@
  *
  * Nota: El flujo principal ahora es:
  * Escaneo → Firmas → submitToNetSuite (netsuite-client.js)
- * Fallback: exportJSON → n8n webhook
+ * Fallback: exportJSON → backend /webhook/scan → n8n
+ *
+ * La URL del webhook de n8n vive SOLO en el backend (env N8N_WEBHOOK_URL);
+ * el frontend la desconoce para no exponerla en el JS público.
+ *
+ * Nota: BACKEND_URL ya está declarado como global en js/auth.js (se carga
+ * antes que este script), por eso NO se redeclara aquí.
  */
 
-const WEBHOOK_URL = window.APP_CONFIG?.WEBHOOK_URL;
-if (!WEBHOOK_URL) {
-  console.error('APP_CONFIG.WEBHOOK_URL no definido. Verifica js/config.js.');
-}
 let hasBeenSent = false; // Rastrea si ya fue enviado
 
 /**
@@ -90,7 +92,8 @@ function downloadJSONFallback(payload) {
 
 /**
  * Envía los datos al webhook de n8n (FALLBACK LEGACY)
- * Esta función se mantiene para compatibilidad hacia atrás
+ * Ahora vía el backend (/webhook/scan) para no exponer la URL de n8n.
+ * Esta función se mantiene para compatibilidad hacia atrás.
  * El flujo principal es submitToNetSuite()
  */
 async function exportJSON() {
@@ -105,9 +108,12 @@ async function exportJSON() {
 
     try {
         showToast('Enviando al sistema (FALLBACK)...', 'folio-ok');
-        const res = await fetch(WEBHOOK_URL, {
+        const res = await fetch(`${BACKEND_URL}/webhook/scan`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`
+            },
             body: JSON.stringify(payload),
         });
 
