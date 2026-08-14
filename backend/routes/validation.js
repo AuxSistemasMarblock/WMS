@@ -6,12 +6,14 @@ const express = require('express');
 const router = express.Router();
 const netsuiteRestletClient = require('../config/netsuiteRestlet');
 const config = require('../config/environments');
+const { devOnly } = require('../middleware/auth');
 
 /**
  * GET /validate
- * Valida la configuración y credenciales antes de subir
+ * Valida la configuración y credenciales antes de subir.
+ * Solo disponible fuera de producción.
  */
-router.get('/', async (req, res) => {
+router.get('/', devOnly, async (req, res) => {
   const validation = {
     timestamp: new Date().toISOString(),
     checks: {},

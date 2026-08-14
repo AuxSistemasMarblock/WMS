@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/authController');
-const { verifyToken } = require('../middleware/auth');
+const { verifyToken, requireAdmin, devOnly } = require('../middleware/auth');
 
 /**
  * POST /auth/login
@@ -11,9 +11,10 @@ router.post('/login', authController.login);
 
 /**
  * POST /auth/register
- * Crea nuevo usuario (genera hash bcrypt automáticamente)
+ * Crea nuevo usuario (genera hash bcrypt automáticamente).
+ * Requiere sesión de administrador.
  */
-router.post('/register', authController.register);
+router.post('/register', verifyToken, requireAdmin, authController.register);
 
 /**
  * GET /auth/user
@@ -29,8 +30,8 @@ router.post('/logout', authController.logout);
 
 /**
  * POST /auth/generate-hash
- * Genera hash bcrypt para una contraseña (SOLO PARA TESTING/DESARROLLO)
+ * Genera hash bcrypt para una contraseña (SOLO PARA DESARROLLO)
  */
-router.post('/generate-hash', authController.generateHash);
+router.post('/generate-hash', devOnly, authController.generateHash);
 
 module.exports = router;
