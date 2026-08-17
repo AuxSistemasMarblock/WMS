@@ -1969,6 +1969,7 @@ Ambos registros deben apuntar a la IP del VPS. Traefik (gestionado por Dokploy) 
 | `GOOGLE_SHEETS_SA_PATH`                   | No        | `backend/secrets/gcp-service-account.json`         | Ruta al JSON de Service Account (volumen). Ver §6.14 |
 | `GOOGLE_SHEETS_SPREADSHEET_ID`            | **Sí**    | `1aBcD...`                                         | ID del spreadsheet (segmento de la URL). Ver §6.14 |
 | `GOOGLE_SHEETS_RANGE`                     | No        | `Hoja 1!A:I`                                       | Rango A1 notation del Sheet de escaneos. Ver §6.14 |
+| `N8N_WEBHOOK_URL`                         | **Sí**    | `https://n8nmrb.marblock.shop/webhook/...`         | URL del webhook de n8n (solo backend; el frontend NO la conoce). Ver §6.x proxy de webhook |
 | `ALLOWED_ORIGINS`                         | **Sí**    | `https://wms.marblock.shop`                        | CSV de orígenes permitidos por CORS         |
 
 ### 8.2 Validación al boot

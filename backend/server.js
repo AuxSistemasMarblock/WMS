@@ -35,6 +35,7 @@ app.use('/auth/netsuite', require('./routes/oauth'));
 app.use('/netsuite', require('./routes/netsuite'));
 app.use('/firmas', require('./routes/firmas'));
 app.use('/validate', require('./routes/validation'));
+app.use('/webhook', require('./routes/webhook'));
 app.use('/api/dashboard', require('./routes/dashboard'));
 
 // Error handling

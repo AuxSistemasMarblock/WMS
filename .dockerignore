@@ -1,0 +1,14 @@
+# Dependencias
+node_modules
+
+# Control de versiones y metadatos
+.git
+*.md
+Dockerfile
+
+# Backend (el build del frontend solo necesita js/, css/, lib/, images/, html)
+backend/
+
+# Documentos pesados de referencia (no son parte del build)
+Guia_*.pdf
+Guia_*.docx

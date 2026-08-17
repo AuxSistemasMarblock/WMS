@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const oauthController = require('../controllers/oauthController');
+const { devOnly } = require('../middleware/auth');
 
-// Test de conexión OAuth 2.0 (sin protección para debug)
-router.get('/oauth/test', oauthController.testOAuth2Connection);
+// Test de conexión OAuth 2.0 (solo dev)
+router.get('/oauth/test', devOnly, oauthController.testOAuth2Connection);
 
 // Iniciar flujo OAuth 2.0
 // GET /auth/netsuite/oauth/initiate → redirige a NetSuite
