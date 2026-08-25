@@ -110,7 +110,11 @@ module.exports = {
       // Saved search de IFs pendientes a sacar (la que usa el controller del scanner)
       searchId: process.env.NETSUITE_SEARCH_ID || 'customsearch3678',
       // Saved search de IFs ya enviadas (la que usa el dashboard para confronta)
-      searchIdEnviadas: process.env.NETSUITE_SEARCH_IFS_ENVIADAS_ID || 'customsearch3675'
+      searchIdEnviadas: process.env.NETSUITE_SEARCH_IFS_ENVIADAS_ID || 'customsearch3675',
+      // Saved search de existencias (artículos/lotes con cantidad a mano)
+      searchIdExistencias: process.env.NETSUITE_SEARCH_EXISTENCIAS_ID || 'customsearch_imr_items',
+      // Saved search IR -> pedimento (sub-búsqueda por ubicación + lote)
+      searchIdIRPedimento: process.env.NETSUITE_SEARCH_IR_PEDIMENTO_ID || 'customsearch3677'
     },
 
     // Función helper para obtener URL del RESTlet
@@ -166,5 +170,17 @@ module.exports = {
 
   // ===== HELPERS =====
   isProduction: () => process.env.NODE_ENV === 'production',
-  isSandbox: () => process.env.NETSUITE_REALM === 'sandbox'
+  isSandbox: () => process.env.NETSUITE_REALM === 'sandbox',
+
+  // ===== ZPL (impresión de etiquetas) =====
+  // Dimensiones y settings de la impresora Zebra, ajustables por ambiente.
+  zpl: {
+    ancho: parseInt(process.env.ZPL_PW || '807', 10),     // ^PW ancho de impresión (101mm)
+    alto: parseInt(process.env.ZPL_LL || '152', 10),      // ^LL largo de etiqueta (19mm)
+    velocidad: parseInt(process.env.ZPL_PR || '2', 10),   // ^PR velocidad (lenta = más nitidez)
+    densidad: parseInt(process.env.ZPL_SD || '25', 10),   // ~SD máxima oscuridad
+    qrX: parseInt(process.env.ZPL_QR_X || '580', 10),     // posición X del QR
+    qrY: parseInt(process.env.ZPL_QR_Y || '20', 10),      // posición Y del QR
+    pedimentoY: parseInt(process.env.ZPL_PEDIMENTO_Y || '120', 10) // Y del pedimento bajo el QR
+  }
 };
