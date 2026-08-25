@@ -1,0 +1,172 @@
+/* ================================================
+   WMS Scanner — App shell que llena la pantalla
+   Desktop: 2 columnas (lector izq. + registros der.)
+   Móvil:   flujo vertical compacto
+   ================================================ */
+
+#mainApp {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+#mainApp main {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  max-width: 1400px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 18px 20px 0;
+}
+
+/* ─────────── GRID 2 COLUMNAS (desktop) ─────────── */
+.scan-layout {
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 400px minmax(0, 1fr);
+  gap: 18px;
+}
+
+.scan-col {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow: hidden;
+}
+
+.table-col {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ─────────── FOLIO (IF) COMPACTO ─────────── */
+.scan-col .folio-bar {
+  flex-shrink: 0;
+  margin-bottom: 0;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.folio-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.folio-input-wrap select {
+  flex: 1;
+  min-width: 0;
+}
+
+.folio-input-wrap .btn {
+  flex-shrink: 0;
+}
+
+/* ─────────── SCANNER CARD ─────────── */
+.scan-col .scanner-card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0;
+  overflow: hidden;
+  padding: 16px 18px;
+}
+
+.scan-col .scanner-card .scan-area {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.scan-col .gun-panel {
+  height: 100%;
+  min-height: 150px;
+}
+
+/* ─────────── TABLA (domina la derecha) ─────────── */
+.scan-hint {
+  flex-shrink: 0;
+  text-align: left;
+  font-weight: 600;
+  color: var(--text, #222);
+  font-size: 15px;
+  padding: 0 4px 12px;
+}
+
+.table-col .table-card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.table-col .table-card .table-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* ─────────── MÓVIL (flujo vertical compacto) ─────────── */
+@media (max-width: 1000px) {
+  #mainApp {
+    height: auto;
+    overflow: visible;
+  }
+
+  #mainApp main {
+    overflow: visible;
+    padding: 12px 12px 0;
+  }
+
+  .scan-layout {
+    grid-template-columns: 1fr;
+    height: auto;
+    gap: 12px;
+  }
+
+  .scan-col {
+    overflow: visible;
+    gap: 12px;
+  }
+
+  .table-col {
+    overflow: visible;
+  }
+
+  .scan-col .scanner-card {
+    flex: none;
+    padding: 14px;
+  }
+
+  .scan-col .scanner-card .scan-area {
+    flex: none;
+    height: auto;
+  }
+
+  .scan-col .gun-panel {
+    height: auto;
+    min-height: 120px;
+    padding: 16px 14px;
+  }
+
+  .scan-col .gun-panel .last-scan-text {
+    font-size: 0.8rem;
+  }
+
+  .table-col .table-card {
+    flex: none;
+  }
+
+  .table-col .table-card .table-wrap {
+    max-height: 45vh;
+    overflow-y: auto;
+  }
+}
