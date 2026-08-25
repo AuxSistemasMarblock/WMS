@@ -13,8 +13,6 @@ if (!window.APP_CONFIG?.BACKEND_URL) {
 }
 
 // =================== ESTADO ===================
-const PAGE_SIZE = 10;
-
 const state = {
   existencias: [],        // todas las filas (ya filtradas por rol en backend)
   ubicaciones: [],
@@ -25,6 +23,16 @@ const state = {
 
 const carrito = [];       // { internalid, sku, descripcion, lote, ubicacion, ubicacionId, fisico, totalM2,
                           //   cantidad, pedimento, pedimentos, multiple, selectedPedimento, estado }
+
+/**
+ * Tamaño de página adaptativo: filas que caben en la altura disponible de la
+ * tabla (aprox. 46px por fila), mínimo 8, para rellenar bien el espacio.
+ */
+function pageSize() {
+  const wrap = document.querySelector('.results-card .table-wrap');
+  const h = wrap ? wrap.clientHeight : 480;
+  return Math.max(8, Math.floor(h / 46));
+}
 
 // =================== HELPERS ===================
 function $(id) { return document.getElementById(id); }
@@ -149,18 +157,19 @@ function limpiarBusqueda() {
 
 function cambiarPagina(delta) {
   const total = filtrados().length;
-  const totalPaginas = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const totalPaginas = Math.max(1, Math.ceil(total / pageSize()));
   state.pagina = Math.min(Math.max(1, state.pagina + delta), totalPaginas);
   renderResultados();
 }
 
 function renderResultados() {
+  const ps = pageSize();
   const filas = filtrados();
-  const totalPaginas = Math.max(1, Math.ceil(filas.length / PAGE_SIZE));
+  const totalPaginas = Math.max(1, Math.ceil(filas.length / ps));
   state.pagina = Math.min(state.pagina, totalPaginas);
 
-  const start = (state.pagina - 1) * PAGE_SIZE;
-  const pagina = filas.slice(start, start + PAGE_SIZE);
+  const start = (state.pagina - 1) * ps;
+  const pagina = filas.slice(start, start + ps);
 
   $('countResult').textContent = filas.length;
   const tbody = $('tbodyResult');
@@ -191,7 +200,7 @@ function renderResultados() {
 
   // Paginación
   const pag = $('pagination');
-  if (filas.length > PAGE_SIZE) {
+  if (filas.length > pageSize()) {
     pag.style.display = 'flex';
     $('pageInfo').textContent = `Página ${state.pagina} de ${totalPaginas}`;
     $('btnPrev').disabled = state.pagina <= 1;
@@ -227,6 +236,7 @@ async function agregarAlCarrito(internalid) {
 
   carrito.push(item);
   renderCarrito();
+  renderResultados();   // marcar la fila como "agregada" en la tabla
   actualizarBotones();
 
   // Buscar pedimento
@@ -251,6 +261,7 @@ async function agregarAlCarrito(internalid) {
   }
 
   renderCarrito();
+  renderResultados();
   actualizarBotones();
 }
 
@@ -258,12 +269,14 @@ function eliminarDelCarrito(internalid) {
   const idx = carrito.findIndex(i => String(i.internalid) === String(internalid));
   if (idx >= 0) carrito.splice(idx, 1);
   renderCarrito();
+  renderResultados();
   actualizarBotones();
 }
 
 function vaciarCarrito() {
   carrito.length = 0;
   renderCarrito();
+  renderResultados();
   actualizarBotones();
 }
 
@@ -291,6 +304,7 @@ function cambiarPedimento(internalid, valor) {
   const item = carrito.find(i => String(i.internalid) === String(internalid));
   if (!item) return;
   item.selectedPedimento = valor;
+  actualizarBotones();
 }
 
 function renderCarrito() {
@@ -385,11 +399,6 @@ async function imprimirTodo() {
     return;
   }
 
-  if (!navigator.usb) {
-    showToast('Este navegador no soporta WebUSB. Usa Chromium/Edge con contexto seguro.', 'error');
-    return;
-  }
-
   showToast('Generando etiquetas…', 'info');
 
   // Generar ZPL de cada artículo y concatenar
@@ -430,7 +439,40 @@ async function imprimirTodo() {
     showToast(`${total} generadas, ${errores.length} con error`, 'info');
   }
 
+  // WebUSB solo existe en Chromium (Chrome/Edge) y en contexto seguro (HTTPS/localhost).
+  if (!navigator.usb) {
+    showToast(mensajeNoWebUSB(), 'error');
+    descargarZPL(zplFinal); // respaldo para comprobar que la etiqueta sí se generó
+    return;
+  }
+
   await enviarZpl(zplFinal);
+}
+
+/**
+ * Devuelve un mensaje claro según el navegador cuando WebUSB no está disponible.
+ */
+function mensajeNoWebUSB() {
+  const ua = navigator.userAgent.toUpperCase();
+  if (ua.includes('FIREFOX')) {
+    return 'Firefox no soporta WebUSB. Usa Chrome o Edge e imprime desde ahí. Se descargó el .zpl como respaldo.';
+  }
+  return 'WebUSB requiere contexto seguro. Sobre http://IP activa chrome://flags/#unsafely-treat-insecure-origin-as-secure. Se descargó el .zpl como respaldo.';
+}
+
+/**
+ * Descarga el ZPL generado como archivo local (fallback).
+ */
+function descargarZPL(zplData) {
+  const blob = new Blob([zplData], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'etiquetas.zpl';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 async function enviarZpl(zplData) {
@@ -483,12 +525,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     $('currentUserRole').textContent = getRoleLabel(rol);
   }
 
-  $('mainApp').style.display = 'block';
+  $('mainApp').style.display = 'flex';
 
   // Buscar con Enter
   $('searchInput').addEventListener('keydown', e => {
     if (e.key === 'Enter') buscar();
   });
+
+  // Re-paginar al cambiar el tamaño del navegador
+  window.addEventListener('resize', () => renderResultados());
 
   loadExistencias();
 });
