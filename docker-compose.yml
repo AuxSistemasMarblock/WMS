@@ -15,7 +15,7 @@ services:
     build:
       context: .
       args:
-        BACKEND_URL: http://localhost:3001
+        BACKEND_URL: ${BACKEND_URL:-http://localhost:3001}
         ENVIRONMENT: production
     container_name: wms-frontend
     restart: always
