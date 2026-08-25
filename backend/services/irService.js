@@ -73,15 +73,45 @@ function normalizeLote(lote) {
 }
 
 /**
- * Obtiene el/los pedimento(s) para un lote. Match SOLO por lote.
+ * Indica si la ubicación de una fila IR coincide con la ubicación buscada.
+ * Compara por id (value) si se provee; si no, por tokens de nombre (text).
+ * El match por tokens es bidireccional para cubrir outlet->padre:
+ *   existencias "OUTLET MEX" (id 4)  <->  IR "MEX" (id 3, padre)
+ */
+function matchLocation(filaLocation, ubicacion, ubicacionId) {
+  if (!ubicacion && !ubicacionId) return true;
+
+  const value = filaLocation && typeof filaLocation === 'object' ? filaLocation.value : null;
+  const text = (filaLocation && typeof filaLocation === 'object'
+    ? filaLocation.text
+    : extract(filaLocation)) || '';
+
+  if (ubicacionId && value != null && String(value) === String(ubicacionId)) return true;
+
+  if (ubicacion) {
+    const upper = s => String(s || '').toUpperCase();
+    const irTokens = upper(text).split(/[\s:]+/).filter(Boolean);
+    const uTokens = upper(ubicacion).split(/[\s:]+/).filter(Boolean);
+    const irSet = new Set(irTokens);
+    if (uTokens.some(t => irSet.has(t))) return true;
+  }
+
+  return false;
+}
+
+/**
+ * Obtiene el/los pedimento(s) para un lote.
  *
- * Trae todas las IRs paginando con `start` y recolecta los pedimentos distintos
- * del lote. Si hay más de un pedimento distinto (caso raro: mismo lote en
- * varias ubicaciones con distinto pedimento), se devuelve la lista para que el
+ * Trae todas las IRs paginando con `start` y busca por lote. Luego filtra por
+ * la ubicación de la existencia (si se indicó, con tolerancia outlet->padre).
+ * Si en esa ubicación quedan varios pedimentos distintos (caso raro: mismo lote
+ * recibido más de una vez en la misma ubicación), devuelve la lista para que el
  * usuario elija cuál usar.
  *
  * @param {Object} options
  * @param {string} options.lote - Lote (ej. "AG116-3.20X1.60")
+ * @param {string} [options.ubicacion] - Nombre de ubicación (ej. "OUTLET MEX")
+ * @param {string} [options.ubicacionId] - Id interno de ubicación (ej. "4")
  * @returns {Promise<{
  *   pedimento: string|null,
  *   ir: string|null,
@@ -90,7 +120,7 @@ function normalizeLote(lote) {
  *   warning: string|null
  * }>}
  */
-async function obtenerPedimento({ lote }) {
+async function obtenerPedimento({ lote, ubicacion, ubicacionId }) {
   const loteNorm = normalizeLote(lote);
   const pageSize = 1000;
   let start = 0;
@@ -128,7 +158,8 @@ async function obtenerPedimento({ lote }) {
         pedimento: extractPedimento(fila),
         ir: extract(fila.tranid) ?? extract(fila.ir) ?? null,
         ubicacion: extract(fila.location),
-        fecha: extract(fila.trandate) ?? null
+        fecha: extract(fila.trandate) ?? null,
+        location: fila.location
       });
     }
 
@@ -137,9 +168,14 @@ async function obtenerPedimento({ lote }) {
     start += pageSize;
   }
 
+  // Filtrar por la ubicación de la existencia (si se indicó).
+  const locMatches = (ubicacion || ubicacionId)
+    ? matches.filter(m => matchLocation(m.location, ubicacion, ubicacionId))
+    : matches;
+
   // Deduplicar por pedimento (solo los no vacíos).
   const seen = new Map();
-  for (const m of matches) {
+  for (const m of locMatches) {
     if (!m.pedimento) continue;
     if (!seen.has(m.pedimento)) seen.set(m.pedimento, m);
   }
@@ -161,13 +197,13 @@ async function obtenerPedimento({ lote }) {
       ir: null,
       pedimentos,
       multiple: true,
-      warning: 'Existen múltiples pedimentos para este lote; selecciona cuál usar'
+      warning: 'Existen múltiples pedimentos para este lote en esta ubicación; selecciona cuál usar'
     };
   }
 
   return {
     pedimento: null,
-    ir: matches[0]?.ir ?? null,
+    ir: locMatches[0]?.ir ?? matches[0]?.ir ?? null,
     pedimentos: [],
     multiple: false,
     warning: 'No se encontró un pedimento para este lote'
