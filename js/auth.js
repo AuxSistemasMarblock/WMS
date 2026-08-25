@@ -54,8 +54,7 @@ async function handleLogin(event) {
       return;
     }
     if (rol === 'jefe_almacen') {
-      // Temporal: apunta a dashboard hasta que exista etiquetas.html (Fase 3)
-      window.location.href = 'dashboard.html';
+      window.location.href = 'etiquetas.html';
       return;
     }
 
