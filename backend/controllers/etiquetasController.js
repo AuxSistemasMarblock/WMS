@@ -136,18 +136,19 @@ const getLotesHandler = async (req, res) => {
 
 /**
  * POST /api/etiquetas/pedimento
- * body: { lote }
- * Devuelve el pedimento (texto) del lote. Si hay varios pedimentos distintos,
- * devuelve la lista (`pedimentos`) con `multiple: true` para que el usuario elija.
+ * body: { lote, ubicacion?, ubicacionId? }
+ * Devuelve el pedimento (texto) del lote, desambiguado por la ubicación de la
+ * existencia. Si en esa ubicación hay varios pedimentos distintos, devuelve la
+ * lista (`pedimentos`) con `multiple: true` para que el usuario elija.
  */
 const postPedimentoHandler = async (req, res) => {
   try {
-    const { lote } = req.body;
+    const { lote, ubicacion, ubicacionId } = req.body;
     if (!lote) {
       return res.status(400).json({ error: 'lote es requerido' });
     }
 
-    const resultado = await obtenerPedimento({ lote });
+    const resultado = await obtenerPedimento({ lote, ubicacion, ubicacionId });
 
     res.json({
       pedimento: resultado.pedimento,
@@ -210,7 +211,11 @@ const postZplHandler = async (req, res) => {
       });
     }
 
-    const resultado = await obtenerPedimento({ lote });
+    const resultado = await obtenerPedimento({
+      lote,
+      ubicacion: fila.ubicacion,
+      ubicacionId: fila.ubicacionId
+    });
 
     // Resolver el pedimento a imprimir
     let pedimento = pedimentoSeleccionado || null;
