@@ -21,25 +21,45 @@ function startsWithRestrictedPrefix(loc) {
   });
 }
 
+/**
+ * Determina la sucursal a la que pertenece una ubicación (o null si no es de
+ * una sucursal restringida). Detecta tanto "MEX", "MEX : OUTLET MEX" como el
+ * estilo de existencias "OUTLET MEX".
+ */
+function branchOf(loc) {
+  const s = String(loc || '').trim().toUpperCase();
+  return RESTRICTED_LOCATION_PREFIXES.find(p => {
+    const P = p.toUpperCase();
+    return s === P
+      || s.startsWith(P + ':')
+      || s.startsWith(P + ' ')
+      || s.startsWith('OUTLET ' + P);
+  }) || null;
+}
+
 function isSharedLocation(loc) {
   if (!loc) return false;
   if (SHARED_LOCATIONS.includes(loc)) return true;
+  // Si pertenece a una sucursal restringida (o su outlet), NO es compartida.
+  if (branchOf(loc)) return false;
   return !startsWithRestrictedPrefix(loc);
 }
 
 /**
  * Filtra las filas de existencias por las ubicaciones permitidas del usuario:
- * su ubicación, su outlet (tokens), y las compartidas/whitelist.
+ * su sucursal (incluido su outlet) y las compartidas/whitelist. Las filas de
+ * outlets/sucursales de OTRA sucursal se excluyen.
  */
 function filterByAllowedLocations(rows, userLocationName) {
   if (!userLocationName) return rows;
+  const uBranch = branchOf(userLocationName) || String(userLocationName).trim().toUpperCase();
   return rows.filter(row => {
     const loc = row.ubicacion;
     if (!loc) return false;
     if (isSharedLocation(loc)) return true;
-    if (loc === userLocationName) return true;
-    const tokens = loc.split(/[\s:]+/).filter(Boolean);
-    return tokens.includes(userLocationName);
+    const branch = branchOf(loc);
+    if (branch) return branch === uBranch;
+    return !startsWithRestrictedPrefix(loc);
   });
 }
 
