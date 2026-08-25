@@ -47,6 +47,10 @@ function parseNum(val) {
  * Normaliza una fila cruda del RESTlet a un objeto de existencia.
  */
 function normalizarExistencia(fila) {
+  const locationValue = (fila.location && typeof fila.location === 'object')
+    ? fila.location.value
+    : null;
+
   return {
     internalid: extract(fila.id) ?? extract(fila.internalid),
     sku: extract(fila.upccode) ?? extract(fila.sku),
@@ -54,6 +58,7 @@ function normalizarExistencia(fila) {
     lote: extract(fila.inventorynumber) ?? extract(fila.lote) ?? extract(fila.lot),
     bloque: extract(fila.formulatext),
     ubicacion: extract(fila.location),
+    ubicacionId: locationValue != null ? String(locationValue) : null,
     fisico: parseNum(fila.quantityonhand ?? fila.fisico),
     disponible: parseNum(fila.quantityavailable ?? fila.disponible),
     largo: parseNum(fila.custitemnumber_imr_largo_mts ?? fila.largo),
