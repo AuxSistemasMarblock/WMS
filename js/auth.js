@@ -47,9 +47,14 @@ async function handleLogin(event) {
     sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
 
     showToast(`¡Bienvenido ${currentUser.nombre}!`, 'success');
-    // Roles con acceso al dashboard
-    const rolesDashboard = ['admin'];
-    if (rolesDashboard.includes(currentUser.cargo)) {
+    // Redirigir por rol (clave) con fallback a cargo (legacy)
+    const rol = currentUser.rol || currentUser.cargo;
+    if (rol === 'admin') {
+      window.location.href = 'dashboard.html';
+      return;
+    }
+    if (rol === 'jefe_almacen') {
+      // Temporal: apunta a dashboard hasta que exista etiquetas.html (Fase 3)
       window.location.href = 'dashboard.html';
       return;
     }
@@ -129,11 +134,14 @@ function showMainView() {
 }
 
 /**
- * Traducir cargo a etiqueta
+ * Traducir cargo/rol a etiqueta
  */
 function getRoleLabel(cargo) {
   const roles = {
     'aux_almacen': 'Aux. Almacén',
+    'jefe_almacen': 'Jefe de Almacén',
+    'gerente': 'Gerente',
+    'cliente': 'Cliente',
     'admin': 'Administrador'
   };
   return roles[cargo] || cargo;
