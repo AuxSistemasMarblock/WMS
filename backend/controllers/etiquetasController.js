@@ -136,8 +136,9 @@ const getLotesHandler = async (req, res) => {
 
 /**
  * POST /api/etiquetas/pedimento
- * body: { sku, lote, ubicacion }
- * Devuelve el pedimento (texto) de la IR que coincide por ubicación + lote.
+ * body: { lote }
+ * Devuelve el pedimento (texto) del lote. Si hay varios pedimentos distintos,
+ * devuelve la lista (`pedimentos`) con `multiple: true` para que el usuario elija.
  */
 const postPedimentoHandler = async (req, res) => {
   try {
@@ -146,17 +147,15 @@ const postPedimentoHandler = async (req, res) => {
       return res.status(400).json({ error: 'lote es requerido' });
     }
 
-    const { pedimento, ir } = await obtenerPedimento({ lote });
+    const resultado = await obtenerPedimento({ lote });
 
-    if (!pedimento) {
-      return res.json({
-        pedimento: null,
-        ir: ir || null,
-        warning: 'No se encontró un pedimento para este lote'
-      });
-    }
-
-    res.json({ pedimento, ir });
+    res.json({
+      pedimento: resultado.pedimento,
+      ir: resultado.ir || null,
+      pedimentos: resultado.pedimentos,
+      multiple: resultado.multiple,
+      warning: resultado.warning || undefined
+    });
   } catch (error) {
     console.error('Post pedimento error:', error);
     res.status(500).json({ error: 'Error al consultar pedimento', details: error.message });
@@ -165,13 +164,14 @@ const postPedimentoHandler = async (req, res) => {
 
 /**
  * POST /api/etiquetas/zpl
- * body: { sku, lote, ubicacion, cantidad }
+ * body: { sku, lote, ubicacion, cantidad, pedimento? }
  * Revalida contra la fila de existencias (autoritativa), consulta el pedimento
- * y arma el ZPL. Devuelve warning si no hay pedimento.
+ * y arma el ZPL. Si hay múltiples pedimentos para el lote, `pedimento` debe
+ * venir seleccionado; si no, responde 409 con la lista para elegir.
  */
 const postZplHandler = async (req, res) => {
   try {
-    const { sku, lote, ubicacion, cantidad } = req.body;
+    const { sku, lote, ubicacion, cantidad, pedimento: pedimentoSeleccionado } = req.body;
     if (!sku || !lote || !ubicacion || !cantidad) {
       return res.status(400).json({ error: 'sku, lote, ubicacion y cantidad son requeridos' });
     }
@@ -210,7 +210,34 @@ const postZplHandler = async (req, res) => {
       });
     }
 
-    const { pedimento, ir } = await obtenerPedimento({ lote });
+    const resultado = await obtenerPedimento({ lote });
+
+    // Resolver el pedimento a imprimir
+    let pedimento = pedimentoSeleccionado || null;
+
+    if (resultado.multiple && !pedimento) {
+      return res.status(409).json({
+        error: 'Existen múltiples pedimentos para este lote',
+        pedimentos: resultado.pedimentos,
+        multiple: true,
+        warning: resultado.warning
+      });
+    }
+
+    if (pedimento && !resultado.pedimentos.some(p => p.pedimento === pedimento)) {
+      return res.status(400).json({
+        error: 'Pedimento seleccionado no válido',
+        pedimentos: resultado.pedimentos
+      });
+    }
+
+    if (!pedimento) {
+      pedimento = resultado.pedimento; // único o null
+    }
+
+    const selMatch = pedimento
+      ? resultado.pedimentos.find(p => p.pedimento === pedimento)
+      : null;
 
     const zpl = buildZpl({
       sku: fila.sku,
@@ -225,9 +252,10 @@ const postZplHandler = async (req, res) => {
     res.json({
       zpl,
       pedimento,
-      ir: ir || null,
+      ir: selMatch?.ir ?? resultado.ir ?? null,
       maxLabels: max,
-      warning: pedimento ? undefined : 'No se encontró un pedimento para este lote'
+      multiple: resultado.multiple,
+      warning: resultado.warning || (pedimento ? undefined : 'No se encontró un pedimento para este lote')
     });
   } catch (error) {
     console.error('Post zpl error:', error);
