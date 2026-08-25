@@ -102,8 +102,9 @@ function matchLocation(filaLocation, ubicacion, ubicacionId) {
 /**
  * Obtiene el/los pedimento(s) para un lote.
  *
- * Trae todas las IRs paginando con `start` y busca por lote. Luego filtra por
- * la ubicación de la existencia (si se indicó, con tolerancia outlet->padre).
+ * Trae todas las IRs (con caché en memoria TTL 60s, porque el RESTlet 2217
+ * solo devuelve 1000 por request) y busca por lote. Luego filtra por la
+ * ubicación de la existencia (si se indicó, con tolerancia outlet->padre).
  * Si en esa ubicación quedan varios pedimentos distintos (caso raro: mismo lote
  * recibido más de una vez en la misma ubicación), devuelve la lista para que el
  * usuario elija cuál usar.
@@ -120,11 +121,22 @@ function matchLocation(filaLocation, ubicacion, ubicacionId) {
  *   warning: string|null
  * }>}
  */
-async function obtenerPedimento({ lote, ubicacion, ubicacionId }) {
-  const loteNorm = normalizeLote(lote);
+
+const IR_CACHE_TTL = 60000;
+let irCache = { rows: null, at: 0 };
+
+/**
+ * Obtiene todas las filas de la saved search IR/pedimento, paginando con
+ * `start`. Resultado cacheado en memoria por IR_CACHE_TTL.
+ */
+async function fetchAllIRs() {
+  if (irCache.rows && (Date.now() - irCache.at) < IR_CACHE_TTL) {
+    return irCache.rows;
+  }
+
   const pageSize = 1000;
   let start = 0;
-  const matches = [];
+  const all = [];
 
   while (true) {
     const response = await netsuiteClient.post(restletPath, {
@@ -149,23 +161,33 @@ async function obtenerPedimento({ lote, ubicacion, ubicacionId }) {
       }
     }
 
-    for (const fila of filas) {
-      const filaLote = extract(fila.inventorynumber) ?? extract(fila.lote) ?? extract(fila.lot);
-      if (!filaLote) continue;
-      if (normalizeLote(filaLote) !== loteNorm) continue;
-
-      matches.push({
-        pedimento: extractPedimento(fila),
-        ir: extract(fila.tranid) ?? extract(fila.ir) ?? null,
-        ubicacion: extract(fila.location),
-        fecha: extract(fila.trandate) ?? null,
-        location: fila.location
-      });
-    }
-
-    // El RESTlet solo devuelve hasta 1000 por request; seguimos con `start`.
+    all.push(...filas);
     if (filas.length < pageSize) break;
     start += pageSize;
+  }
+
+  irCache = { rows: all, at: Date.now() };
+  return all;
+}
+
+async function obtenerPedimento({ lote, ubicacion, ubicacionId }) {
+  const loteNorm = normalizeLote(lote);
+
+  const filas = await fetchAllIRs();
+  const matches = [];
+
+  for (const fila of filas) {
+    const filaLote = extract(fila.inventorynumber) ?? extract(fila.lote) ?? extract(fila.lot);
+    if (!filaLote) continue;
+    if (normalizeLote(filaLote) !== loteNorm) continue;
+
+    matches.push({
+      pedimento: extractPedimento(fila),
+      ir: extract(fila.tranid) ?? extract(fila.ir) ?? null,
+      ubicacion: extract(fila.location),
+      fecha: extract(fila.trandate) ?? null,
+      location: fila.location
+    });
   }
 
   // Filtrar por la ubicación de la existencia (si se indicó).

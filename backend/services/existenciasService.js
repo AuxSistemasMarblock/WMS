@@ -74,13 +74,24 @@ function normalizarExistencia(fila) {
  * Consulta las existencias de NetSuite.
  *
  * @param {Object} options
- * @param {string} [options.ubicacion] - Ubicación a filtrar (se pasa al RESTlet como
- *   hint y se filtra en memoria; el filtro por rol lo hace el controller).
+ * @param {string} [options.ubicacion] - Ubicación a filtrar (en memoria; el RESTlet
+ *   ignora filtros server-side).
  * @param {string} [options.sku] - SKU a filtrar (en memoria).
  * @param {number} [options.maxRegistros] - Tope de seguridad (default 5000).
  * @returns {Promise<Array<Object>>} Filas normalizadas.
  */
-async function getExistencias({ ubicacion, sku, maxRegistros = 5000 } = {}) {
+
+const EX_CACHE_TTL = 60000;
+let exCache = { rows: null, at: 0 };
+
+/**
+ * Obtiene todas las existencias (paginado) con caché en memoria TTL 60s.
+ */
+async function fetchAllExistencias(maxRegistros = 5000) {
+  if (exCache.rows && (Date.now() - exCache.at) < EX_CACHE_TTL) {
+    return exCache.rows;
+  }
+
   const pageSize = 1000;
   let filas = [];
   let start = 0;
@@ -91,7 +102,6 @@ async function getExistencias({ ubicacion, sku, maxRegistros = 5000 } = {}) {
       limit: pageSize,
       start
     };
-    if (ubicacion) payload.location = ubicacion;
 
     const response = await netsuiteClient.post(restletPath, payload);
 
@@ -116,7 +126,17 @@ async function getExistencias({ ubicacion, sku, maxRegistros = 5000 } = {}) {
     start += pageSize;
   }
 
-  let normalizadas = filas.map(normalizarExistencia);
+  exCache = { rows: filas.map(normalizarExistencia), at: Date.now() };
+  return exCache.rows;
+}
+
+async function getExistencias({ ubicacion, sku, maxRegistros = 5000 } = {}) {
+  let normalizadas = await fetchAllExistencias(maxRegistros);
+
+  if (ubicacion) {
+    const u = String(ubicacion).trim();
+    normalizadas = normalizadas.filter(f => (f.ubicacion || '').includes(u));
+  }
 
   if (sku) {
     const s = String(sku).trim().toLowerCase();
