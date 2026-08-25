@@ -46,6 +46,9 @@ async function handleLogin(event) {
     sessionStorage.setItem('authToken', authToken);
     sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
 
+    // Re-renderizar nav de módulos según rol
+    if (typeof window.renderAppNav === 'function') window.renderAppNav();
+
     showToast(`¡Bienvenido ${currentUser.nombre}!`, 'success');
     // Redirigir por rol (clave) con fallback a cargo (legacy)
     const rol = currentUser.rol || currentUser.cargo;
@@ -54,7 +57,7 @@ async function handleLogin(event) {
       return;
     }
     if (rol === 'jefe_almacen') {
-      window.location.href = 'etiquetas.html';
+      window.location.href = 'index.html';
       return;
     }
 
@@ -103,6 +106,7 @@ function restoreSession() {
     try {
       authToken = token;
       currentUser = JSON.parse(userStr);
+      if (typeof window.renderAppNav === 'function') window.renderAppNav();
       showMainView();
       loadIFs(); // Cargar IFs al restaurar sesión
     } catch (error) {
@@ -125,7 +129,7 @@ function showLoginView() {
  */
 function showMainView() {
   document.getElementById('loginContainer').style.display = 'none';
-  document.getElementById('mainApp').style.display = 'block';
+  document.getElementById('mainApp').style.display = 'flex';
   document.getElementById('currentUserName').textContent = currentUser.nombre;
   document.getElementById('currentUserLocation').textContent = currentUser.ubicacion.nombre;
   document.getElementById('currentUserRole').textContent = getRoleLabel(currentUser.cargo);
