@@ -1,0 +1,158 @@
+/* ================================
+   WMS Etiquetas — Estilos propios
+   ================================ */
+
+.etiquetas-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 16px;
+  margin: 16px 20px;
+  align-items: start;
+}
+
+@media (max-width: 960px) {
+  .etiquetas-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.etiquetas-panel {
+  background: #fff;
+  border: 1px solid var(--gray-3, #e5e7eb);
+  border-radius: 8px;
+  padding: 16px;
+  position: sticky;
+  top: 16px;
+}
+
+.panel-title {
+  margin: 0 0 12px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text, #222);
+}
+
+.detalle {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 6px 10px;
+  margin: 0 0 16px;
+  font-size: 13px;
+}
+
+.detalle dt {
+  color: var(--gray-6, #6b7280);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.3px;
+  align-self: center;
+}
+
+.detalle dd {
+  margin: 0;
+  color: var(--text, #222);
+  word-break: break-word;
+}
+
+.field {
+  margin-bottom: 14px;
+}
+
+.field label {
+  display: block;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--gray-6, #6b7280);
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.field input,
+.field select {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--gray-3, #e5e7eb);
+  border-radius: 6px;
+  font-size: 14px;
+  background: #fff;
+}
+
+.field small {
+  display: block;
+  margin-top: 4px;
+  color: var(--gray-6, #6b7280);
+  font-size: 12px;
+}
+
+.pedimento-valor {
+  background: var(--gray-1, #f9fafb);
+  border: 1px solid var(--gray-3, #e5e7eb);
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 14px;
+  color: var(--text, #222);
+  word-break: break-all;
+}
+
+.pedimento-warning {
+  background: #fff7e6;
+  border: 1px solid #ffe3a3;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: #8a6d3b;
+}
+
+.preview {
+  margin: 14px 0;
+}
+
+.preview label {
+  display: block;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--gray-6, #6b7280);
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.preview pre {
+  background: #0f172a;
+  color: #d1fae5;
+  padding: 12px;
+  border-radius: 6px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  max-height: 220px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+}
+
+.actions .btn {
+  flex: 1;
+}
+
+#tbodyExistencias tr.seleccionable {
+  cursor: pointer;
+}
+
+#tbodyExistencias tr.seleccionable:hover {
+  background: var(--row-hover, #fffbf0);
+}
+
+#tbodyExistencias tr.seleccionado {
+  background: #e6f0ff;
+  outline: 2px solid var(--accent2, #004a99);
+  outline-offset: -2px;
+}
