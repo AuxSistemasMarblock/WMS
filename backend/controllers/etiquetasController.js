@@ -141,12 +141,12 @@ const getLotesHandler = async (req, res) => {
  */
 const postPedimentoHandler = async (req, res) => {
   try {
-    const { lote, ubicacion } = req.body;
-    if (!lote || !ubicacion) {
-      return res.status(400).json({ error: 'lote y ubicacion son requeridos' });
+    const { lote, ubicacion, ubicacionId } = req.body;
+    if (!lote) {
+      return res.status(400).json({ error: 'lote es requerido' });
     }
 
-    const { pedimento, ir } = await obtenerPedimento({ ubicacion, lote });
+    const { pedimento, ir } = await obtenerPedimento({ lote, ubicacion, ubicacionId });
 
     if (!pedimento) {
       return res.json({
@@ -210,7 +210,11 @@ const postZplHandler = async (req, res) => {
       });
     }
 
-    const { pedimento, ir } = await obtenerPedimento({ ubicacion, lote });
+    const { pedimento, ir } = await obtenerPedimento({
+      lote,
+      ubicacion: fila.ubicacion,
+      ubicacionId: fila.ubicacionId
+    });
 
     const zpl = buildZpl({
       sku: fila.sku,
