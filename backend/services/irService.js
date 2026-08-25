@@ -7,14 +7,14 @@
  * y busca el lote en memoria para devolver el pedimento como TEXTO (valor
  * visible), NO el internalid (fix del bug "pedimento como ID").
  *
- * Columnas esperadas de customsearch3677 (según levantamiento; verificar en
- * producción con VERBOSE=1, en sandbox la búsqueda está vacía):
+ * Columnas verificadas de customsearch3677:
  *   id          -> internalid
+ *   recordType  -> "itemreceipt"
  *   trandate    -> fecha
  *   location    -> ubicación ({value, text})
  *   tranid      -> IR
- *   inventorynumber -> lote
- *   <custbody pedimento> -> pedimento (objeto {value, text})
+ *   inventorynumber -> lote ({value, text})
+ *   custbody_pi_pedimento_de_importacion -> pedimento ({value: id, text: valor})
  */
 
 const envConfig = require('../config/environments');
@@ -29,8 +29,8 @@ const restletPath = `/app/site/hosting/restlet.nl?script=${scriptId}&deploy=${de
  */
 const PEDIMENTO_KEYS = [
   process.env.NETSUITE_FIELD_PEDIMENTO,
+  'custbody_pi_pedimento_de_importacion',
   'custbody_pedimento',
-  'custbody_num_pedimento',
   'pedimento'
 ].filter(Boolean);
 
@@ -64,26 +64,37 @@ function normalizeLote(lote) {
 
 /**
  * Indica si la ubicación de una fila IR coincide con la ubicación buscada.
- * Compara por id (value) si se provee; si no, por nombre (text).
+ * Compara por id (value) si se provee; si no, por tokens de nombre (text).
+ * El match por tokens es bidireccional para cubrir outlet->padre:
+ *   existencias "OUTLET MEX" (id 4)  <->  IR "MEX" (id 3, padre)
  */
 function matchLocation(filaLocation, ubicacion, ubicacionId) {
-  const value = filaLocation && typeof filaLocation === 'object' ? filaLocation.value : null;
-  const text = filaLocation && typeof filaLocation === 'object' ? filaLocation.text : extract(filaLocation);
+  if (!ubicacion && !ubicacionId) return true;
 
-  if (ubicacionId) {
-    return value != null && String(value) === String(ubicacionId);
-  }
+  const value = filaLocation && typeof filaLocation === 'object' ? filaLocation.value : null;
+  const text = (filaLocation && typeof filaLocation === 'object'
+    ? filaLocation.text
+    : extract(filaLocation)) || '';
+
+  if (ubicacionId && value != null && String(value) === String(ubicacionId)) return true;
+
   if (ubicacion) {
-    const tokens = String(text || '').split(/[\s:]+/).filter(Boolean).map(t => t.toUpperCase());
-    return tokens.includes(String(ubicacion).toUpperCase());
+    const upper = s => String(s || '').toUpperCase();
+    const irTokens = upper(text).split(/[\s:]+/).filter(Boolean);
+    const uTokens = upper(ubicacion).split(/[\s:]+/).filter(Boolean);
+    const irSet = new Set(irTokens);
+    if (uTokens.some(t => irSet.has(t))) return true;
   }
-  return true;
+
+  return false;
 }
 
 /**
  * Obtiene el pedimento (y la IR) para un lote en una ubicación.
  *
  * Trae todas las IRs paginando con `start` y busca por lote en memoria.
+ * Entre los candidatos del mismo lote, prefiere: (1) match de ubicación,
+ * (2) pedimento no vacío.
  *
  * @param {Object} options
  * @param {string} options.lote - Lote (ej. "AG116-3.20X1.60")
@@ -95,6 +106,8 @@ async function obtenerPedimento({ lote, ubicacion, ubicacionId }) {
   const loteNorm = normalizeLote(lote);
   const pageSize = 1000;
   let start = 0;
+
+  const loteMatches = [];
 
   while (true) {
     const response = await netsuiteClient.post(restletPath, {
@@ -122,23 +135,33 @@ async function obtenerPedimento({ lote, ubicacion, ubicacionId }) {
     for (const fila of filas) {
       const filaLote = extract(fila.inventorynumber) ?? extract(fila.lote) ?? extract(fila.lot);
       if (!filaLote) continue;
-
       if (normalizeLote(filaLote) !== loteNorm) continue;
-      if (!matchLocation(fila.location, ubicacion, ubicacionId)) continue;
 
-      return {
+      loteMatches.push({
         pedimento: extractPedimento(fila),
-        ir: extract(fila.tranid) ?? extract(fila.ir) ?? null
-      };
+        ir: extract(fila.tranid) ?? extract(fila.ir) ?? null,
+        location: fila.location
+      });
     }
 
-    // El RESTlet solo devuelve hasta 1000 por request; si no hallamos el lote
-    // en esta página, avanzamos con `start` hasta agotar los resultados.
+    // El RESTlet solo devuelve hasta 1000 por request; seguimos con `start`.
     if (filas.length < pageSize) break;
     start += pageSize;
   }
 
-  return { pedimento: null, ir: null };
+  if (loteMatches.length === 0) {
+    return { pedimento: null, ir: null };
+  }
+
+  // 1) Preferir coincidencia de ubicación (si se indicó).
+  const locMatches = loteMatches.filter(m => matchLocation(m.location, ubicacion, ubicacionId));
+  const pool = locMatches.length > 0 ? locMatches : loteMatches;
+
+  // 2) Preferir el que sí tenga pedimento.
+  const conPedimento = pool.filter(m => m.pedimento);
+  const best = (conPedimento.length > 0 ? conPedimento : pool)[0];
+
+  return { pedimento: best.pedimento, ir: best.ir };
 }
 
 module.exports = { obtenerPedimento, extractPedimento };
