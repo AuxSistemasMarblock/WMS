@@ -1,9 +1,9 @@
 /**
  * WMS Etiquetas — Entry point
  *
- * Página de impresión de etiquetas Zebra para jefe de almacén y admin.
- * Asume sesión activa (login en index.html). Si no hay token o el rol no está
- * permitido, redirige.
+ * Flujo: buscar existencias (paginado 10/pág.) → agregar lotes a un "carrito"
+ * con la cantidad de etiquetas a imprimir de cada uno → imprimir todo por USB.
+ * Mantiene las líneas seleccionadas mientras se vuelve a buscar.
  */
 
 // =================== CONFIG ===================
@@ -13,16 +13,18 @@ if (!window.APP_CONFIG?.BACKEND_URL) {
 }
 
 // =================== ESTADO ===================
+const PAGE_SIZE = 10;
+
 const state = {
-  existencias: [],
+  existencias: [],        // todas las filas (ya filtradas por rol en backend)
   ubicaciones: [],
-  seleccion: null,       // fila de existencias seleccionada
-  pedimento: null,       // pedimento único (string) o null
-  ir: null,
-  pedimentos: [],        // lista de opciones cuando multiple
-  multiple: false,
-  zpl: null
+  filtroTexto: '',
+  filtroUbicacion: '',
+  pagina: 1
 };
+
+const carrito = [];       // { internalid, sku, descripcion, lote, ubicacion, ubicacionId, fisico, totalM2,
+                          //   cantidad, pedimento, pedimentos, multiple, selectedPedimento, estado }
 
 // =================== HELPERS ===================
 function $(id) { return document.getElementById(id); }
@@ -84,13 +86,9 @@ async function request(path, opts = {}) {
 
 async function apiFetch(path, opts = {}) {
   const { status, data } = await request(path, opts);
-  if (!resOk(status)) {
-    throw new Error(data.error || `Error ${status}`);
-  }
+  if (status < 200 || status >= 300) throw new Error(data.error || `Error ${status}`);
   return data;
 }
-
-function resOk(status) { return status >= 200 && status < 300; }
 
 function maxEtiquetas(fila) {
   const totalM2 = parseFloat(fila.totalM2) || 0;
@@ -99,7 +97,11 @@ function maxEtiquetas(fila) {
   return Math.max(1, Math.floor(fisico / totalM2));
 }
 
-// =================== CARGA DE EXISTENCIAS ===================
+function enCarrito(internalid) {
+  return carrito.some(i => String(i.internalid) === String(internalid));
+}
+
+// =================== CARGA INICIAL ===================
 async function loadExistencias() {
   try {
     const data = await apiFetch('/api/etiquetas/existencias');
@@ -110,224 +112,328 @@ async function loadExistencias() {
     state.ubicaciones = Array.from(set).sort();
 
     const sel = $('filtroUbicacion');
-    const actual = sel.value;
-    sel.innerHTML = '<option value="">Todas</option>' +
+    sel.innerHTML = '<option value="">Todas las ubicaciones</option>' +
       state.ubicaciones.map(u => `<option value="${escapeHTML(u)}">${escapeHTML(u)}</option>`).join('');
-    sel.value = actual;
 
-    aplicarFiltros();
-    showToast(`Existencias cargadas: ${state.existencias.length}`, 'success');
+    buscar();
+    showToast(`Existencias cargadas (${state.existencias.length})`, 'success');
   } catch (e) {
     showToast('Error cargando existencias: ' + e.message, 'error');
   }
 }
 
-function aplicarFiltros() {
-  const ubicacion = $('filtroUbicacion').value;
-  const sku = $('filtroSku').value.trim().toLowerCase();
-
-  const filas = state.existencias.filter(e => {
-    if (ubicacion && e.ubicacion !== ubicacion) return false;
-    if (sku && !(e.sku || '').toLowerCase().includes(sku)) return false;
-    return true;
+// =================== BÚSQUEDA Y PAGINACIÓN ===================
+function filtrados() {
+  const texto = state.filtroTexto.toLowerCase();
+  return state.existencias.filter(e => {
+    if (state.filtroUbicacion && e.ubicacion !== state.filtroUbicacion) return false;
+    if (!texto) return true;
+    return (e.sku || '').toLowerCase().includes(texto) ||
+           (e.lote || '').toLowerCase().includes(texto) ||
+           (e.descripcion || '').toLowerCase().includes(texto);
   });
-
-  $('countExist').textContent = filas.length;
-  renderTabla(filas);
 }
 
-function renderTabla(filas) {
-  const tbody = $('tbodyExistencias');
+function buscar() {
+  state.filtroTexto = $('searchInput').value.trim();
+  state.filtroUbicacion = $('filtroUbicacion').value;
+  state.pagina = 1;
+  renderResultados();
+}
+
+function limpiarBusqueda() {
+  $('searchInput').value = '';
+  $('filtroUbicacion').value = '';
+  buscar();
+}
+
+function cambiarPagina(delta) {
+  const total = filtrados().length;
+  const totalPaginas = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  state.pagina = Math.min(Math.max(1, state.pagina + delta), totalPaginas);
+  renderResultados();
+}
+
+function renderResultados() {
+  const filas = filtrados();
+  const totalPaginas = Math.max(1, Math.ceil(filas.length / PAGE_SIZE));
+  state.pagina = Math.min(state.pagina, totalPaginas);
+
+  const start = (state.pagina - 1) * PAGE_SIZE;
+  const pagina = filas.slice(start, start + PAGE_SIZE);
+
+  $('countResult').textContent = filas.length;
+  const tbody = $('tbodyResult');
+
   if (filas.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state">Sin resultados</div></td></tr>';
-    return;
+    tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state">Sin resultados. Ajusta la búsqueda.</div></td></tr>';
+  } else {
+    tbody.innerHTML = pagina.map(f => {
+      const max = maxEtiquetas(f);
+      const agregado = enCarrito(f.internalid);
+      return `<tr>
+        <td class="sku-cell">${escapeHTML(f.sku)}</td>
+        <td class="descripcion-cell">${escapeHTML(f.descripcion)}</td>
+        <td class="lote-cell">${escapeHTML(f.lote)}</td>
+        <td>${escapeHTML(f.ubicacion)}</td>
+        <td class="num">${escapeHTML(f.fisico)}</td>
+        <td class="num">${escapeHTML(f.totalM2)}</td>
+        <td class="num">${max}</td>
+        <td class="num">
+          <button class="btn-agregar${agregado ? ' agregado' : ''}" data-id="${escapeHTML(f.internalid)}"
+            ${agregado ? 'disabled' : ''} onclick="agregarAlCarrito('${escapeHTML(f.internalid)}')">
+            ${agregado ? '✓ Agregado' : '+ Agregar'}
+          </button>
+        </td>
+      </tr>`;
+    }).join('');
   }
 
-  tbody.innerHTML = filas.map(f => {
-    const max = maxEtiquetas(f);
-    const seleccionado = state.seleccion && state.seleccion.internalid === f.internalid;
-    return `<tr class="seleccionable${seleccionado ? ' seleccionado' : ''}" data-internalid="${escapeHTML(f.internalid)}">
-      <td>${escapeHTML(f.sku)}</td>
-      <td>${escapeHTML(f.descripcion)}</td>
-      <td>${escapeHTML(f.lote)}</td>
-      <td>${escapeHTML(f.ubicacion)}</td>
-      <td>${escapeHTML(f.fisico)}</td>
-      <td>${escapeHTML(f.totalM2)}</td>
-      <td>${max}</td>
-    </tr>`;
-  }).join('');
-
-  tbody.querySelectorAll('tr.seleccionable').forEach(tr => {
-    tr.addEventListener('click', () => selectRow(tr.dataset.internalid));
-  });
+  // Paginación
+  const pag = $('pagination');
+  if (filas.length > PAGE_SIZE) {
+    pag.style.display = 'flex';
+    $('pageInfo').textContent = `Página ${state.pagina} de ${totalPaginas}`;
+    $('btnPrev').disabled = state.pagina <= 1;
+    $('btnNext').disabled = state.pagina >= totalPaginas;
+  } else {
+    pag.style.display = 'none';
+  }
 }
 
-// =================== SELECCIÓN ===================
-function selectRow(internalid) {
+// =================== CARRITO ===================
+async function agregarAlCarrito(internalid) {
+  if (enCarrito(internalid)) return;
+
   const fila = state.existencias.find(e => String(e.internalid) === String(internalid));
   if (!fila) return;
 
-  state.seleccion = fila;
-  state.pedimento = null;
-  state.ir = null;
-  state.pedimentos = [];
-  state.multiple = false;
-  state.zpl = null;
+  const item = {
+    internalid: fila.internalid,
+    sku: fila.sku,
+    descripcion: fila.descripcion,
+    lote: fila.lote,
+    ubicacion: fila.ubicacion,
+    ubicacionId: fila.ubicacionId,
+    fisico: fila.fisico,
+    totalM2: fila.totalM2,
+    cantidad: 1,
+    pedimento: null,
+    pedimentos: [],
+    multiple: false,
+    selectedPedimento: null,
+    estado: 'cargando'
+  };
 
-  // Detalle
-  $('detalleVacio').style.display = 'none';
-  $('detalleContenido').style.display = 'block';
-  $('dSku').textContent = fila.sku || '–';
-  $('dDescripcion').textContent = fila.descripcion || '–';
-  $('dLote').textContent = fila.lote || '–';
-  $('dUbicacion').textContent = fila.ubicacion || '–';
-  $('dFisico').textContent = fila.fisico ?? '–';
-  $('dTotalM2').textContent = fila.totalM2 ?? '–';
+  carrito.push(item);
+  renderCarrito();
+  actualizarBotones();
 
-  const max = maxEtiquetas(fila);
-  $('cantidad').max = max;
-  $('cantidad').value = 1;
-  $('cantidadHint').textContent = `Máx: ${max} etiquetas (físico / m² por pieza)`;
-
-  $('pedimentoBox').innerHTML = '<span style="color:#6b7280;font-size:13px;">Consultando pedimento…</span>';
-  $('previewBox').style.display = 'none';
-  $('zplPreview').textContent = '';
-
-  renderTabla(aplicarFiltrosFilas());
-
-  fetchPedimento(fila);
-}
-
-function aplicarFiltrosFilas() {
-  const ubicacion = $('filtroUbicacion').value;
-  const sku = $('filtroSku').value.trim().toLowerCase();
-  return state.existencias.filter(e => {
-    if (ubicacion && e.ubicacion !== ubicacion) return false;
-    if (sku && !(e.sku || '').toLowerCase().includes(sku)) return false;
-    return true;
-  });
-}
-
-// =================== PEDIMENTO ===================
-async function fetchPedimento(fila) {
+  // Buscar pedimento
   try {
     const { status, data } = await request('/api/etiquetas/pedimento', {
       method: 'POST',
-      body: JSON.stringify({
-        lote: fila.lote,
-        ubicacion: fila.ubicacion,
-        ubicacionId: fila.ubicacionId
-      })
+      body: JSON.stringify({ lote: item.lote, ubicacion: item.ubicacion, ubicacionId: item.ubicacionId })
     });
 
-    if (!resOk(status)) {
+    if (status < 200 || status >= 300) {
       throw new Error(data.error || `Error ${status}`);
     }
 
-    state.pedimento = data.pedimento || null;
-    state.ir = data.ir || null;
-    state.pedimentos = data.pedimentos || [];
-    state.multiple = !!data.multiple;
-
-    renderPedimento(data);
+    item.pedimento = data.pedimento || null;
+    item.pedimentos = data.pedimentos || [];
+    item.multiple = !!data.multiple;
+    item.selectedPedimento = item.multiple ? null : item.pedimento;
+    item.estado = 'listo';
   } catch (e) {
-    state.pedimento = null;
-    state.multiple = false;
-    $('pedimentoBox').innerHTML = `<div class="pedimento-warning">Error: ${escapeHTML(e.message)}</div>`;
+    item.estado = 'error';
+    item.error = e.message;
   }
+
+  renderCarrito();
+  actualizarBotones();
 }
 
-function renderPedimento(data) {
-  const box = $('pedimentoBox');
+function eliminarDelCarrito(internalid) {
+  const idx = carrito.findIndex(i => String(i.internalid) === String(internalid));
+  if (idx >= 0) carrito.splice(idx, 1);
+  renderCarrito();
+  actualizarBotones();
+}
 
-  if (data.multiple) {
-    const opciones = (data.pedimentos || []).map(p =>
-      `<option value="${escapeHTML(p.pedimento)}">${escapeHTML(p.pedimento)} · ${escapeHTML(p.ubicacion || p.ir || '')}</option>`
+function vaciarCarrito() {
+  carrito.length = 0;
+  renderCarrito();
+  actualizarBotones();
+}
+
+function cambiarCantidad(internalid, delta) {
+  const item = carrito.find(i => String(i.internalid) === String(internalid));
+  if (!item) return;
+  const max = maxEtiquetas(item);
+  item.cantidad = Math.min(Math.max(1, item.cantidad + delta), max);
+  renderCarrito();
+  actualizarBotones();
+}
+
+function setCantidad(internalid, valor) {
+  const item = carrito.find(i => String(i.internalid) === String(internalid));
+  if (!item) return;
+  const max = maxEtiquetas(item);
+  let n = parseInt(valor, 10);
+  if (!Number.isInteger(n) || n < 1) n = 1;
+  item.cantidad = Math.min(n, max);
+  renderCarrito();
+  actualizarBotones();
+}
+
+function cambiarPedimento(internalid, valor) {
+  const item = carrito.find(i => String(i.internalid) === String(internalid));
+  if (!item) return;
+  item.selectedPedimento = valor;
+}
+
+function renderCarrito() {
+  const list = $('cartList');
+
+  if (carrito.length === 0) {
+    list.innerHTML = '<div class="cart-empty">' +
+      '<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4"/><path d="M9 12h6M9 16h6"/></svg>' +
+      'Agrega artículos desde los resultados</div>';
+    return;
+  }
+
+  list.innerHTML = carrito.map(item => {
+    const max = maxEtiquetas(item);
+    const pedHTML = renderPedimentoHTML(item);
+    return `<div class="cart-item">
+      <div class="cart-item-top">
+        <div>
+          <div class="cart-item-sku">${escapeHTML(item.sku)}</div>
+          <div class="cart-item-lote">${escapeHTML(item.lote)}</div>
+          <div class="cart-item-desc">${escapeHTML(item.descripcion)}</div>
+        </div>
+        <button class="cart-item-remove" onclick="eliminarDelCarrito('${escapeHTML(item.internalid)}')" title="Quitar">✕</button>
+      </div>
+      <div class="cart-item-meta">
+        <span class="cart-item-ubicacion">${escapeHTML(item.ubicacion)}</span>
+        <span class="qty-max">Máx ${max}</span>
+      </div>
+      ${pedHTML}
+      <div class="cart-item-qty">
+        <div class="qty-stepper">
+          <button onclick="cambiarCantidad('${escapeHTML(item.internalid)}',-1)" ${item.cantidad <= 1 ? 'disabled' : ''}>−</button>
+          <input type="number" value="${item.cantidad}" min="1" max="${max}"
+            onchange="setCantidad('${escapeHTML(item.internalid)}',this.value)" />
+          <button onclick="cambiarCantidad('${escapeHTML(item.internalid)}',1)" ${item.cantidad >= max ? 'disabled' : ''}>+</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  const total = carrito.reduce((acc, i) => acc + i.cantidad, 0);
+  $('cartTotal').textContent = total;
+  $('countCart').textContent = carrito.length;
+}
+
+function renderPedimentoHTML(item) {
+  if (item.estado === 'cargando') {
+    return '<div class="cart-item-loading">Consultando pedimento…</div>';
+  }
+  if (item.estado === 'error') {
+    return `<div class="cart-item-error">${escapeHTML(item.error || 'Error al consultar pedimento')}</div>`;
+  }
+
+  if (item.multiple) {
+    const opts = item.pedimentos.map(p =>
+      `<option value="${escapeHTML(p.pedimento)}" ${String(item.selectedPedimento) === String(p.pedimento) ? 'selected' : ''}>${escapeHTML(p.pedimento)} · ${escapeHTML(p.ubicacion || '')}</option>`
     ).join('');
-    box.innerHTML = `
-      <div class="pedimento-warning">⚠️ ${escapeHTML(data.warning || 'Múltiples pedimentos')}</div>
-      <select id="pedimentoSelect">${opciones}</select>`;
-    return;
+    return `<div class="cart-item-pedimento">
+      <div class="cart-item-pedimento-label"><span class="warning">⚠️</span> Selecciona pedimento</div>
+      <select onchange="cambiarPedimento('${escapeHTML(item.internalid)}',this.value)">${opts}</select>
+    </div>`;
   }
 
-  if (data.pedimento) {
-    box.innerHTML = `<div class="pedimento-valor">${escapeHTML(data.pedimento)}</div>` +
-      (data.ir ? `<small style="color:#6b7280;">IR: ${escapeHTML(data.ir)}</small>` : '');
-    return;
+  if (item.pedimento) {
+    return `<div class="cart-item-pedimento">
+      <div class="cart-item-pedimento-label">Pedimento</div>
+      <div class="cart-item-pedimento-valor">${escapeHTML(item.pedimento)}</div>
+    </div>`;
   }
 
-  box.innerHTML = `<div class="pedimento-warning">${escapeHTML(data.warning || 'No se encontró un pedimento para este lote')}</div>`;
+  return `<div class="cart-item-pedimento">
+    <div class="cart-item-pedimento-label"><span class="warning">⚠️</span> Sin pedimento</div>
+    <div class="cart-item-pedimento-valor sin-pedimento">No se encontró pedimento. La etiqueta se imprimirá sin pedimento.</div>
+  </div>`;
 }
 
-function pedimentoSeleccionado() {
-  if (!state.multiple) return state.pedimento;
-  const sel = $('pedimentoSelect');
-  return sel ? sel.value : null;
+function actualizarBotones() {
+  const btn = $('btnImprimir');
+  const tieneItems = carrito.length > 0 &&
+    carrito.every(i => i.estado === 'listo' && (!i.multiple || i.selectedPedimento));
+  btn.disabled = !tieneItems || carrito.length === 0;
+  $('cartTotal').textContent = carrito.reduce((acc, i) => acc + i.cantidad, 0);
 }
 
-// =================== ZPL ===================
-async function generarZpl() {
-  const fila = state.seleccion;
-  if (!fila) { showToast('Selecciona un artículo', 'error'); return; }
+// =================== IMPRESIÓN ===================
+async function imprimirTodo() {
+  if (carrito.length === 0) { showToast('No hay etiquetas seleccionadas', 'error'); return; }
 
-  const cantidad = parseInt($('cantidad').value, 10);
-  const max = maxEtiquetas(fila);
-  if (!Number.isInteger(cantidad) || cantidad < 1) {
-    showToast('Cantidad inválida', 'error');
+  const faltante = carrito.find(i => i.multiple && !i.selectedPedimento);
+  if (faltante) {
+    showToast(`Selecciona el pedimento del lote ${faltante.lote}`, 'error');
     return;
-  }
-  if (cantidad > max) {
-    showToast(`La cantidad máxima es ${max}`, 'error');
-    return;
-  }
-
-  try {
-    const { status, data } = await request('/api/etiquetas/zpl', {
-      method: 'POST',
-      body: JSON.stringify({
-        sku: fila.sku,
-        lote: fila.lote,
-        ubicacion: fila.ubicacion,
-        cantidad,
-        pedimento: pedimentoSeleccionado() || undefined
-      })
-    });
-
-    if (status === 409) {
-      state.multiple = true;
-      state.pedimentos = data.pedimentos || [];
-      renderPedimento({ multiple: true, pedimentos: state.pedimentos, warning: data.warning });
-      showToast('Selecciona el pedimento a imprimir', 'error');
-      return;
-    }
-
-    if (!resOk(status)) {
-      showToast(data.error || 'Error generando ZPL', 'error');
-      return;
-    }
-
-    state.zpl = data.zpl;
-    if (data.warning) showToast(data.warning, 'info');
-
-    $('previewBox').style.display = 'block';
-    $('zplPreview').textContent = data.zpl;
-  } catch (e) {
-    showToast('Error: ' + e.message, 'error');
-  }
-}
-
-// =================== IMPRESIÓN USB ===================
-async function imprimir() {
-  if (!state.zpl) {
-    await generarZpl();
-    if (!state.zpl) return;
   }
 
   if (!navigator.usb) {
-    showToast('Este navegador no soporta WebUSB. Usa Chromium/Edge.', 'error');
+    showToast('Este navegador no soporta WebUSB. Usa Chromium/Edge con contexto seguro.', 'error');
     return;
   }
 
+  showToast('Generando etiquetas…', 'info');
+
+  // Generar ZPL de cada artículo y concatenar
+  let zplFinal = '';
+  let total = 0;
+  const errores = [];
+
+  for (const item of carrito) {
+    try {
+      const { status, data } = await request('/api/etiquetas/zpl', {
+        method: 'POST',
+        body: JSON.stringify({
+          sku: item.sku,
+          lote: item.lote,
+          ubicacion: item.ubicacion,
+          cantidad: item.cantidad,
+          pedimento: item.selectedPedimento || undefined
+        })
+      });
+
+      if (status < 200 || status >= 300) {
+        throw new Error(data.error || `Error ${status}`);
+      }
+      zplFinal += data.zpl || '';
+      total += item.cantidad;
+    } catch (e) {
+      errores.push(`${item.sku} ${item.lote}: ${e.message}`);
+    }
+  }
+
+  if (!zplFinal) {
+    showToast('No se pudo generar ninguna etiqueta', 'error');
+    if (errores.length) console.error(errores);
+    return;
+  }
+
+  if (errores.length) {
+    showToast(`${total} generadas, ${errores.length} con error`, 'info');
+  }
+
+  await enviarZpl(zplFinal);
+}
+
+async function enviarZpl(zplData) {
   try {
     showToast('Solicitando acceso al puerto USB…', 'info');
     const device = await navigator.usb.requestDevice({ filters: [{ vendorId: 0x0a5f }] });
@@ -342,11 +448,9 @@ async function imprimir() {
     for (const ep of device.configuration.interfaces[0].alternate.endpoints) {
       if (ep.direction === 'out') { endpointOut = ep.endpointNumber; break; }
     }
-    if (!endpointOut) {
-      throw new Error('No se encontró un canal de salida en la impresora');
-    }
+    if (!endpointOut) throw new Error('No se encontró un canal de salida');
 
-    const dataBytes = new TextEncoder().encode(state.zpl);
+    const dataBytes = new TextEncoder().encode(zplData);
     await device.transferOut(endpointOut, dataBytes);
     await device.close();
 
@@ -364,15 +468,10 @@ async function imprimir() {
 // =================== INIT ===================
 document.addEventListener('DOMContentLoaded', async () => {
   const token = getToken();
-  if (!token) {
-    window.location.href = 'index.html';
-    return;
-  }
+  if (!token) { window.location.href = 'index.html'; return; }
 
   const user = getCurrentUser();
   const rol = user?.rol || user?.cargo;
-
-  // Gating por rol: solo jefe_almacen y admin
   if (rol !== 'jefe_almacen' && rol !== 'admin') {
     window.location.href = 'index.html';
     return;
@@ -385,5 +484,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   $('mainApp').style.display = 'block';
+
+  // Buscar con Enter
+  $('searchInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') buscar();
+  });
+
   loadExistencias();
 });

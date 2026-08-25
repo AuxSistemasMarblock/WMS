@@ -39,38 +39,34 @@
     <span class="badge">ETIQUETAS</span>
   </header>
 
-  <main>
+  <main class="etiquetas-main">
 
-    <!-- FILTROS -->
-    <section class="filters-card">
-      <div class="filters-row">
-        <div class="filter-group">
-          <label>Ubicación</label>
-          <select id="filtroUbicacion" class="filter-select" onchange="aplicarFiltros()">
-            <option value="">Todas</option>
-          </select>
-        </div>
-        <div class="filter-group" style="flex:1; min-width:220px;">
-          <label>SKU</label>
-          <input id="filtroSku" type="text" placeholder="Buscar SKU..." oninput="aplicarFiltros()" />
-        </div>
-        <button class="btn btn-ghost" onclick="loadExistencias()" title="Recargar desde NetSuite">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
-          Recargar
-        </button>
+    <!-- BARRA DE BÚSQUEDA -->
+    <section class="search-bar">
+      <div class="search-input-wrap">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input id="searchInput" type="text" placeholder="Buscar por SKU, lote o descripción…" />
+      </div>
+      <div class="search-filters">
+        <select id="filtroUbicacion" class="filter-select">
+          <option value="">Todas las ubicaciones</option>
+        </select>
+        <button class="btn btn-primary" onclick="buscar()">Buscar</button>
       </div>
     </section>
 
     <div class="etiquetas-layout">
 
-      <!-- TABLA DE EXISTENCIAS -->
-      <section class="table-card">
-        <div class="table-header">
-          <div class="table-title">
-            Existencias
-            <span class="count-badge" id="countExist">0</span>
+      <!-- RESULTADOS -->
+      <section class="results-card">
+        <div class="card-head">
+          <div class="card-title">
+            Resultados
+            <span class="count-badge" id="countResult">0</span>
           </div>
+          <button class="btn btn-ghost" onclick="limpiarBusqueda()" title="Limpiar búsqueda">Limpiar</button>
         </div>
+
         <div class="table-wrap">
           <table>
             <thead>
@@ -79,59 +75,52 @@
                 <th>Descripción</th>
                 <th>Lote</th>
                 <th>Ubicación</th>
-                <th>Físico</th>
-                <th>M²/pieza</th>
-                <th>Máx etiquetas</th>
+                <th class="num">Físico</th>
+                <th class="num">M²/pieza</th>
+                <th class="num">Máx</th>
+                <th class="num"></th>
               </tr>
             </thead>
-            <tbody id="tbodyExistencias">
-              <tr><td colspan="7"><div class="empty-state">Cargando…</div></td></tr>
+            <tbody id="tbodyResult">
+              <tr><td colspan="8"><div class="empty-state">Cargando…</div></td></tr>
             </tbody>
           </table>
         </div>
+
+        <div class="pagination" id="pagination" style="display:none;">
+          <button class="page-btn" id="btnPrev" onclick="cambiarPagina(-1)">‹ Anterior</button>
+          <span class="page-info" id="pageInfo">Página 1 de 1</span>
+          <button class="page-btn" id="btnNext" onclick="cambiarPagina(1)">Siguiente ›</button>
+        </div>
       </section>
 
-      <!-- PANEL DE ETIQUETA -->
-      <aside class="etiquetas-panel" id="panelDetalle">
-        <h2 class="panel-title">Etiqueta</h2>
-        <div id="detalleVacio" class="empty-state">
-          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/></svg>
-          Selecciona un artículo para generar su etiqueta
+      <!-- CARRITO DE ETIQUETAS SELECCIONADAS -->
+      <aside class="cart-card" id="cartCard">
+        <div class="card-head">
+          <div class="card-title">
+            Etiquetas seleccionadas
+            <span class="count-badge" id="countCart">0</span>
+          </div>
+          <button class="btn btn-ghost btn-icon" onclick="vaciarCarrito()" title="Vaciar selección">✕</button>
         </div>
 
-        <div id="detalleContenido" style="display:none;">
-          <dl class="detalle">
-            <dt>SKU</dt><dd id="dSku">–</dd>
-            <dt>Descripción</dt><dd id="dDescripcion">–</dd>
-            <dt>Lote</dt><dd id="dLote">–</dd>
-            <dt>Ubicación</dt><dd id="dUbicacion">–</dd>
-            <dt>Físico (m²)</dt><dd id="dFisico">–</dd>
-            <dt>M²/pieza</dt><dd id="dTotalM2">–</dd>
-          </dl>
-
-          <div class="field">
-            <label for="cantidad">Cantidad de etiquetas</label>
-            <input type="number" id="cantidad" min="1" value="1" />
-            <small id="cantidadHint">Máx: –</small>
+        <div class="cart-list" id="cartList">
+          <div class="cart-empty">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4"/><path d="M9 12h6M9 16h6"/></svg>
+            Agrega artículos desde los resultados
           </div>
+        </div>
 
-          <div class="field">
-            <label>Pedimento</label>
-            <div id="pedimentoBox"></div>
+        <div class="cart-footer">
+          <div class="cart-total">
+            <span class="cart-total-label">Total a imprimir</span>
+            <span class="cart-total-value" id="cartTotal">0</span>
+            <span class="cart-total-unit">etiquetas</span>
           </div>
-
-          <div class="preview" id="previewBox" style="display:none;">
-            <label>Vista previa ZPL</label>
-            <pre id="zplPreview"></pre>
-          </div>
-
-          <div class="actions">
-            <button class="btn btn-ghost" onclick="generarZpl()">Generar vista previa</button>
-            <button class="btn btn-primary" onclick="imprimir()">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-              Imprimir a Zebra
-            </button>
-          </div>
+          <button class="btn btn-primary btn-wide" onclick="imprimirTodo()" id="btnImprimir" disabled>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+            Imprimir a Zebra
+          </button>
         </div>
       </aside>
 
