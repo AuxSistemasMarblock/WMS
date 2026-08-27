@@ -134,12 +134,12 @@ function switchModo(modo) {
   $('viewIR').style.display = modo === 'ir' ? 'block' : 'none';
 
   $('titleResultados').textContent = modo === 'stock'
-    ? 'Resultados de Existencias'
-    : 'Recepciones Recientes (IR)';
+    ? 'Stock Disponible'
+    : 'Recepciones (IR)';
 
   $('searchInput').placeholder = modo === 'stock'
-    ? 'Buscar por SKU, lote o descripción en stock…'
-    : 'Buscar por Folio IR (ej. 879, IR879), Embarque o Pedimento…';
+    ? 'Buscar SKU, lote o descripción…'
+    : 'Buscar Folio IR, embarque o pedimento…';
 
   $('searchInput').value = '';
   state.filtroTexto = '';

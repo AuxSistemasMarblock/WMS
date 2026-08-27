@@ -11,7 +11,7 @@
   />
   <link rel="stylesheet" href="css/variables.css" />
   <link rel="stylesheet" href="css/styles.css" />
-  <link rel="stylesheet" href="css/etiquetas.css?v=7" />
+  <link rel="stylesheet" href="css/etiquetas.css?v=8" />
 </head>
 <body>
 
@@ -42,29 +42,34 @@
 
   <main class="etiquetas-main">
 
-    <!-- PESTAÑAS DE MODO -->
-    <div class="tabs-bar">
-      <button class="tab-btn active" id="tabStock" onclick="switchModo('stock')">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
-        Por Artículo / Lote (Stock)
-      </button>
-      <button class="tab-btn" id="tabIR" onclick="switchModo('ir')">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
-        Por Recepción (IR)
-      </button>
-    </div>
-
-    <!-- BARRA DE BÚSQUEDA -->
+    <!-- BARRA UNIFICADA DE BÚSQUEDA Y MODO -->
     <section class="search-bar">
-      <div class="search-input-wrap">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input id="searchInput" type="text" placeholder="Buscar por SKU, lote o descripción en stock…" onkeydown="if(event.key==='Enter') buscar()" />
+      <!-- SELECTOR DE MODO COMPACTO -->
+      <div class="mode-switch">
+        <button type="button" class="switch-btn active" id="tabStock" onclick="switchModo('stock')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+          Stock
+        </button>
+        <button type="button" class="switch-btn" id="tabIR" onclick="switchModo('ir')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+          Recepción IR
+        </button>
       </div>
+
+      <div class="toolbar-divider"></div>
+
+      <!-- INPUT DE BÚSQUEDA -->
+      <div class="search-input-wrap">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input id="searchInput" type="text" placeholder="Buscar por SKU, lote o descripción..." onkeydown="if(event.key==='Enter') buscar()" />
+      </div>
+
+      <!-- FILTRO DE UBICACIÓN Y BOTÓN BUSCAR -->
       <div class="search-filters">
         <select id="filtroUbicacion" class="filter-select" onchange="buscar()">
           <option value="">Todas las ubicaciones</option>
         </select>
-        <button class="btn btn-primary" onclick="buscar()">Buscar</button>
+        <button class="btn btn-primary btn-search" onclick="buscar()">Buscar</button>
       </div>
     </section>
 
@@ -74,10 +79,10 @@
       <section class="results-card">
         <div class="card-head">
           <div class="card-title">
-            <span id="titleResultados">Resultados de Existencias</span>
+            <span id="titleResultados">Stock Disponible</span>
             <span class="count-badge" id="countResult">0</span>
           </div>
-          <button class="btn btn-ghost" onclick="limpiarBusqueda()" title="Limpiar búsqueda">Limpiar</button>
+          <button class="btn btn-ghost btn-sm" onclick="limpiarBusqueda()" title="Limpiar búsqueda">Limpiar</button>
         </div>
 
         <!-- VISTA: TABLA STOCK -->
@@ -229,9 +234,9 @@
   <footer class="app-footer" id="appFooter"></footer>
 </div>
 
-<script src="js/config.js?v=7"></script>
-<script src="js/nav.js?v=7"></script>
-<script src="js/footer.js?v=7"></script>
-<script src="js/etiquetas/app.js?v=7"></script>
+<script src="js/config.js?v=8"></script>
+<script src="js/nav.js?v=8"></script>
+<script src="js/footer.js?v=8"></script>
+<script src="js/etiquetas/app.js?v=8"></script>
 </body>
 </html>
