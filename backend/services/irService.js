@@ -36,6 +36,8 @@ const PEDIMENTO_KEYS = [
   'pedimento'
 ].filter(Boolean);
 
+const EMBARQUE_KEY = 'custbody_imr_embarque';
+
 function extract(val) {
   if (val === null || val === undefined) return null;
   if (typeof val === 'string') return val;
@@ -100,7 +102,7 @@ function matchLocation(filaLocation, ubicacion, ubicacionId) {
 }
 
 /**
- * Obtiene el/los pedimento(s) para un lote.
+ * Obtiene el/los pedimento(s) y embarque para un lote.
  *
  * Trae todas las IRs (con caché en memoria TTL 60s, porque el RESTlet 2217
  * solo devuelve 1000 por request) y busca por lote. Luego filtra por la
@@ -116,7 +118,8 @@ function matchLocation(filaLocation, ubicacion, ubicacionId) {
  * @returns {Promise<{
  *   pedimento: string|null,
  *   ir: string|null,
- *   pedimentos: Array<{pedimento:string, ir:string|null, ubicacion:string|null, fecha:string|null}>,
+ *   embarque: string|null,
+ *   pedimentos: Array<{pedimento:string, ir:string|null, embarque:string|null, ubicacion:string|null, fecha:string|null}>,
  *   multiple: boolean,
  *   warning: string|null
  * }>}
@@ -184,6 +187,7 @@ async function obtenerPedimento({ lote, ubicacion, ubicacionId }) {
     matches.push({
       pedimento: extractPedimento(fila),
       ir: extract(fila.tranid) ?? extract(fila.ir) ?? null,
+      embarque: extract(fila[EMBARQUE_KEY]) || null,
       ubicacion: extract(fila.location),
       fecha: extract(fila.trandate) ?? null,
       location: fila.location
@@ -207,6 +211,7 @@ async function obtenerPedimento({ lote, ubicacion, ubicacionId }) {
     return {
       pedimento: pedimentos[0].pedimento,
       ir: pedimentos[0].ir,
+      embarque: pedimentos[0].embarque,
       pedimentos,
       multiple: false,
       warning: null
@@ -217,6 +222,7 @@ async function obtenerPedimento({ lote, ubicacion, ubicacionId }) {
     return {
       pedimento: null,
       ir: null,
+      embarque: null,
       pedimentos,
       multiple: true,
       warning: 'Existen múltiples pedimentos para este lote en esta ubicación; selecciona cuál usar'
@@ -226,6 +232,7 @@ async function obtenerPedimento({ lote, ubicacion, ubicacionId }) {
   return {
     pedimento: null,
     ir: locMatches[0]?.ir ?? matches[0]?.ir ?? null,
+    embarque: locMatches[0]?.embarque ?? matches[0]?.embarque ?? null,
     pedimentos: [],
     multiple: false,
     warning: 'No se encontró un pedimento para este lote'

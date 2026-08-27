@@ -173,6 +173,7 @@ const postPedimentoHandler = async (req, res) => {
     res.json({
       pedimento: resultado.pedimento,
       ir: resultado.ir || null,
+      embarque: resultado.embarque || null,
       pedimentos: resultado.pedimentos,
       multiple: resultado.multiple,
       warning: resultado.warning || undefined
@@ -237,7 +238,7 @@ const postZplHandler = async (req, res) => {
       ubicacionId: fila.ubicacionId
     });
 
-    // Resolver el pedimento a imprimir
+    // Resolver el pedimento y el embarque a imprimir
     let pedimento = pedimentoSeleccionado || null;
 
     if (resultado.multiple && !pedimento) {
@@ -264,6 +265,8 @@ const postZplHandler = async (req, res) => {
       ? resultado.pedimentos.find(p => p.pedimento === pedimento)
       : null;
 
+    const embarque = selMatch?.embarque ?? resultado.embarque ?? null;
+
     const zpl = buildZpl({
       sku: fila.sku,
       lote: fila.lote,
@@ -271,12 +274,14 @@ const postZplHandler = async (req, res) => {
       descripcion: fila.descripcion,
       totalM2: fila.totalM2,
       pedimento,
+      embarque,
       cantidad: n
     });
 
     res.json({
       zpl,
       pedimento,
+      embarque,
       ir: selMatch?.ir ?? resultado.ir ?? null,
       maxLabels: max,
       multiple: resultado.multiple,
