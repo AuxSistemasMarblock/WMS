@@ -114,7 +114,9 @@ module.exports = {
       // Saved search de existencias (artículos/lotes con cantidad a mano)
       searchIdExistencias: process.env.NETSUITE_SEARCH_EXISTENCIAS_ID || 'customsearch_imr_items',
       // Saved search IR -> pedimento (sub-búsqueda por ubicación + lote)
-      searchIdIRPedimento: process.env.NETSUITE_SEARCH_IR_PEDIMENTO_ID || 'customsearch3677'
+      searchIdIRPedimento: process.env.NETSUITE_SEARCH_IR_PEDIMENTO_ID || 'customsearch3677',
+      // Saved search de Recepciones de Artículo (IRs completas ordenadas por más recientes)
+      searchIdIRList: process.env.NETSUITE_SEARCH_IR_LIST_ID || 'customsearch3678'
     },
 
     // Función helper para obtener URL del RESTlet

@@ -1,9 +1,10 @@
 /**
  * WMS Etiquetas — Entry point
  *
- * Flujo: buscar existencias (paginado 10/pág.) → agregar lotes a un "carrito"
- * con la cantidad de etiquetas a imprimir de cada uno → imprimir todo por USB.
- * Mantiene las líneas seleccionadas mientras se vuelve a buscar.
+ * Flujo Dual:
+ * 1. Por Stock / Lote: buscar existencias (paginado) → agregar lotes a un "carrito" → imprimir por USB.
+ * 2. Por Recepción (IR): listar recepciones recientes / buscar por Folio IR, Embarque o Pedimento
+ *    → previsualizar lotes con placas calculadas → ajustar cantidades → imprimir todo directo o agregar al carrito.
  */
 
 // =================== CONFIG ===================
@@ -24,7 +25,10 @@ if (!window.APP_CONFIG?.BACKEND_URL) {
 
 // =================== ESTADO ===================
 const state = {
-  existencias: [],        // todas las filas (ya filtradas por rol en backend)
+  modo: 'stock',          // 'stock' | 'ir'
+  existencias: [],        // todas las filas de existencias
+  irs: [],                // lista de IRs recientes / filtradas
+  selectedIR: null,       // objeto de IR seleccionada para el modal
   ubicaciones: [],
   filtroTexto: '',
   filtroUbicacion: '',
@@ -32,16 +36,15 @@ const state = {
 };
 
 const carrito = [];       // { internalid, sku, descripcion, lote, ubicacion, ubicacionId, fisico, totalM2,
-                          //   cantidad, pedimento, pedimentos, multiple, selectedPedimento, estado }
+                          //   cantidad, pedimento, pedimentos, multiple, selectedPedimento, estado, embarque }
 
 /**
- * Tamaño de página adaptativo: filas que caben en la altura disponible de la
- * tabla (aprox. 46px por fila), mínimo 8, para rellenar bien el espacio.
+ * Tamaño de página adaptativo para la tabla de stock
  */
 function pageSize() {
   const wrap = document.querySelector('.results-card .table-wrap');
   const h = wrap ? wrap.clientHeight : 480;
-  return Math.max(8, Math.floor(h / 46));
+  return Math.max(8, Math.floor(h / 36));
 }
 
 // =================== HELPERS ===================
@@ -119,7 +122,40 @@ function enCarrito(internalid) {
   return carrito.some(i => String(i.internalid) === String(internalid));
 }
 
-// =================== CARGA INICIAL ===================
+// =================== CONTROL DE PESTAÑAS (MODOS) ===================
+function switchModo(modo) {
+  if (state.modo === modo) return;
+  state.modo = modo;
+
+  $('tabStock').classList.toggle('active', modo === 'stock');
+  $('tabIR').classList.toggle('active', modo === 'ir');
+
+  $('viewStock').style.display = modo === 'stock' ? 'block' : 'none';
+  $('viewIR').style.display = modo === 'ir' ? 'block' : 'none';
+
+  $('titleResultados').textContent = modo === 'stock'
+    ? 'Stock Disponible'
+    : 'Recepciones (IR)';
+
+  $('searchInput').placeholder = modo === 'stock'
+    ? 'Buscar SKU, lote o descripción…'
+    : 'Buscar Folio IR, embarque o pedimento…';
+
+  $('searchInput').value = '';
+  state.filtroTexto = '';
+
+  if (modo === 'ir') {
+    if (state.irs.length === 0) {
+      loadIRs();
+    } else {
+      renderIRs();
+    }
+  } else {
+    buscar();
+  }
+}
+
+// =================== CARGA DE DATOS ===================
 async function loadExistencias() {
   try {
     const data = await apiFetch('/api/etiquetas/existencias');
@@ -140,8 +176,24 @@ async function loadExistencias() {
   }
 }
 
-// =================== BÚSQUEDA Y PAGINACIÓN ===================
-function filtrados() {
+async function loadIRs(query = '') {
+  try {
+    const tbody = $('tbodyIR');
+    tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state">Consultando recepciones de NetSuite…</div></td></tr>';
+
+    const u = state.filtroUbicacion ? `&ubicacion=${encodeURIComponent(state.filtroUbicacion)}` : '';
+    const q = query ? `&q=${encodeURIComponent(query)}` : '';
+    const data = await apiFetch(`/api/etiquetas/irs?limit=100${u}${q}`);
+    state.irs = data.irs || [];
+    renderIRs();
+  } catch (e) {
+    showToast('Error al consultar recepciones (IRs): ' + e.message, 'error');
+    $('tbodyIR').innerHTML = `<tr><td colspan="8"><div class="empty-state error">Error: ${escapeHTML(e.message)}</div></td></tr>`;
+  }
+}
+
+// =================== BÚSQUEDA ===================
+function filtradosStock() {
   const texto = state.filtroTexto.toLowerCase();
   return state.existencias.filter(e => {
     if (state.filtroUbicacion && e.ubicacion !== state.filtroUbicacion) return false;
@@ -155,26 +207,38 @@ function filtrados() {
 function buscar() {
   state.filtroTexto = $('searchInput').value.trim();
   state.filtroUbicacion = $('filtroUbicacion').value;
-  state.pagina = 1;
-  renderResultados();
+
+  if (state.modo === 'stock') {
+    state.pagina = 1;
+    renderResultados();
+  } else {
+    loadIRs(state.filtroTexto);
+  }
 }
 
 function limpiarBusqueda() {
   $('searchInput').value = '';
   $('filtroUbicacion').value = '';
-  buscar();
+  state.filtroTexto = '';
+  state.filtroUbicacion = '';
+  if (state.modo === 'stock') {
+    buscar();
+  } else {
+    loadIRs('');
+  }
 }
 
 function cambiarPagina(delta) {
-  const total = filtrados().length;
+  const total = filtradosStock().length;
   const totalPaginas = Math.max(1, Math.ceil(total / pageSize()));
   state.pagina = Math.min(Math.max(1, state.pagina + delta), totalPaginas);
   renderResultados();
 }
 
+// =================== RENDER VISTA STOCK ===================
 function renderResultados() {
   const ps = pageSize();
-  const filas = filtrados();
+  const filas = filtradosStock();
   const totalPaginas = Math.max(1, Math.ceil(filas.length / ps));
   state.pagina = Math.min(state.pagina, totalPaginas);
 
@@ -208,7 +272,7 @@ function renderResultados() {
     }).join('');
   }
 
-  // Paginación
+  // Paginación de stock
   const pag = $('pagination');
   if (filas.length > pageSize()) {
     pag.style.display = 'flex';
@@ -220,7 +284,250 @@ function renderResultados() {
   }
 }
 
-// =================== CARRITO ===================
+// =================== RENDER VISTA RECEPCIONES (IR) ===================
+function renderIRs() {
+  const tbody = $('tbodyIR');
+  const irs = state.irs;
+  $('countResult').textContent = irs.length;
+
+  if (!irs.length) {
+    tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state">No se encontraron recepciones de artículo.</div></td></tr>';
+    $('pagination').style.display = 'none';
+    return;
+  }
+
+  tbody.innerHTML = irs.map(ir => {
+    const embarqueHTML = ir.embarque
+      ? `<span class="tag-badge embarque-badge">${escapeHTML(ir.embarque)}</span>`
+      : '<span class="sin-pedimento">—</span>';
+    const pedimentoHTML = ir.pedimento
+      ? `<span class="tag-badge pedimento-badge">${escapeHTML(ir.pedimento)}</span>`
+      : '<span class="sin-pedimento">—</span>';
+
+    return `<tr>
+      <td><span class="ir-badge">${escapeHTML(ir.tranid)}</span></td>
+      <td>${escapeHTML(ir.trandate)}</td>
+      <td><strong>${escapeHTML(ir.location || '—')}</strong></td>
+      <td>${embarqueHTML}</td>
+      <td>${pedimentoHTML}</td>
+      <td class="num">${escapeHTML(ir.totalLineas)}</td>
+      <td class="num"><strong>${escapeHTML(ir.totalPlacas)}</strong></td>
+      <td class="num">
+        <button class="btn-ir-action" onclick="abrirDetalleIR('${escapeHTML(ir.tranid)}')">
+          🔍 Ver / Imprimir
+        </button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  $('pagination').style.display = 'none';
+}
+
+// =================== MODAL DETALLE DE IR ===================
+async function abrirDetalleIR(idOrTranid) {
+  try {
+    showToast('Cargando detalle de la recepción…', 'info');
+    const data = await apiFetch(`/api/etiquetas/ir/${encodeURIComponent(idOrTranid)}`);
+    const ir = data.ir;
+    if (!ir) throw new Error('No se recibió la información de la IR');
+
+    state.selectedIR = {
+      ...ir,
+      lineas: (ir.lineas || []).map(l => ({
+        ...l,
+        selected: true,
+        cantidadAImprimir: l.placas || 1
+      }))
+    };
+
+    $('modalIRTranid').textContent = ir.tranid;
+    $('modalIRFecha').textContent = ir.trandate || '--/--/----';
+    $('modalIRUbicacion').textContent = ir.location || 'Ubicación no especificada';
+    $('modalIREmbarque').textContent = ir.embarque ? `Embarque: ${ir.embarque}` : 'Sin embarque';
+    $('modalIRPedimento').textContent = ir.pedimento ? `Pedimento: ${ir.pedimento}` : 'Sin pedimento';
+    $('chkSelectAllIR').checked = true;
+
+    renderModalIRLineas();
+    $('modalIR').style.display = 'flex';
+  } catch (e) {
+    showToast('Error al abrir detalle de IR: ' + e.message, 'error');
+  }
+}
+
+function cerrarDetalleIR() {
+  $('modalIR').style.display = 'none';
+  state.selectedIR = null;
+}
+
+function renderModalIRLineas() {
+  const ir = state.selectedIR;
+  if (!ir) return;
+
+  const tbody = $('tbodyIRLineas');
+  if (!ir.lineas.length) {
+    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state">Esta IR no tiene líneas registradas.</div></td></tr>';
+    actualizarResumenModalIR();
+    return;
+  }
+
+  tbody.innerHTML = ir.lineas.map((l, idx) => {
+    const medidas = (l.largo && l.alto) ? `(${l.largo} × ${l.alto} m)` : '';
+    return `<tr>
+      <td style="text-align: center;">
+        <input type="checkbox" ${l.selected ? 'checked' : ''} onchange="toggleIRLine(${idx}, this.checked)" />
+      </td>
+      <td class="sku-cell">${escapeHTML(l.sku)}</td>
+      <td class="descripcion-cell">${escapeHTML(l.descripcion)}</td>
+      <td class="lote-cell">
+        <strong>${escapeHTML(l.lote)}</strong>
+        ${medidas ? `<div class="sub-meta">${escapeHTML(medidas)}</div>` : ''}
+      </td>
+      <td class="num">${escapeHTML(l.cantidadM2)} m²</td>
+      <td class="num">${escapeHTML(l.totalM2)} m²</td>
+      <td class="num">
+        <div class="qty-stepper" style="justify-content: flex-end;">
+          <button onclick="cambiarCantidadIRLinea(${idx}, -1)" ${l.cantidadAImprimir <= 1 ? 'disabled' : ''}>−</button>
+          <input type="number" value="${l.cantidadAImprimir}" min="1" max="999"
+            onchange="setCantidadIRLinea(${idx}, this.value)" style="width: 50px;" />
+          <button onclick="cambiarCantidadIRLinea(${idx}, 1)">+</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  actualizarResumenModalIR();
+}
+
+function toggleSelectAllIRLines(checked) {
+  if (!state.selectedIR) return;
+  state.selectedIR.lineas.forEach(l => l.selected = !!checked);
+  renderModalIRLineas();
+}
+
+function toggleIRLine(idx, checked) {
+  if (!state.selectedIR || !state.selectedIR.lineas[idx]) return;
+  state.selectedIR.lineas[idx].selected = !!checked;
+  const allChecked = state.selectedIR.lineas.every(l => l.selected);
+  $('chkSelectAllIR').checked = allChecked;
+  actualizarResumenModalIR();
+}
+
+function cambiarCantidadIRLinea(idx, delta) {
+  if (!state.selectedIR || !state.selectedIR.lineas[idx]) return;
+  const linea = state.selectedIR.lineas[idx];
+  linea.cantidadAImprimir = Math.max(1, (linea.cantidadAImprimir || 1) + delta);
+  renderModalIRLineas();
+}
+
+function setCantidadIRLinea(idx, valor) {
+  if (!state.selectedIR || !state.selectedIR.lineas[idx]) return;
+  let n = parseInt(valor, 10);
+  if (!Number.isInteger(n) || n < 1) n = 1;
+  state.selectedIR.lineas[idx].cantidadAImprimir = n;
+  actualizarResumenModalIR();
+}
+
+function actualizarResumenModalIR() {
+  if (!state.selectedIR) return;
+  const totalLineas = state.selectedIR.lineas.length;
+  const selectedLines = state.selectedIR.lineas.filter(l => l.selected);
+  const totalPlacas = selectedLines.reduce((acc, l) => acc + (l.cantidadAImprimir || 1), 0);
+
+  $('modalIRTotalCount').textContent = totalLineas;
+  $('modalIRSelectedCount').textContent = selectedLines.length;
+  $('modalIRTotalPlacas').textContent = totalPlacas;
+
+  const btnImprimir = $('btnImprimirIR');
+  btnImprimir.disabled = selectedLines.length === 0;
+  btnImprimir.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> 🖨️ Imprimir ${totalPlacas} Etiquetas de esta IR`;
+}
+
+// =================== ACCIONES MODAL IR ===================
+async function imprimirIRDirecto() {
+  if (!state.selectedIR) return;
+  const ir = state.selectedIR;
+  const seleccionadas = ir.lineas.filter(l => l.selected && l.cantidadAImprimir > 0);
+
+  if (!seleccionadas.length) {
+    showToast('Selecciona al menos una línea para imprimir', 'error');
+    return;
+  }
+
+  showToast('Generando código ZPL masivo…', 'info');
+
+  const items = seleccionadas.map(l => ({
+    sku: l.sku,
+    lote: l.lote,
+    ubicacion: ir.location || '',
+    descripcion: l.descripcion,
+    totalM2: l.totalM2,
+    pedimento: ir.pedimento || null,
+    embarque: ir.embarque || null,
+    cantidad: l.cantidadAImprimir
+  }));
+
+  try {
+    const data = await apiFetch('/api/etiquetas/zpl-bulk', {
+      method: 'POST',
+      body: JSON.stringify({ items })
+    });
+
+    if (!data.zpl) {
+      throw new Error('No se generó código ZPL');
+    }
+
+    if (!navigator.usb) {
+      showToast(mensajeNoWebUSB(), 'error');
+      descargarZPL(data.zpl);
+      return;
+    }
+
+    await enviarZpl(data.zpl);
+  } catch (e) {
+    showToast('Error al imprimir IR: ' + e.message, 'error');
+  }
+}
+
+function cargarIRAlCarrito() {
+  if (!state.selectedIR) return;
+  const ir = state.selectedIR;
+  const seleccionadas = ir.lineas.filter(l => l.selected && l.cantidadAImprimir > 0);
+
+  if (!seleccionadas.length) {
+    showToast('Selecciona al menos una línea para agregar al carrito', 'error');
+    return;
+  }
+
+  let agregadas = 0;
+  for (const l of seleccionadas) {
+    const cartId = `ir_${ir.id}_${l.lote}_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+    carrito.push({
+      internalid: cartId,
+      sku: l.sku,
+      descripcion: l.descripcion,
+      lote: l.lote,
+      ubicacion: ir.location,
+      ubicacionId: ir.locationId,
+      fisico: l.cantidadM2,
+      totalM2: l.totalM2,
+      cantidad: l.cantidadAImprimir,
+      pedimento: ir.pedimento || null,
+      embarque: ir.embarque || null,
+      pedimentos: ir.pedimento ? [{ pedimento: ir.pedimento, ubicacion: ir.location }] : [],
+      multiple: false,
+      selectedPedimento: ir.pedimento || null,
+      estado: 'listo'
+    });
+    agregadas++;
+  }
+
+  cerrarDetalleIR();
+  renderCarrito();
+  actualizarBotones();
+  showToast(`Se agregaron ${agregadas} lotes de la IR al carrito`, 'success');
+}
+
+// =================== CARRITO DE ETIQUETAS ===================
 async function agregarAlCarrito(internalid) {
   if (enCarrito(internalid)) return;
 
@@ -238,6 +545,7 @@ async function agregarAlCarrito(internalid) {
     totalM2: fila.totalM2,
     cantidad: 1,
     pedimento: null,
+    embarque: null,
     pedimentos: [],
     multiple: false,
     selectedPedimento: null,
@@ -246,10 +554,10 @@ async function agregarAlCarrito(internalid) {
 
   carrito.push(item);
   renderCarrito();
-  renderResultados();   // marcar la fila como "agregada" en la tabla
+  renderResultados();
   actualizarBotones();
 
-  // Buscar pedimento
+  // Buscar pedimento y embarque
   try {
     const { status, data } = await request('/api/etiquetas/pedimento', {
       method: 'POST',
@@ -261,6 +569,7 @@ async function agregarAlCarrito(internalid) {
     }
 
     item.pedimento = data.pedimento || null;
+    item.embarque = data.embarque || null;
     item.pedimentos = data.pedimentos || [];
     item.multiple = !!data.multiple;
     item.selectedPedimento = item.multiple ? null : item.pedimento;
@@ -402,7 +711,7 @@ function actualizarBotones() {
   $('countCart').textContent = carrito.length;
 }
 
-// =================== IMPRESIÓN ===================
+// =================== IMPRESIÓN CARRITO ===================
 async function imprimirTodo() {
   if (carrito.length === 0) { showToast('No hay etiquetas seleccionadas', 'error'); return; }
 
@@ -414,63 +723,44 @@ async function imprimirTodo() {
 
   showToast('Generando etiquetas…', 'info');
 
-  // Generar ZPL de cada artículo y concatenar
-  let zplFinal = '';
-  let total = 0;
-  const errores = [];
+  const items = carrito.map(item => ({
+    sku: item.sku,
+    lote: item.lote,
+    ubicacion: item.ubicacion,
+    descripcion: item.descripcion,
+    totalM2: item.totalM2,
+    pedimento: item.selectedPedimento || item.pedimento || null,
+    embarque: item.embarque || null,
+    cantidad: item.cantidad
+  }));
 
-  for (const item of carrito) {
-    try {
-      const { status, data } = await request('/api/etiquetas/zpl', {
-        method: 'POST',
-        body: JSON.stringify({
-          sku: item.sku,
-          lote: item.lote,
-          ubicacion: item.ubicacion,
-          cantidad: item.cantidad,
-          pedimento: item.selectedPedimento || undefined
-        })
-      });
+  try {
+    const data = await apiFetch('/api/etiquetas/zpl-bulk', {
+      method: 'POST',
+      body: JSON.stringify({ items })
+    });
 
-      if (status < 200 || status >= 300) {
-        throw new Error(data.error || `Error ${status}`);
-      }
-      zplFinal += data.zpl || '';
-      total += item.cantidad;
-    } catch (e) {
-      errores.push(`${item.sku} ${item.lote}: ${e.message}`);
+    if (!data.zpl) {
+      throw new Error('No se generó código ZPL');
     }
-  }
 
-  if (!zplFinal) {
-    showToast('No se pudo generar ninguna etiqueta', 'error');
-    if (errores.length) console.error(errores);
-    return;
-  }
+    if (!navigator.usb) {
+      showToast(mensajeNoWebUSB(), 'error');
+      descargarZPL(data.zpl);
+      return;
+    }
 
-  if (errores.length) {
-    showToast(`${total} generadas, ${errores.length} con error`, 'info');
+    await enviarZpl(data.zpl);
+  } catch (e) {
+    showToast('Error de impresión: ' + e.message, 'error');
   }
-
-  // WebUSB solo existe en Chromium (Chrome/Edge) y en contexto seguro (HTTPS/localhost).
-  if (!navigator.usb) {
-    showToast(mensajeNoWebUSB(), 'error');
-    descargarZPL(zplFinal); // respaldo para comprobar que la etiqueta sí se generó
-    return;
-  }
-
-  await enviarZpl(zplFinal);
 }
 
 function esFirefox() { return /Firefox/i.test(navigator.userAgent || ''); }
 function esChromium() { return !esFirefox() && /Edg\/|Chrome\/|Chromium/i.test(navigator.userAgent || ''); }
 
-/**
- * Devuelve un mensaje claro según el navegador/contexto cuando WebUSB no está
- * disponible (no hay contexto seguro o el navegador no lo soporta).
- */
 function mensajeNoWebUSB() {
-  const host = window.location.host; // ej. 192.168.100.185:8080
+  const host = window.location.host;
   if (esFirefox()) {
     return 'Firefox no soporta WebUSB. Usa Chrome o Edge e imprime desde ahí. Se descargó el .zpl como respaldo.';
   }
@@ -480,9 +770,6 @@ function mensajeNoWebUSB() {
   return 'WebUSB no está disponible en este navegador/contexto. Se descargó el .zpl como respaldo.';
 }
 
-/**
- * Descarga el ZPL generado como archivo local (fallback).
- */
 function descargarZPL(zplData) {
   const blob = new Blob([zplData], { type: 'text/plain;charset=utf-8' });
   const url = URL.createObjectURL(blob);
@@ -553,7 +840,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   // Re-paginar al cambiar el tamaño del navegador
-  window.addEventListener('resize', () => renderResultados());
+  window.addEventListener('resize', () => {
+    if (state.modo === 'stock') renderResultados();
+  });
 
   loadExistencias();
 });
