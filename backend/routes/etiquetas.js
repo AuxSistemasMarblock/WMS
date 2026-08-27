@@ -14,5 +14,8 @@ router.get('/existencias', verifyToken, requireRole(...allowedRoles), controller
 router.get('/lotes', verifyToken, requireRole(...allowedRoles), controller.getLotes);
 router.post('/pedimento', verifyToken, requireRole(...allowedRoles), controller.postPedimento);
 router.post('/zpl', verifyToken, requireRole(...allowedRoles), controller.postZpl);
+router.get('/irs', verifyToken, requireRole(...allowedRoles), controller.getIRs);
+router.get('/ir/:idOrTranid', verifyToken, requireRole(...allowedRoles), controller.getIRDetail);
+router.post('/zpl-bulk', verifyToken, requireRole(...allowedRoles), controller.postZplBulk);
 
 module.exports = router;

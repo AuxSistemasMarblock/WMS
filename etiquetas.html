@@ -42,14 +42,26 @@
 
   <main class="etiquetas-main">
 
+    <!-- PESTAÑAS DE MODO -->
+    <div class="tabs-bar">
+      <button class="tab-btn active" id="tabStock" onclick="switchModo('stock')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+        Por Artículo / Lote (Stock)
+      </button>
+      <button class="tab-btn" id="tabIR" onclick="switchModo('ir')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+        Por Recepción (IR)
+      </button>
+    </div>
+
     <!-- BARRA DE BÚSQUEDA -->
     <section class="search-bar">
       <div class="search-input-wrap">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input id="searchInput" type="text" placeholder="Buscar por SKU, lote o descripción…" />
+        <input id="searchInput" type="text" placeholder="Buscar por SKU, lote o descripción en stock…" onkeydown="if(event.key==='Enter') buscar()" />
       </div>
       <div class="search-filters">
-        <select id="filtroUbicacion" class="filter-select">
+        <select id="filtroUbicacion" class="filter-select" onchange="buscar()">
           <option value="">Todas las ubicaciones</option>
         </select>
         <button class="btn btn-primary" onclick="buscar()">Buscar</button>
@@ -62,13 +74,14 @@
       <section class="results-card">
         <div class="card-head">
           <div class="card-title">
-            Resultados
+            <span id="titleResultados">Resultados de Existencias</span>
             <span class="count-badge" id="countResult">0</span>
           </div>
           <button class="btn btn-ghost" onclick="limpiarBusqueda()" title="Limpiar búsqueda">Limpiar</button>
         </div>
 
-        <div class="table-wrap">
+        <!-- VISTA: TABLA STOCK -->
+        <div class="table-wrap" id="viewStock">
           <table>
             <thead>
               <tr>
@@ -84,6 +97,27 @@
             </thead>
             <tbody id="tbodyResult">
               <tr><td colspan="8"><div class="empty-state">Cargando…</div></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- VISTA: TABLA RECEPCIONES (IR) -->
+        <div class="table-wrap" id="viewIR" style="display: none;">
+          <table>
+            <thead>
+              <tr>
+                <th>Folio IR</th>
+                <th>Fecha</th>
+                <th>Sucursal</th>
+                <th>Embarque</th>
+                <th>Pedimento</th>
+                <th class="num">Lotes</th>
+                <th class="num">Placas Estimadas</th>
+                <th class="num">Acción</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyIR">
+              <tr><td colspan="8"><div class="empty-state">Cargando recepciones…</div></td></tr>
             </tbody>
           </table>
         </div>
@@ -128,6 +162,69 @@
     </div>
 
   </main>
+
+  <!-- MODAL: DETALLE DE IR PARA IMPRESIÓN MASIVA -->
+  <div class="modal-backdrop" id="modalIR" style="display: none;">
+    <div class="modal-card modal-ir-card">
+      <div class="modal-head">
+        <div>
+          <div class="modal-title-row">
+            <span class="ir-badge" id="modalIRTranid">IR---</span>
+            <span class="modal-date" id="modalIRFecha">--/--/----</span>
+            <span class="modal-location" id="modalIRUbicacion">---</span>
+          </div>
+          <div class="modal-meta-row">
+            <span class="tag-badge embarque-badge" id="modalIREmbarque">Embarque: ---</span>
+            <span class="tag-badge pedimento-badge" id="modalIRPedimento">Pedimento: ---</span>
+          </div>
+        </div>
+        <button class="btn btn-ghost btn-icon" onclick="cerrarDetalleIR()" title="Cerrar modal">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="modal-ir-toolbar">
+          <label class="select-all-label">
+            <input type="checkbox" id="chkSelectAllIR" onchange="toggleSelectAllIRLines(this.checked)" checked />
+            <span>Seleccionar todas las líneas (<span id="modalIRSelectedCount">0</span>/<span id="modalIRTotalCount">0</span>)</span>
+          </label>
+          <div class="modal-ir-summary">
+            Total etiquetas a generar: <strong id="modalIRTotalPlacas">0</strong>
+          </div>
+        </div>
+
+        <div class="table-wrap modal-ir-table-wrap">
+          <table class="modal-ir-table">
+            <thead>
+              <tr>
+                <th style="width: 40px;"></th>
+                <th>SKU</th>
+                <th>Descripción</th>
+                <th>Lote</th>
+                <th class="num">M² Recibidos</th>
+                <th class="num">M²/pieza</th>
+                <th class="num" style="width: 140px;">Etiquetas</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyIRLineas">
+              <tr><td colspan="7"><div class="empty-state">Cargando líneas…</div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="cerrarDetalleIR()">Cancelar</button>
+        <button class="btn btn-secondary" onclick="cargarIRAlCarrito()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+          ➕ Cargar al Carrito
+        </button>
+        <button class="btn btn-primary" id="btnImprimirIR" onclick="imprimirIRDirecto()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+          🖨️ Imprimir Etiquetas de esta IR
+        </button>
+      </div>
+    </div>
+  </div>
 
   <footer class="app-footer" id="appFooter"></footer>
 </div>

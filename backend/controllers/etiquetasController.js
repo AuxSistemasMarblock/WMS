@@ -10,6 +10,7 @@ const supabase = require('../config/supabase');
 const config = require('../config/environments');
 const { getExistencias } = require('../services/existenciasService');
 const { obtenerPedimento } = require('../services/irService');
+const { getIRsList, getIRDetail } = require('../services/irSearchService');
 const { buildZpl, maxLabels } = require('../services/zplService');
 
 const RESTRICTED_LOCATION_PREFIXES = config.netsuite.RESTRICTED_LOCATION_PREFIXES;
@@ -293,9 +294,102 @@ const postZplHandler = async (req, res) => {
   }
 };
 
+/**
+ * GET /api/etiquetas/irs?q=&ubicacion=
+ * Lista o busca recepciones de artículo (IRs) con resumen de lotes y placas calculadas.
+ */
+const getIRsHandler = async (req, res) => {
+  try {
+    const { q, ubicacion } = req.query;
+    let userLoc = null;
+    if (!isAdmin(req)) {
+      userLoc = await getUserLocationName(req);
+    }
+    const irs = await getIRsList({
+      query: q,
+      ubicacion: ubicacion || userLoc,
+      limit: 100
+    });
+    res.json({ irs, total: irs.length });
+  } catch (error) {
+    console.error('Get IRs error:', error);
+    res.status(500).json({ error: 'Error al obtener recepciones (IRs)', details: error.message });
+  }
+};
+
+/**
+ * GET /api/etiquetas/ir/:idOrTranid
+ * Obtiene el detalle completo de una IR con todas sus líneas y cálculos listos.
+ */
+const getIRDetailHandler = async (req, res) => {
+  try {
+    const { idOrTranid } = req.params;
+    if (!idOrTranid) {
+      return res.status(400).json({ error: 'idOrTranid es requerido' });
+    }
+    const ir = await getIRDetail(idOrTranid);
+    if (!ir) {
+      return res.status(404).json({ error: 'No se encontró la recepción indicada' });
+    }
+    res.json({ ir });
+  } catch (error) {
+    console.error('Get IR detail error:', error);
+    res.status(500).json({ error: 'Error al obtener detalle de la recepción', details: error.message });
+  }
+};
+
+/**
+ * POST /api/etiquetas/zpl-bulk
+ * body: { items: Array<{ sku, lote, ubicacion, descripcion, totalM2, pedimento, embarque, cantidad }> }
+ * Genera el ZPL continuo para múltiples lotes/placas seleccionados.
+ */
+const postZplBulkHandler = async (req, res) => {
+  try {
+    const { items } = req.body;
+    if (!Array.isArray(items) || !items.length) {
+      return res.status(400).json({ error: 'items debe ser un arreglo no vacío' });
+    }
+
+    let fullZpl = '';
+    let totalEtiquetas = 0;
+
+    for (const item of items) {
+      const { sku, lote, ubicacion, descripcion, totalM2, pedimento, embarque, cantidad } = item;
+      const n = parseInt(cantidad, 10);
+      if (!sku || !lote || isNaN(n) || n < 1) continue;
+
+      const zpl = buildZpl({
+        sku,
+        lote,
+        ubicacion: ubicacion || '',
+        descripcion: descripcion || '',
+        totalM2: totalM2 || 1,
+        pedimento: pedimento || null,
+        embarque: embarque || null,
+        cantidad: n
+      });
+
+      fullZpl += zpl;
+      totalEtiquetas += n;
+    }
+
+    res.json({
+      zpl: fullZpl,
+      totalEtiquetas,
+      totalLotes: items.length
+    });
+  } catch (error) {
+    console.error('Post zpl bulk error:', error);
+    res.status(500).json({ error: 'Error al generar ZPL masivo', details: error.message });
+  }
+};
+
 module.exports = {
   getExistencias: getExistenciasHandler,
   getLotes: getLotesHandler,
   postPedimento: postPedimentoHandler,
-  postZpl: postZplHandler
+  postZpl: postZplHandler,
+  getIRs: getIRsHandler,
+  getIRDetail: getIRDetailHandler,
+  postZplBulk: postZplBulkHandler
 };

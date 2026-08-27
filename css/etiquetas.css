@@ -521,4 +521,237 @@
   padding: 4px 0;
 }
 
+/* ─────────── PESTAÑAS DE MODO ─────────── */
+.tabs-bar {
+  display: flex;
+  gap: 8px;
+  background: var(--gray-1, #f9fafb);
+  border: 1px solid var(--gray-3, #e5e7eb);
+  border-radius: 10px;
+  padding: 6px;
+  width: fit-content;
+}
+
+.tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 18px;
+  border-radius: 7px;
+  border: none;
+  background: transparent;
+  color: var(--gray-6, #4b5563);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tab-btn:hover {
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--text, #111);
+}
+
+.tab-btn.active {
+  background: #fff;
+  color: var(--accent2, #004a99);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+/* ─────────── BADGES Y TAGS DE IR ─────────── */
+.ir-badge {
+  display: inline-flex;
+  align-items: center;
+  background: #e0f2fe;
+  color: #0369a1;
+  font-family: 'IBM Plex Mono', monospace;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 4px 10px;
+  border-radius: 6px;
+}
+
+.tag-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: 5px;
+  font-weight: 500;
+}
+
+.embarque-badge {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.pedimento-badge {
+  background: #f3e8ff;
+  color: #6b21a8;
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+.btn-ir-action {
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--gray-1, #f3f4f6);
+  border: 1px solid var(--gray-3, #e5e7eb);
+  border-radius: 6px;
+  color: var(--accent2, #004a99);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-ir-action:hover {
+  background: var(--accent2, #004a99);
+  color: #fff;
+  border-color: var(--accent2, #004a99);
+}
+
+/* ─────────── MODAL DETALLE DE IR ─────────── */
+.modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(2px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.modal-card {
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  width: 100%;
+  max-width: 1100px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: modalFadeIn 0.2s ease-out;
+}
+
+@keyframes modalFadeIn {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--gray-3, #e5e7eb);
+  background: #fafafa;
+}
+
+.modal-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.modal-date,
+.modal-location {
+  font-size: 14px;
+  color: var(--gray-6, #6b7280);
+  font-weight: 500;
+}
+
+.modal-meta-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.modal-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 24px;
+  overflow: hidden;
+}
+
+.modal-ir-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0 14px 0;
+}
+
+.select-all-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--text, #1f2937);
+}
+
+.select-all-label input[type="checkbox"] {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--accent2, #004a99);
+  cursor: pointer;
+}
+
+.modal-ir-summary {
+  font-size: 14px;
+  color: var(--gray-6, #4b5563);
+}
+
+.modal-ir-summary strong {
+  font-size: 16px;
+  color: var(--accent2, #004a99);
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+.modal-ir-table-wrap {
+  flex: 1;
+  min-height: 250px;
+  max-height: 52vh;
+  overflow-y: auto;
+  border: 1px solid var(--gray-3, #e5e7eb);
+  border-radius: 8px;
+}
+
+.modal-ir-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.modal-ir-table th {
+  position: sticky;
+  top: 0;
+  background: var(--gray-1, #f9fafb);
+  z-index: 2;
+}
+
+.modal-ir-table input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent2, #004a99);
+  cursor: pointer;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--gray-3, #e5e7eb);
+  background: #fafafa;
+}
+
 /* Toast reutiliza estilos existentes */
