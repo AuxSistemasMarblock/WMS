@@ -200,13 +200,15 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 14px 18px;
-  border-bottom: 1px solid var(--gray-2, #f3f4f6);
+  gap: 10px;
+  padding: 6px 14px;
+  min-height: 38px;
+  background: #fafafa;
+  border-bottom: 1px solid var(--gray-3, #e5e7eb);
 }
 
 .card-title {
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--text, #222);
   display: flex;
@@ -218,19 +220,20 @@
   background: var(--accent, #ffb800);
   color: #222;
   border-radius: 999px;
-  padding: 2px 9px;
-  font-size: 12px;
+  padding: 1px 7px;
+  font-size: 11px;
   font-weight: 700;
 }
 
 .card-head .btn-ghost {
-  padding: 6px 12px;
-  font-size: 13px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .btn-icon {
-  min-width: 34px;
-  padding: 6px !important;
+  min-width: 30px;
+  padding: 4px !important;
 }
 
 /* ─────────── TABLA DE RESULTADOS ─────────── */
@@ -238,38 +241,55 @@
   overflow-x: auto;
 }
 
-#tbodyResult td {
-  padding: 12px 14px;
+.results-card .table-wrap thead th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #f8fafc;
+  box-shadow: inset 0 -1px 0 #e2e8f0;
+  padding: 8px 12px;
+  font-size: 11px;
+}
+
+#tbodyResult td,
+#tbodyIR td {
+  padding: 7px 12px;
   font-size: 13px;
   border-bottom: 1px solid var(--gray-2, #f3f4f6);
   vertical-align: middle;
 }
 
-#tbodyResult td.num {
+#tbodyResult td.num,
+#tbodyIR td.num {
   text-align: right;
   font-family: 'IBM Plex Mono', monospace;
   white-space: nowrap;
 }
 
-#tbodyResult tr {
+#tbodyResult tr,
+#tbodyIR tr {
   transition: background 0.12s;
 }
 
-#tbodyResult tr:hover {
+#tbodyResult tr:hover,
+#tbodyIR tr:hover {
   background: var(--row-hover, #fffbf0);
 }
 
-#tbodyResult .sku-cell {
+#tbodyResult .sku-cell,
+#tbodyIR .sku-cell {
   font-weight: 600;
   white-space: nowrap;
 }
 
-#tbodyResult .lote-cell {
+#tbodyResult .lote-cell,
+#tbodyIR .lote-cell {
   font-family: 'IBM Plex Mono', monospace;
   white-space: nowrap;
 }
 
-#tbodyResult .descripcion-cell {
+#tbodyResult .descripcion-cell,
+#tbodyIR .descripcion-cell {
   color: var(--gray-7, #374151);
   max-width: 280px;
 }

@@ -44,7 +44,7 @@ const carrito = [];       // { internalid, sku, descripcion, lote, ubicacion, ub
 function pageSize() {
   const wrap = document.querySelector('.results-card .table-wrap');
   const h = wrap ? wrap.clientHeight : 480;
-  return Math.max(8, Math.floor(h / 46));
+  return Math.max(8, Math.floor(h / 36));
 }
 
 // =================== HELPERS ===================
