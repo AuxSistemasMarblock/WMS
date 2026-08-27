@@ -30,8 +30,15 @@ let chartTopArticulos = null;
 
 // =================== CONFIG ===================
 // Misma convención que js/auth.js: el URL se lee de window.APP_CONFIG.BACKEND_URL
-// (config.js lo setea en el build de Docker). Fallback a localhost solo para dev.
-const BACKEND_URL = window.APP_CONFIG?.BACKEND_URL || 'http://localhost:3001';
+// (config.js lo setea en el build de Docker). Si trae localhost (default) o falta,
+// se deriva del host desde el que se sirvió la página (mismo host, puerto 3001).
+function resolveBackendURL() {
+  const cfg = window.APP_CONFIG?.BACKEND_URL;
+  if (cfg && !cfg.includes('localhost')) return cfg;
+  return `http://${window.location.hostname}:3001`;
+}
+
+const BACKEND_URL = resolveBackendURL();
 if (!window.APP_CONFIG?.BACKEND_URL) {
   console.error('APP_CONFIG.BACKEND_URL no definido. Verifica js/config.js.');
 }
