@@ -7,7 +7,17 @@
  */
 
 // =================== CONFIG ===================
-const BACKEND_URL = window.APP_CONFIG?.BACKEND_URL || 'http://localhost:3001';
+/**
+ * Resuelve la URL del backend: usa la config si es remota; si no, deriva
+ * del host desde el que se sirvió la página (mismo host, puerto 3001).
+ */
+function resolveBackendURL() {
+  const cfg = window.APP_CONFIG?.BACKEND_URL;
+  if (cfg && !cfg.includes('localhost')) return cfg;
+  return `http://${window.location.hostname}:3001`;
+}
+
+const BACKEND_URL = resolveBackendURL();
 if (!window.APP_CONFIG?.BACKEND_URL) {
   console.error('APP_CONFIG.BACKEND_URL no definido. Verifica js/config.js.');
 }
@@ -314,6 +324,8 @@ function renderCarrito() {
     list.innerHTML = '<div class="cart-empty">' +
       '<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4"/><path d="M9 12h6M9 16h6"/></svg>' +
       'Agrega artículos desde los resultados</div>';
+    $('cartTotal').textContent = '0';
+    $('countCart').textContent = '0';
     return;
   }
 
@@ -387,6 +399,7 @@ function actualizarBotones() {
     carrito.every(i => i.estado === 'listo' && (!i.multiple || i.selectedPedimento));
   btn.disabled = !tieneItems || carrito.length === 0;
   $('cartTotal').textContent = carrito.reduce((acc, i) => acc + i.cantidad, 0);
+  $('countCart').textContent = carrito.length;
 }
 
 // =================== IMPRESIÓN ===================
@@ -449,15 +462,22 @@ async function imprimirTodo() {
   await enviarZpl(zplFinal);
 }
 
+function esFirefox() { return /Firefox/i.test(navigator.userAgent || ''); }
+function esChromium() { return !esFirefox() && /Edg\/|Chrome\/|Chromium/i.test(navigator.userAgent || ''); }
+
 /**
- * Devuelve un mensaje claro según el navegador cuando WebUSB no está disponible.
+ * Devuelve un mensaje claro según el navegador/contexto cuando WebUSB no está
+ * disponible (no hay contexto seguro o el navegador no lo soporta).
  */
 function mensajeNoWebUSB() {
-  const ua = navigator.userAgent.toUpperCase();
-  if (ua.includes('FIREFOX')) {
+  const host = window.location.host; // ej. 192.168.100.185:8080
+  if (esFirefox()) {
     return 'Firefox no soporta WebUSB. Usa Chrome o Edge e imprime desde ahí. Se descargó el .zpl como respaldo.';
   }
-  return 'WebUSB requiere contexto seguro. Sobre http://IP activa chrome://flags/#unsafely-treat-insecure-origin-as-secure. Se descargó el .zpl como respaldo.';
+  if (!window.isSecureContext && esChromium()) {
+    return 'WebUSB requiere HTTPS/localhost. En Edge/Chrome abre chrome://flags/#unsafely-treat-insecure-origin-as-secure, habilítalo, agrega "http://' + host + '" y relanza el navegador. Se descargó el .zpl como respaldo.';
+  }
+  return 'WebUSB no está disponible en este navegador/contexto. Se descargó el .zpl como respaldo.';
 }
 
 /**

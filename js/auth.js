@@ -3,7 +3,17 @@
  * Maneja login, logout y gestión de sesión con JWT
  */
 
-const BACKEND_URL = window.APP_CONFIG?.BACKEND_URL;
+/**
+ * Resuelve la URL del backend:
+ * usa la config si es una URL remota válida; si no, deriva del host de la página.
+ */
+function resolveBackendURL() {
+  const cfg = window.APP_CONFIG?.BACKEND_URL;
+  if (cfg && !cfg.includes('localhost')) return cfg;
+  return `http://${window.location.hostname}:3001`;
+}
+
+const BACKEND_URL = resolveBackendURL();
 if (!BACKEND_URL) {
   console.error('APP_CONFIG.BACKEND_URL no definido. Verifica js/config.js.');
 }
