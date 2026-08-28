@@ -1345,6 +1345,13 @@ td {
 .signature-actions {
     display: flex;
     gap: 10px;
+    justify-content: flex-end;
+}
+
+.signature-actions .btn {
+    flex: 1;
+    min-width: 80px;
+    justify-content: center;
 }
 
 /* ─────────────────────────────────────────────────────────
@@ -1451,6 +1458,15 @@ td {
     .signature-card {
         max-width: 100%;
         padding: 16px;
+    }
+
+    .signature-actions {
+        gap: 6px;
+    }
+
+    .signature-actions .btn {
+        padding: 8px 6px;
+        font-size: 0.75rem;
     }
 
     .confirm-card {

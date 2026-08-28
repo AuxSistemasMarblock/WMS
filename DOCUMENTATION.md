@@ -846,8 +846,8 @@ Todas las variables compartidas son globales (declaradas con `var` en cada scrip
 
 #### `js/signatures.js`
 - `lockBodyScroll()` / `unlockBodyScroll()` — setean `document.body.style.overflow` para evitar que el body scrollee detrás del modal en mobile.
-- `syncCanvasSize(canvas, cssW, cssH)` — sincroniza el tamaño interno del canvas con su tamaño CSS (mapeo 1:1, sin `ctx.scale`). Es la pieza clave para que la firma aparezca donde se traza.
-- `initSignaturePad()` — instancia `new SignaturePad(canvas, ...)` y registra un `ResizeObserver` sobre el canvas que dispara `syncCanvasSize()` ante cualquier cambio de tamaño (apertura del modal, rotación, resize de ventana).
+- `syncCanvasSize(canvas, cssW, cssH)` — sincroniza el tamaño interno del canvas con su tamaño CSS (mapeo 1:1, sin `ctx.scale`). Si el canvas ya contiene trazos, los preserva automáticamente al redimensionar.
+- `initSignaturePad()` — instancia como singleton `new SignaturePad(canvas, ...)` y registra un `ResizeObserver` sobre el canvas que dispara `syncCanvasSize()` ante cambios de tamaño.
 - `getRequiredSignatures()` — devuelve objeto con firmas requeridas según `records.length`:
   - siempre: `auxAlmacen` y `cliente`
   - si `> 3`: `jefeAlmacen`
@@ -857,9 +857,10 @@ Todas las variables compartidas son globales (declaradas con `var` en cada scrip
   2. `!selectedIF` → toast "Selecciona una IF antes…" + return.
   3. Llama `clearScanBuffer()` (defensivo) y muestra `#confirmExitModal`.
 - `askExitConfirmation(count, selectedIF)` — modal con "Se registrarán N placas para IF14580 (SO14548). ¿Deseas continuar?".
-- `captureNextSignature()` — saca la siguiente firma de la cola y muestra `#signatureModal`. Llama `lockBodyScroll()` + `syncCanvasSize()` (sincronización inmediata antes del primer toque del usuario).
+- `captureNextSignature()` — saca la siguiente firma de la cola y actualiza el `#signatureModal`. Si no estaba abierto, lo activa con `lockBodyScroll()` + `syncCanvasSize()`. Al cambiar de firma en cola mantiene el modal abierto evitando parpadeos y disparos erróneos de ResizeObserver.
 - `clearSignature()` — limpia el canvas.
-- `submitSignature()` — toma `toDataURL('image/png')` y guarda en `collectedSignatures`. Llama `unlockBodyScroll()` al cerrar.
+- `cancelSignatureCapture()` — cancela el proceso, vacía la cola de firmas, cierra el modal y desbloquea el scroll.
+- `submitSignature()` — toma `toDataURL('image/png')` y guarda en `collectedSignatures`. Pasa directamente a la siguiente firma o envía a NetSuite al completar.
 - `submitWithSignatures()` — llama a `submitToNetSuite(collectedSignatures)`. Si OK, limpia tabla y llama `clearIF()`.
 
 > **Decisión de diseño del canvas**: el canvas usa mapeo 1:1 entre tamaño CSS y tamaño interno (sin `ctx.scale` ni HiDPI supersampling). Esto elimina el riesgo de offset por desincronización entre `ctx.scale` y `canvas.width`. En pantallas Retina/HiDPI la firma se ve ligeramente menos nítida; si se necesita sharpness, ver §10.2 pendiente #23.
