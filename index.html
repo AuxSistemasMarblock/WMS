@@ -8,9 +8,8 @@
   <!-- Favicon -->
   <link rel="icon" href="images/logo_ico.png" type="image/png" />
 
-  <!-- Librería de firma electrónica -->
   <!-- Librería de firma electrónica (local) -->
-  <script src="lib/signature_pad.min.js"></script>
+  <script src="lib/signature_pad.min.js?v=7"></script>
 
   <!-- Librería de lectura QR (cámara, fallback) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.4/html5-qrcode.min.js" defer></script>
@@ -257,6 +256,11 @@
     <h3 class="signature-title" id="signatureTitle">Obtener firma</h3>
     <canvas id="signatureCanvas" class="signature-canvas" width="450" height="200"></canvas>
     <div class="signature-actions">
+      <button class="btn btn-ghost" id="btnCancelSignature" onclick="cancelSignatureCapture()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        Cancelar
+      </button>
       <button class="btn btn-ghost" onclick="clearSignature()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6h16zM10 11v6M14 11v6"/></svg>
@@ -278,19 +282,19 @@
 </div><!-- cierre de mainApp -->
 
 <!-- Configuración de la aplicación (inyectada en build) -->
-<script src="js/config.js?v=6"></script>
+<script src="js/config.js?v=7"></script>
 
 <!-- Scripts modulares (cache-busting) -->
-  <script src="js/utils.js?v=6"></script>
-  <script src="js/nav.js?v=6"></script>
-  <script src="js/footer.js?v=6"></script>
-  <script src="js/auth.js?v=6"></script>
-  <script src="js/netsuite-client.js?v=6"></script>
-  <script src="js/signatures.js?v=6"></script>
-  <script src="js/qr-parser.js?v=6"></script>
-  <script src="js/webhook.js?v=6"></script>
-  <script src="js/table.js?v=6"></script>
-  <script src="js/scanner.js?v=6"></script>
-  <script src="js/app.js?v=6"></script>
+  <script src="js/utils.js?v=7"></script>
+  <script src="js/nav.js?v=7"></script>
+  <script src="js/footer.js?v=7"></script>
+  <script src="js/auth.js?v=7"></script>
+  <script src="js/netsuite-client.js?v=7"></script>
+  <script src="js/signatures.js?v=7"></script>
+  <script src="js/qr-parser.js?v=7"></script>
+  <script src="js/webhook.js?v=7"></script>
+  <script src="js/table.js?v=7"></script>
+  <script src="js/scanner.js?v=7"></script>
+  <script src="js/app.js?v=7"></script>
 </body>
 </html>
