@@ -193,29 +193,128 @@
 
 
 .kpi-card {
+  position: relative;
   background: #fff;
   border: 1px solid var(--gray-3, #e5e7eb);
   border-radius: 8px;
-  padding: 16px;
+  padding: 14px 16px;
   box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+  cursor: default;
+}
+
+.kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  border-color: #cbd5e1;
 }
 
 .kpi-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--gray-6, #6b7280);
-  margin-bottom: 6px;
+  margin-bottom: 4px;
+}
+
+.info-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--gray-2, #e5e7eb);
+  color: var(--gray-6, #6b7280);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: help;
+  transition: background 0.15s, color 0.15s;
+  user-select: none;
+}
+
+.kpi-card:hover .info-icon,
+.info-icon:hover {
+  background: #004a99;
+  color: #fff;
 }
 
 .kpi-value {
-  font-size: 28px;
+  font-size: 26px;
   font-weight: 700;
   color: var(--gray-8, #1f2937);
+  line-height: 1.2;
+}
+
+.kpi-sub {
+  font-size: 11px;
+  color: var(--gray-5, #9ca3af);
+  margin-top: 4px;
+  font-weight: 500;
 }
 
 .kpi-value.text-error { color: #dc2626; }
 .kpi-value.text-success { color: #059669; }
+
+/* ─────────────────────────────────────────────
+   TOOLTIPS INSTANTÁNEOS (CSS puro)
+   ───────────────────────────────────────────── */
+[data-tooltip] {
+  position: relative;
+}
+
+[data-tooltip]::before {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  background: #1e293b;
+  color: #f8fafc;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+  white-space: normal;
+  width: max-content;
+  max-width: 250px;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.2);
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
+  z-index: 1000;
+  text-align: center;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+[data-tooltip]::after {
+  content: '';
+  position: absolute;
+  bottom: calc(100% + 2px);
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  border-width: 6px 6px 0 6px;
+  border-style: solid;
+  border-color: #1e293b transparent transparent transparent;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
+  z-index: 1000;
+}
+
+[data-tooltip]:hover::before,
+[data-tooltip]:hover::after {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
 
 .top-grid {
   display: grid;
