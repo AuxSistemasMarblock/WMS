@@ -62,7 +62,7 @@ async function handleLogin(event) {
     showToast(`¡Bienvenido ${currentUser.nombre}!`, 'success');
     // Redirigir por rol (clave) con fallback a cargo (legacy)
     const rol = currentUser.rol || currentUser.cargo;
-    if (rol === 'admin') {
+    if (rol === 'admin' || rol === 'gerente') {
       window.location.href = 'dashboard.html';
       return;
     }
