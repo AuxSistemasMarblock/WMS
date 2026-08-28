@@ -17,18 +17,28 @@ const verifyToken = (req, res, next) => {
 };
 
 /**
- * Requiere que el usuario autenticado tenga rol admin.
+ * Requiere que el usuario autenticado tenga uno de los roles indicados.
  * Debe usarse DESPUÉS de verifyToken (necesita req.user).
+ * Lee req.user.rol (nueva clave) con fallback a req.user.cargo (tokens viejos).
+ *
+ * @param {...string} roles - Claves de rol permitidas (ej. 'admin', 'jefe_almacen')
  */
-const requireAdmin = (req, res, next) => {
+const requireRole = (...roles) => (req, res, next) => {
   if (!req.user) {
     return res.status(401).json({ error: 'No token provided' });
   }
-  if (req.user.cargo !== 'admin') {
+  const rol = req.user.rol ?? req.user.cargo;
+  if (!roles.includes(rol)) {
     return res.status(403).json({ error: 'Forbidden' });
   }
   next();
 };
+
+/**
+ * Requiere que el usuario autenticado tenga rol admin.
+ * Debe usarse DESPUÉS de verifyToken (necesita req.user).
+ */
+const requireAdmin = requireRole('admin');
 
 /**
  * Solo disponible fuera de producción (debug/diagnóstico).
@@ -41,4 +51,4 @@ const devOnly = (req, res, next) => {
   next();
 };
 
-module.exports = { verifyToken, requireAdmin, devOnly };
+module.exports = { verifyToken, requireAdmin, requireRole, devOnly };

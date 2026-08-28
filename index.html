@@ -8,9 +8,8 @@
   <!-- Favicon -->
   <link rel="icon" href="images/logo_ico.png" type="image/png" />
 
-  <!-- Librería de firma electrónica -->
   <!-- Librería de firma electrónica (local) -->
-  <script src="lib/signature_pad.min.js"></script>
+  <script src="lib/signature_pad.min.js?v=7"></script>
 
   <!-- Librería de lectura QR (cámara, fallback) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.4/html5-qrcode.min.js" defer></script>
@@ -24,6 +23,7 @@
   <!-- Estilos -->
   <link rel="stylesheet" href="css/variables.css" />
   <link rel="stylesheet" href="css/styles.css" />
+  <link rel="stylesheet" href="css/scanner.css" />
 </head>
 <body>
 
@@ -35,7 +35,7 @@
   <div class="login-card">
     <div class="login-header">
       <img src="images/logo.png" alt="Logo Empresa" style="height:40px; width:auto; border-radius:8px;"/>
-      <h1>WMS Scanner</h1>
+      <h1>WMS</h1>
       <p>Sistema de Gestión de Almacén</p>
     </div>
 
@@ -80,6 +80,7 @@
     <img src="images/logo.png" alt="Logo Empresa" style="height:30px; width:auto; border-radius:6px; padding:2px;"/>
     WMS · SCANNER
   </div>
+  <nav class="app-nav" id="appNav"></nav>
   <div class="header-right">
     <div class="user-info">
       <div class="user-details">
@@ -100,133 +101,137 @@
 </header>
 
 <main>
+  <div class="scan-layout">
 
-  <!-- FOLIO BAR - Dinámico desde NetSuite -->
-  <div class="folio-bar">
-    <label>Instrucción de Fabricación (IF)</label>
-    <div class="folio-input-wrap">
-      <select id="ifSelect" onchange="handleIFSelect(event)" style="width: 100%;">
-        <option value="">-- Selecciona una IF --</option>
-      </select>
-      <button class="btn btn-ghost" onclick="reloadIFs()" title="Recargar IFs desde NetSuite">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
-        </svg>
-      </button>
-    </div>
-    <div class="folio-badge" id="ifBadge" style="display: none;">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-      <span id="ifBadgeText">–</span>
-      <button onclick="clearIF()" title="Limpiar">✕</button>
-    </div>
-  </div>
+    <!-- COLUMNA IZQUIERDA: folio + lector -->
+    <aside class="scan-col">
 
-  <!-- ESCANEO DE PLACAS -->
-  <div style="text-align: center; padding: 10px; margin: 10px 0; font-weight: bold; color: #333;">
-    📦 Escanea las placas para agregarlas
-  </div>
-
-  <!-- SCANNER -->
-  <div class="scanner-card">
-    <div class="scanner-card-header">
-      <h2 id="scanCardTitle">Lector de placas</h2>
-      <div class="source-toggle" role="tablist" aria-label="Fuente de escaneo">
-        <button type="button" id="sourcePistola" class="source-toggle-btn active" onclick="setScanSource('pistola')" role="tab" aria-selected="true" title="Pistola lectora de QR (recomendado)">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h12l4 4v6h-4"/><rect x="4" y="7" width="2" height="14"/><circle cx="9" cy="15" r="1.5"/></svg>
-          Pistola
-        </button>
-        <button type="button" id="sourceCamara" class="source-toggle-btn" onclick="setScanSource('camara')" role="tab" aria-selected="false" title="Cámara del dispositivo (fallback)">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
-          Cámara
-        </button>
-      </div>
-    </div>
-
-    <div class="scan-area" id="scanArea">
-      <!-- Panel del modo PISTOLA (principal) -->
-      <div class="gun-panel" id="gunPanel">
-        <div class="gun-led-row">
-          <div class="gun-led" id="gunLed"></div>
-          <span class="gun-led-label" id="gunLedLabel">Pistola activa</span>
+      <!-- FOLIO BAR - Dinámico desde NetSuite -->
+      <div class="folio-bar">
+        <label>Instrucción de Fabricación (IF)</label>
+        <div class="folio-input-wrap">
+          <select id="ifSelect" onchange="handleIFSelect(event)" style="width: 100%;">
+            <option value="">-- Selecciona una IF --</option>
+          </select>
+          <button class="btn btn-ghost" onclick="reloadIFs()" title="Recargar IFs desde NetSuite">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+            </svg>
+          </button>
         </div>
-        <div class="last-scan" id="lastScanBox">
-          <span class="last-scan-label">Última placa leída</span>
-          <span class="last-scan-text idle" id="lastScanText">Acercá la pistola y dispará el QR de la placa</span>
+        <div class="folio-badge" id="ifBadge" style="display: none;">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          <span id="ifBadgeText">–</span>
+          <button onclick="clearIF()" title="Limpiar">✕</button>
         </div>
       </div>
 
-      <!-- Panel del modo CÁMARA (fallback) -->
-      <div class="camera-panel" id="cameraPanel" style="display:none;">
-        <div id="reader"></div>
-        <div class="scan-overlay" id="scanOverlay" style="display:none;">
-          <div class="mode-label" id="modeLabel">MODO: cámara</div>
-          <div class="scan-frame"><span></span><div class="scan-line"></div></div>
-          <p class="scan-hint" id="scanHint">Apunta al QR de la placa</p>
+      <!-- SCANNER -->
+      <div class="scanner-card">
+        <div class="scanner-card-header">
+          <h2 id="scanCardTitle">Lector de placas</h2>
+          <div class="source-toggle" role="tablist" aria-label="Fuente de escaneo">
+            <button type="button" id="sourcePistola" class="source-toggle-btn active" onclick="setScanSource('pistola')" role="tab" aria-selected="true" title="Pistola lectora de QR (recomendado)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h12l4 4v6h-4"/><rect x="4" y="7" width="2" height="14"/><circle cx="9" cy="15" r="1.5"/></svg>
+              Pistola
+            </button>
+            <button type="button" id="sourceCamara" class="source-toggle-btn" onclick="setScanSource('camara')" role="tab" aria-selected="false" title="Cámara del dispositivo (fallback)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+              Cámara
+            </button>
+          </div>
         </div>
-        <div class="scan-idle" id="scanIdle">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
-            <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
-            <rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>
-          </svg>
-          <span>Apuntá al QR de la placa</span>
-        </div>
-      </div>
-    </div>
 
-    <!-- Aviso cuando se usa el modo Cámara -->
-    <div class="camera-warning" id="cameraWarning" style="display:none;">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-      <span>Modo <strong>Cámara</strong>: la pistola NO funcionará acá. Volvé a <strong>Pistola</strong> para usar el lector físico.</span>
-    </div>
-
-    <div class="status-line">
-      <div class="status-dot" id="statusDot"></div>
-      <span id="statusText">Listo para escanear</span>
-    </div>
-  </div>
-
-
-
-  <!-- TABLA -->
-  <div class="table-card">
-    <div class="table-header">
-      <div class="table-title">
-        Registros capturados
-        <span class="count-badge" id="rowCount">0</span>
-      </div>
-      <div class="table-actions">
-        <button class="btn btn-primary" id="btnCompletar" onclick="startSignatureCapture()">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="20 6 9 17 4 12"/></svg>
-          Completar registro
-        </button>
-        <button class="btn btn-ghost" onclick="clearTable()">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-          Limpiar
-        </button>
-      </div>
-    </div>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>#</th><th>SKU</th><th>Lote</th><th>Ubicación</th><th>Hora</th><th></th>
-          </tr>
-        </thead>
-        <tbody id="tableBody">
-          <tr id="emptyRow"><td colspan="6">
-            <div class="empty-state">
-              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                <polyline points="14 2 14 8 20 8"/>
-                <line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/>
-              </svg>
-              Sin registros. Escanea un QR de placa para comenzar.
+        <div class="scan-area" id="scanArea">
+          <!-- Panel del modo PISTOLA (principal) -->
+          <div class="gun-panel" id="gunPanel">
+            <div class="gun-led-row">
+              <div class="gun-led" id="gunLed"></div>
+              <span class="gun-led-label" id="gunLedLabel">Pistola activa</span>
             </div>
-          </td></tr>
-        </tbody>
-      </table>
-    </div>
-    <!-- jsonPreview eliminado para producción -->
+            <div class="last-scan" id="lastScanBox">
+              <span class="last-scan-label">Última placa leída</span>
+              <span class="last-scan-text idle" id="lastScanText">Acercá la pistola y dispará el QR de la placa</span>
+            </div>
+          </div>
+
+          <!-- Panel del modo CÁMARA (fallback) -->
+          <div class="camera-panel" id="cameraPanel" style="display:none;">
+            <div id="reader"></div>
+            <div class="scan-overlay" id="scanOverlay" style="display:none;">
+              <div class="mode-label" id="modeLabel">MODO: cámara</div>
+              <div class="scan-frame"><span></span><div class="scan-line"></div></div>
+              <p class="scan-hint" id="scanHint">Apunta al QR de la placa</p>
+            </div>
+            <div class="scan-idle" id="scanIdle">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+                <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+                <rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>
+              </svg>
+              <span>Apuntá al QR de la placa</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Aviso cuando se usa el modo Cámara -->
+        <div class="camera-warning" id="cameraWarning" style="display:none;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <span>Modo <strong>Cámara</strong>: la pistola NO funcionará acá. Volvé a <strong>Pistola</strong> para usar el lector físico.</span>
+        </div>
+
+        <div class="status-line">
+          <div class="status-dot" id="statusDot"></div>
+          <span id="statusText">Listo para escanear</span>
+        </div>
+      </div>
+
+    </aside>
+
+    <!-- COLUMNA DERECHA: registros capturados -->
+    <section class="table-col">
+      <div class="scan-hint">📦 Escanea las placas para agregarlas</div>
+
+      <div class="table-card">
+        <div class="table-header">
+          <div class="table-title">
+            Registros capturados
+            <span class="count-badge" id="rowCount">0</span>
+          </div>
+          <div class="table-actions">
+            <button class="btn btn-primary" id="btnCompletar" onclick="startSignatureCapture()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="20 6 9 17 4 12"/></svg>
+              Completar registro
+            </button>
+            <button class="btn btn-ghost" onclick="clearTable()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+              Limpiar
+            </button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th><th>SKU</th><th>Lote</th><th>Ubicación</th><th>Hora</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="tableBody">
+              <tr id="emptyRow"><td colspan="6">
+                <div class="empty-state">
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/>
+                  </svg>
+                  Sin registros. Escanea un QR de placa para comenzar.
+                </div>
+              </td></tr>
+            </tbody>
+          </table>
+        </div>
+        <!-- jsonPreview eliminado para producción -->
+      </div>
+    </section>
   </div>
 
 <!-- MODAL DE CONFIRMACIÓN DE SALIDA DE PLACAS -->
@@ -251,6 +256,11 @@
     <h3 class="signature-title" id="signatureTitle">Obtener firma</h3>
     <canvas id="signatureCanvas" class="signature-canvas" width="450" height="200"></canvas>
     <div class="signature-actions">
+      <button class="btn btn-ghost" id="btnCancelSignature" onclick="cancelSignatureCapture()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        Cancelar
+      </button>
       <button class="btn btn-ghost" onclick="clearSignature()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6h16zM10 11v6M14 11v6"/></svg>
@@ -267,20 +277,24 @@
 
 </main>
 
+<footer class="app-footer" id="appFooter"></footer>
+
 </div><!-- cierre de mainApp -->
 
 <!-- Configuración de la aplicación (inyectada en build) -->
-<script src="js/config.js?v=4"></script>
+<script src="js/config.js?v=7"></script>
 
 <!-- Scripts modulares (cache-busting) -->
-  <script src="js/utils.js?v=4"></script>
-  <script src="js/auth.js?v=4"></script>
-  <script src="js/netsuite-client.js?v=4"></script>
-  <script src="js/signatures.js?v=4"></script>
-  <script src="js/qr-parser.js?v=4"></script>
-  <script src="js/webhook.js?v=4"></script>
-  <script src="js/table.js?v=4"></script>
-  <script src="js/scanner.js?v=4"></script>
-  <script src="js/app.js?v=4"></script>
+  <script src="js/utils.js?v=7"></script>
+  <script src="js/nav.js?v=7"></script>
+  <script src="js/footer.js?v=7"></script>
+  <script src="js/auth.js?v=7"></script>
+  <script src="js/netsuite-client.js?v=7"></script>
+  <script src="js/signatures.js?v=7"></script>
+  <script src="js/qr-parser.js?v=7"></script>
+  <script src="js/webhook.js?v=7"></script>
+  <script src="js/table.js?v=7"></script>
+  <script src="js/scanner.js?v=7"></script>
+  <script src="js/app.js?v=7"></script>
 </body>
 </html>

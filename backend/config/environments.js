@@ -110,7 +110,13 @@ module.exports = {
       // Saved search de IFs pendientes a sacar (la que usa el controller del scanner)
       searchId: process.env.NETSUITE_SEARCH_ID || 'customsearch3678',
       // Saved search de IFs ya enviadas (la que usa el dashboard para confronta)
-      searchIdEnviadas: process.env.NETSUITE_SEARCH_IFS_ENVIADAS_ID || 'customsearch3675'
+      searchIdEnviadas: process.env.NETSUITE_SEARCH_IFS_ENVIADAS_ID || 'customsearch3675',
+      // Saved search de existencias (artículos/lotes con cantidad a mano)
+      searchIdExistencias: process.env.NETSUITE_SEARCH_EXISTENCIAS_ID || 'customsearch_imr_items',
+      // Saved search IR -> pedimento (sub-búsqueda por ubicación + lote)
+      searchIdIRPedimento: process.env.NETSUITE_SEARCH_IR_PEDIMENTO_ID || 'customsearch3677',
+      // Saved search de Recepciones de Artículo (IRs completas ordenadas por más recientes)
+      searchIdIRList: process.env.NETSUITE_SEARCH_IR_LIST_ID || 'customsearch3678'
     },
 
     // Función helper para obtener URL del RESTlet
@@ -166,5 +172,20 @@ module.exports = {
 
   // ===== HELPERS =====
   isProduction: () => process.env.NODE_ENV === 'production',
-  isSandbox: () => process.env.NETSUITE_REALM === 'sandbox'
+  isSandbox: () => process.env.NETSUITE_REALM === 'sandbox',
+
+  // ===== ZPL (impresión de etiquetas) =====
+  // Dimensiones y settings de la impresora Zebra, ajustables por ambiente.
+  zpl: {
+    ancho: parseInt(process.env.ZPL_PW || '807', 10),     // ^PW ancho de impresión (101mm / 807 dots @ 203dpi)
+    alto: parseInt(process.env.ZPL_LL || '152', 10),      // ^LL largo de etiqueta (19mm / 152 dots @ 203dpi)
+    velocidad: parseInt(process.env.ZPL_PR || '2', 10),   // ^PR velocidad (lenta = más nitidez)
+    densidad: parseInt(process.env.ZPL_SD || '25', 10),   // ~SD máxima oscuridad
+    qrMagnification: parseInt(process.env.ZPL_QR_MAGNIFICATION || process.env.ZPL_QR_SIZE || '4', 10), // Factor de tamaño (4 = ~1.45 cm, 3 = ~1.08 cm)
+    qrEcc: process.env.ZPL_QR_ECC || 'L',                 // Corrección de error (L permite hasta 53 bytes en V3 sin crecer)
+    qrFixedLen: parseInt(process.env.ZPL_QR_FIXED_LEN || '45', 10), // largo fijo del dato QR para bloquear Versión 3 fija (29x29)
+    textoX: parseInt(process.env.ZPL_TEXTO_X || '20', 10),          // X de la columna de texto (margen izquierdo)
+    qrX: process.env.ZPL_QR_X ? parseInt(process.env.ZPL_QR_X, 10) : undefined, // Opcional: si se omite, se calcula automáticamente para márgenes idénticos
+    qrY: process.env.ZPL_QR_Y ? parseInt(process.env.ZPL_QR_Y, 10) : undefined  // Opcional: si se omite, se calcula automáticamente para márgenes idénticos
+  }
 };

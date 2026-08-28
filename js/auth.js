@@ -3,7 +3,17 @@
  * Maneja login, logout y gestión de sesión con JWT
  */
 
-const BACKEND_URL = window.APP_CONFIG?.BACKEND_URL;
+/**
+ * Resuelve la URL del backend:
+ * usa la config si es una URL remota válida; si no, deriva del host de la página.
+ */
+function resolveBackendURL() {
+  const cfg = window.APP_CONFIG?.BACKEND_URL;
+  if (cfg && !cfg.includes('localhost')) return cfg;
+  return `http://${window.location.hostname}:3001`;
+}
+
+const BACKEND_URL = resolveBackendURL();
 if (!BACKEND_URL) {
   console.error('APP_CONFIG.BACKEND_URL no definido. Verifica js/config.js.');
 }
@@ -46,11 +56,18 @@ async function handleLogin(event) {
     sessionStorage.setItem('authToken', authToken);
     sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
 
+    // Re-renderizar nav de módulos según rol
+    if (typeof window.renderAppNav === 'function') window.renderAppNav();
+
     showToast(`¡Bienvenido ${currentUser.nombre}!`, 'success');
-    // Roles con acceso al dashboard
-    const rolesDashboard = ['admin'];
-    if (rolesDashboard.includes(currentUser.cargo)) {
+    // Redirigir por rol (clave) con fallback a cargo (legacy)
+    const rol = currentUser.rol || currentUser.cargo;
+    if (rol === 'admin' || rol === 'gerente') {
       window.location.href = 'dashboard.html';
+      return;
+    }
+    if (rol === 'jefe_almacen') {
+      window.location.href = 'index.html';
       return;
     }
 
@@ -99,6 +116,7 @@ function restoreSession() {
     try {
       authToken = token;
       currentUser = JSON.parse(userStr);
+      if (typeof window.renderAppNav === 'function') window.renderAppNav();
       showMainView();
       loadIFs(); // Cargar IFs al restaurar sesión
     } catch (error) {
@@ -121,7 +139,7 @@ function showLoginView() {
  */
 function showMainView() {
   document.getElementById('loginContainer').style.display = 'none';
-  document.getElementById('mainApp').style.display = 'block';
+  document.getElementById('mainApp').style.display = 'flex';
   document.getElementById('currentUserName').textContent = currentUser.nombre;
   document.getElementById('currentUserLocation').textContent = currentUser.ubicacion.nombre;
   document.getElementById('currentUserRole').textContent = getRoleLabel(currentUser.cargo);
@@ -129,11 +147,14 @@ function showMainView() {
 }
 
 /**
- * Traducir cargo a etiqueta
+ * Traducir cargo/rol a etiqueta
  */
 function getRoleLabel(cargo) {
   const roles = {
     'aux_almacen': 'Aux. Almacén',
+    'jefe_almacen': 'Jefe de Almacén',
+    'gerente': 'Gerente',
+    'cliente': 'Cliente',
     'admin': 'Administrador'
   };
   return roles[cargo] || cargo;

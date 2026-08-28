@@ -13,10 +13,10 @@ const login = async (req, res) => {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
-    // Buscar usuario en Supabase
+    // Buscar usuario en Supabase (join con roles para obtener la clave)
     const { data: usuario, error: queryError } = await supabase
       .from('usuarios')
-      .select('*')
+      .select('*, roles(clave, nombre)')
       .eq('email', email.toLowerCase())
       .single();
 
@@ -48,6 +48,7 @@ const login = async (req, res) => {
         email: usuario.email,
         nombre: usuario.nombre_completo,
         cargo: usuario.cargo,
+        rol: usuario.roles?.clave ?? usuario.cargo,
         ubicacion_id: usuario.ubicacion_id
       },
       process.env.JWT_SECRET,
@@ -61,6 +62,7 @@ const login = async (req, res) => {
         nombre: usuario.nombre_completo,
         email: usuario.email,
         cargo: usuario.cargo,
+        rol: usuario.roles?.clave ?? usuario.cargo,
         ubicacion: ubicacion || { id: usuario.ubicacion_id, nombre: 'Unknown' }
       }
     });
@@ -75,10 +77,13 @@ const login = async (req, res) => {
  */
 const register = async (req, res) => {
   try {
-    const { email, password, nombre_completo, ubicacion_id, cargo } = req.body;
+    const { email, password, nombre_completo, ubicacion_id, rol, cargo } = req.body;
+
+    // Acepta `rol` (clave) con fallback a `cargo` (legacy)
+    const rolClave = rol || cargo;
 
     // Validar campos requeridos
-    if (!email || !password || !nombre_completo || !ubicacion_id || !cargo) {
+    if (!email || !password || !nombre_completo || !ubicacion_id || !rolClave) {
       return res.status(400).json({ error: 'All fields are required' });
     }
 
@@ -93,6 +98,17 @@ const register = async (req, res) => {
       return res.status(400).json({ error: 'Invalid location ID' });
     }
 
+    // Resolver rol_id desde la tabla roles por clave
+    const { data: rolRecord, error: rolError } = await supabase
+      .from('roles')
+      .select('id')
+      .eq('clave', rolClave)
+      .single();
+
+    if (rolError || !rolRecord) {
+      return res.status(400).json({ error: `Invalid role: ${rolClave}` });
+    }
+
     // Generar hash bcrypt de la contraseña
     const password_hash = await bcryptjs.hash(password, 10);
 
@@ -105,11 +121,12 @@ const register = async (req, res) => {
           password_hash,
           nombre_completo,
           ubicacion_id,
-          cargo,
+          cargo: rolClave,
+          rol_id: rolRecord.id,
           activo: true
         }
       ])
-      .select('id, email, nombre_completo, cargo')
+      .select('id, email, nombre_completo, cargo, rol_id')
       .single();
 
     if (insertError) {
@@ -136,7 +153,7 @@ const getUser = async (req, res) => {
 
     const { data: usuario, error } = await supabase
       .from('usuarios')
-      .select('*')
+      .select('*, roles(clave, nombre)')
       .eq('id', userId)
       .single();
 
@@ -157,6 +174,7 @@ const getUser = async (req, res) => {
         nombre: usuario.nombre_completo,
         email: usuario.email,
         cargo: usuario.cargo,
+        rol: usuario.roles?.clave ?? usuario.cargo,
         ubicacion: ubicacion || { id: usuario.ubicacion_id, nombre: 'Unknown' }
       }
     });

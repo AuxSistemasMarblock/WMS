@@ -7,6 +7,7 @@ let signaturePad = null;
 let collectedSignatures = {};
 let signatureQueue = [];
 let currentSignatureType = null;
+let isSubmittingSignature = false;
 
 /**
  * Lock/unlock del scroll del body mientras el modal de firma está abierto.
@@ -21,32 +22,46 @@ function unlockBodyScroll() {
 
 // ResizeObserver: se inicializa una vez y reacciona automáticamente a cualquier
 // cambio de tamaño del canvas (apertura del modal, rotación, resize de ventana).
-// Es más robusto que requestAnimationFrame + getBoundingClientRect porque no
-// depende del timing del frame y dispara solo cuando el tamaño REAL cambia.
 let signatureCanvasObserver = null;
 
 /**
  * Sincronizar el tamaño INTERNO del canvas con su tamaño CSS.
  * Mapeo 1:1 sin escala: la firma aparece exactamente donde se traza.
- *
- * Trade-off: en pantallas Retina/HiDPI la firma se ve ligeramente menos nítida
- * (1 pixel CSS = 1 pixel interno, sin supersampling). Esto es aceptable para
- * una firma y elimina COMPLETAMENTE el riesgo de offset por desincronización
- * entre ctx.scale y canvas.width.
+ * Si ya existen trazos, se preservan al redimensionar.
  */
 function syncCanvasSize(canvas, cssWidth, cssHeight) {
   if (!canvas) return;
   if (cssWidth <= 0 || cssHeight <= 0) return;
   const w = Math.round(cssWidth);
   const h = Math.round(cssHeight);
-  if (canvas.width === w && canvas.height === h) return;
+  if (Math.abs(canvas.width - w) < 2 && Math.abs(canvas.height - h) < 2) return;
+
+  // Si ya hay trazos dibujados, guardar una copia para restaurarla tras el resize
+  const hasContent = signaturePad && !signaturePad.isEmpty();
+  let tempCanvas = null;
+  if (hasContent) {
+    tempCanvas = document.createElement('canvas');
+    tempCanvas.width = canvas.width;
+    tempCanvas.height = canvas.height;
+    const tempCtx = tempCanvas.getContext('2d');
+    tempCtx.drawImage(canvas, 0, 0);
+  }
+
   canvas.width = w;
   canvas.height = h;
-  if (signaturePad) signaturePad.clear();
+
+  if (hasContent && tempCanvas) {
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = signaturePad.options.backgroundColor || '#ffffff';
+    ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(tempCanvas, 0, 0, w, h);
+  } else if (signaturePad) {
+    signaturePad.clear();
+  }
 }
 
 /**
- * Inicializar SignaturePad
+ * Inicializar SignaturePad (Singleton)
  */
 function initSignaturePad() {
   const canvas = document.getElementById('signatureCanvas');
@@ -55,7 +70,11 @@ function initSignaturePad() {
     return;
   }
 
-  console.log('✅ Canvas encontrado:', canvas);
+  if (signaturePad) {
+    return signaturePad;
+  }
+
+  console.log('✅ Inicializando SignaturePad singleton en canvas:', canvas);
 
   signaturePad = new SignaturePad(canvas, {
     backgroundColor: '#ffffff',
@@ -66,7 +85,6 @@ function initSignaturePad() {
   });
 
   // ResizeObserver: detecta cambios de tamaño del canvas automáticamente.
-  // Cubre: apertura del modal, rotación de pantalla, resize de ventana.
   if (window.ResizeObserver && !signatureCanvasObserver) {
     signatureCanvasObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
@@ -76,7 +94,7 @@ function initSignaturePad() {
     signatureCanvasObserver.observe(canvas);
   }
 
-  console.log('✅ SignaturePad inicializado:', signaturePad);
+  return signaturePad;
 }
 
 /**
@@ -167,6 +185,9 @@ async function startSignatureCapture() {
   const confirmed = await askExitConfirmation(records.length, selectedIF);
   if (!confirmed) return;
 
+  // Asegurar que SignaturePad esté listo
+  initSignaturePad();
+
   collectedSignatures = {};
   const required = getRequiredSignatures();
   signatureQueue = Object.entries(required).map(([type, config]) => ({
@@ -183,7 +204,10 @@ async function startSignatureCapture() {
  */
 async function captureNextSignature() {
   if (signatureQueue.length === 0) {
-    // Todas las firmas capturadas
+    // Todas las firmas capturadas: cerrar modal y enviar
+    const modal = document.getElementById('signatureModal');
+    modal.classList.remove('active');
+    unlockBodyScroll();
     await submitWithSignatures();
     return;
   }
@@ -194,25 +218,25 @@ async function captureNextSignature() {
   // Actualizar UI del modal
   document.getElementById('signatureTitle').textContent = `${signature.icon} Firma de ${signature.label}`;
 
-  // Limpiar canvas
-  clearSignature();
+  // Asegurar instancia única e inicializada
+  if (!signaturePad) {
+    initSignaturePad();
+  }
 
-  // Inicializar SignaturePad
-  initSignaturePad();
+  // Limpiar canvas para la nueva firma
+  clearSignature();
 
   // Descartar buffer de pistola antes de mostrar el modal
   if (typeof clearScanBuffer === 'function') clearScanBuffer();
 
-  // Mostrar modal primero (display:flex) para que .clientWidth devuelva el valor real
+  // Mostrar modal si no está activo
   const modal = document.getElementById('signatureModal');
-  modal.classList.add('active');
+  if (!modal.classList.contains('active')) {
+    modal.classList.add('active');
+    lockBodyScroll();
+  }
 
-  // Bloquear scroll del body para que no se mueva el canvas en mobile
-  lockBodyScroll();
-
-  // Sync inmediato del tamaño del canvas (ResizeObserver también disparará
-  // cuando el browser termine de hacer layout, pero esto asegura que el canvas
-  // esté sincronizado antes del primer toque del usuario).
+  // Sincronizar tamaño del canvas
   const canvas = document.getElementById('signatureCanvas');
   const rect = canvas.getBoundingClientRect();
   syncCanvasSize(canvas, rect.width, rect.height);
@@ -228,24 +252,48 @@ function clearSignature() {
 }
 
 /**
+ * Cancelar el flujo de captura de firmas
+ */
+function cancelSignatureCapture() {
+  const modal = document.getElementById('signatureModal');
+  modal.classList.remove('active');
+  unlockBodyScroll();
+
+  clearSignature();
+  signatureQueue = [];
+  collectedSignatures = {};
+  currentSignatureType = null;
+  isSubmittingSignature = false;
+
+  showToast('Captura de firmas cancelada', 'info');
+}
+
+/**
  * Enviar firma capturada
  */
-function submitSignature() {
+async function submitSignature() {
+  if (isSubmittingSignature) return;
+
   if (!signaturePad || signaturePad.isEmpty()) {
     showToast('Por favor traza tu firma', 'error');
     return;
   }
 
-  // Convertir firma a PNG base64
-  const signatureImage = signaturePad.toDataURL('image/png');
-  collectedSignatures[currentSignatureType] = signatureImage;
+  isSubmittingSignature = true;
 
-  showToast(`✓ Firma de ${currentSignatureType} capturada`, 'success');
+  try {
+    // Convertir firma a PNG base64
+    const signatureImage = signaturePad.toDataURL('image/png');
+    collectedSignatures[currentSignatureType] = signatureImage;
 
-  // Ocultar modal y restaurar scroll del body
-  document.getElementById('signatureModal').classList.remove('active');
-  unlockBodyScroll();
-  setTimeout(captureNextSignature, 300);
+    showToast(`✓ Firma capturada`, 'success');
+
+    // Pasar directamente a la siguiente firma sin cerrar el modal
+    // (evita parpadeo, cambios de layout y disparos erróneos de ResizeObserver en Android)
+    await captureNextSignature();
+  } finally {
+    isSubmittingSignature = false;
+  }
 }
 
 /**
@@ -286,6 +334,3 @@ async function submitWithSignatures() {
 document.addEventListener('DOMContentLoaded', () => {
   setTimeout(initSignaturePad, 100);
 });
-
-// NOTA: el resize/orientationchange ya lo cubre el ResizeObserver configurado
-// en initSignaturePad(). No se necesitan listeners manuales de window.
