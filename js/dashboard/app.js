@@ -267,8 +267,8 @@ async function cargarSucursales() {
     const sel = $('filtroSucursal');
     sel.innerHTML = '';
 
-    // Opción "Todas" solo si NO es admin (los admins pueden ver todo por default)
-    if (user?.cargo === 'admin') {
+    // Opción "Todas" solo si es admin (los admins pueden ver todo por default)
+    if (user?.cargo === 'admin' || user?.rol === 'admin') {
       const optTodas = el('option', { value: '' }, 'Todas las sucursales');
       sel.appendChild(optTodas);
     }
@@ -320,14 +320,21 @@ async function cargarKPIs() {
     const params = buildParams();
     const data = await apiFetch('/api/dashboard/resumen?' + params);
     const k = data.kpis;
-    $('kpiErrores').textContent = k.ifs_con_errores;
-    $('kpiLineas').textContent = k.lineas_con_error + ' / ' + k.lineas_totales;
-    $('kpiPlacas').textContent = k.placas_escaneadas + ' / ' + k.placas_esperadas;
-    if (k.placas_escaneadas_huerfanas > 0) {
-      $('kpiPlacas').title = `${k.placas_escaneadas_matcheadas} matchearon con IFs, ${k.placas_escaneadas_huerfanas} no matchearon (huérfanas)`;
-    }
-    $('kpiDiscrepancias').textContent = k.total_discrepancias;
     $('kpiOK').textContent = k.ifs_ok;
+    $('cardKpiOK').setAttribute('data-tooltip', `${k.ifs_ok} IFs despachadas con 100% de exactitud`);
+
+    $('kpiErrores').textContent = k.ifs_con_errores;
+    $('cardKpiErrores').setAttribute('data-tooltip', `${k.ifs_con_errores} IFs con al menos una discrepancia física vs NetSuite`);
+
+    $('kpiDiscrepancias').textContent = k.total_discrepancias;
+    $('cardKpiDiscrepancias').setAttribute('data-tooltip', `${k.total_discrepancias} anomalías detectadas en total en las partidas`);
+
+    $('kpiLineas').textContent = k.lineas_con_error + ' / ' + k.lineas_totales;
+    $('cardKpiLineas').setAttribute('data-tooltip', `${k.lineas_con_error} líneas con error de ${k.lineas_totales} líneas totales (${k.tasa_exactitud.toFixed(1)}% de exactitud)`);
+
+    $('kpiPlacas').textContent = k.placas_escaneadas + ' / ' + k.placas_esperadas;
+    $('cardKpiPlacas').setAttribute('data-tooltip', `${k.placas_escaneadas} placas escaneadas físicamente vs ${k.placas_esperadas} esperadas (${k.placas_escaneadas_matcheadas || 0} matcheadas, ${k.placas_escaneadas_huerfanas || 0} huérfanas)`);
+
     renderChartExactitud(k.ifs_ok, k.ifs_con_errores, k.tasa_exactitud);
   } catch (e) {
     showToast('Error cargando KPIs: ' + e.message, 'error');
@@ -715,9 +722,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const user = getCurrentUser();
   if (user) {
+    const rol = user.rol || user.cargo;
     $('currentUserName').textContent = user.nombre || user.email || 'Usuario';
     $('currentUserLocation').textContent = user.ubicacion?.nombre || 'N/A';
-    $('currentUserRole').textContent = getRoleLabel(user.cargo);
+    $('currentUserRole').textContent = getRoleLabel(rol);
   }
 
   // Preset buttons
@@ -746,6 +754,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 function getRoleLabel(cargo) {
   const roles = {
     'aux_almacen': 'Aux. Almacén',
+    'jefe_almacen': 'Jefe de Almacén',
+    'gerente': 'Gerente',
+    'cliente': 'Cliente',
     'admin': 'Administrador'
   };
   return roles[cargo] || cargo;
