@@ -32,23 +32,22 @@ function parseLote(lote) {
   const limpio = lote.trim();
   if (!limpio) return null;
 
-  // Primer "-" separa id de medidas
-  const dashIdx = limpio.indexOf('-');
-  if (dashIdx === -1) return null;
+  // Buscamos las dimensiones en cualquier parte del string (normalmente al final)
+  // Ejemplos: "15760-3.14X1.96", "24100-082-2.77x2.00", "ST027 1.40X1.79"
+  const regex = /([\d]+(?:[.,]\d+)?)\s*[xX]\s*([\d]+(?:[.,]\d+)?)/;
+  const match = limpio.match(regex);
+  if (!match) return null;
 
-  const id = limpio.substring(0, dashIdx).trim();
-  const medidasStr = limpio.substring(dashIdx + 1).trim();
+  let id = limpio.substring(0, match.index).trim();
+  if (id.endsWith('-')) {
+    id = id.substring(0, id.length - 1).trim();
+  }
 
   if (!id) return null;
 
-  // Regex: acepta "3.14X1.96", "3.14x1.96", "3,14X1,96", con/sin espacios
-  // Solo capturamos las primeras 2 dimensiones (largo x ancho)
-  const m = medidasStr.match(/^([\d]+(?:[.,]\d+)?)\s*[xX]\s*([\d]+(?:[.,]\d+)?)/);
-  if (!m) return null;
-
   const normalizar = (s) => parseFloat(s.replace(',', '.'));
-  const largo = normalizar(m[1]);
-  const ancho = normalizar(m[2]);
+  const largo = normalizar(match[1]);
+  const ancho = normalizar(match[2]);
 
   if (isNaN(largo) || isNaN(ancho) || largo <= 0 || ancho <= 0) return null;
 
@@ -91,6 +90,7 @@ function evaluarCantidad(cantidadM2, lote, placasEscaneadas) {
   if (!parsed) {
     return {
       status: 'sin_medidas',
+      tipo_discrepancia: 'sin_medidas',
       placas_esperadas: null,
       placas_escaneadas: placasEscaneadas,
       diferencia: null,
@@ -98,20 +98,60 @@ function evaluarCantidad(cantidadM2, lote, placasEscaneadas) {
     };
   }
 
-  const placasEsp = Math.round(parseFloat(cantidadM2) / parsed.area);
-  const diferencia = placasEscaneadas - placasEsp;
+  const m2Esperados = parseFloat(cantidadM2);
+  const areaPlaca = parsed.area;
+  const placasTeoricas = m2Esperados / areaPlaca;
+  const m2Escaneados = placasEscaneadas * areaPlaca;
+  const diffM2 = m2Escaneados - m2Esperados;
+
+  const fraccion = placasTeoricas - Math.floor(placasTeoricas);
+  const esFraccionEsperada = (fraccion > 0.08 && fraccion < 0.92);
 
   let status = 'ok';
-  if (diferencia < 0) status = 'faltante';
-  else if (diferencia > 0) status = 'sobrante';
+  let es_media_placa = false;
+  let tipo_discrepancia = null;
+  const placasEsp = Math.round(placasTeoricas);
+  const diffPlacas = placasEscaneadas - placasEsp;
+
+  if (esFraccionEsperada) {
+    // Se pidió una fracción en el ERP (ej: 0.5 placa, 2.5 placas)
+    // Si se escanearon placas completas y el área escaneada excede lo pedido
+    if (diffM2 > (areaPlaca * 0.15)) {
+      status = 'con_errores';
+      es_media_placa = true;
+      tipo_discrepancia = 'media_placa';
+    } else if (diffM2 < -(areaPlaca * 0.15)) {
+      status = 'con_errores';
+      es_media_placa = true;
+      tipo_discrepancia = 'cantidad_faltante';
+    }
+  } else {
+    // Caso de placas completas
+    if (diffPlacas < 0) {
+      status = 'faltante';
+      tipo_discrepancia = 'cantidad_faltante';
+    } else if (diffPlacas > 0) {
+      status = 'sobrante';
+      tipo_discrepancia = 'cantidad_sobrante';
+    }
+  }
+
+  const m2EspRedondeado = parseFloat(m2Esperados.toFixed(2));
+  const m2EscRedondeado = parseFloat(m2Escaneados.toFixed(2));
+  const diffM2Final = parseFloat(Math.abs(m2EscRedondeado - m2EspRedondeado).toFixed(2));
 
   return {
     status,
-    placas_esperadas: placasEsp,
+    tipo_discrepancia,
+    placas_esperadas: esFraccionEsperada ? parseFloat(placasTeoricas.toFixed(2)) : placasEsp,
     placas_escaneadas: placasEscaneadas,
-    diferencia: Math.abs(diferencia),
-    area_placa_m2: parsed.area,
-    id_lote: parsed.id
+    diferencia: Math.abs(diffPlacas),
+    m2_esperados: m2EspRedondeado,
+    m2_escaneados: m2EscRedondeado,
+    diff_m2: diffM2Final,
+    area_placa_m2: areaPlaca,
+    id_lote: parsed.id,
+    es_media_placa
   };
 }
 

@@ -50,6 +50,7 @@ function evaluarLinea(ifTranid, ifSo, ifLocation, ifFecha, lineaEsperada, escane
       tipo: 'linea_faltante',
       sku: lineaEsperada.sku,
       lote: lineaEsperada.lote,
+      cantidad_m2_esperada: lineaEsperada.quantity,
       mensaje: 'No se escaneó ninguna placa de este item',
       if_tranid: ifTranid,
       if_so: ifSo,
@@ -83,7 +84,25 @@ function evaluarLinea(ifTranid, ifSo, ifLocation, ifFecha, lineaEsperada, escane
       if_location: ifLocation,
       if_fecha: ifFecha
     });
-  } else if (evalCantidad.status === 'faltante') {
+  } else if (evalCantidad.tipo_discrepancia === 'media_placa') {
+    discrepancias.push({
+      tipo: 'media_placa',
+      sku: lineaEsperada.sku,
+      lote: lineaEsperada.lote,
+      placas_esperadas: evalCantidad.placas_esperadas,
+      placas_escaneadas: evalCantidad.placas_escaneadas,
+      diferencia: evalCantidad.diferencia,
+      cantidad_m2_esperada: lineaEsperada.quantity,
+      area_placa_m2: evalCantidad.area_placa_m2,
+      id_lote: evalCantidad.id_lote,
+      es_media_placa: true,
+      diff_m2: evalCantidad.diff_m2,
+      if_tranid: ifTranid,
+      if_so: ifSo,
+      if_location: ifLocation,
+      if_fecha: ifFecha
+    });
+  } else if (evalCantidad.tipo_discrepancia === 'cantidad_faltante') {
     discrepancias.push({
       tipo: 'cantidad_faltante',
       sku: lineaEsperada.sku,
@@ -94,12 +113,13 @@ function evaluarLinea(ifTranid, ifSo, ifLocation, ifFecha, lineaEsperada, escane
       cantidad_m2_esperada: lineaEsperada.quantity,
       area_placa_m2: evalCantidad.area_placa_m2,
       id_lote: evalCantidad.id_lote,
+      diff_m2: evalCantidad.diff_m2,
       if_tranid: ifTranid,
       if_so: ifSo,
       if_location: ifLocation,
       if_fecha: ifFecha
     });
-  } else if (evalCantidad.status === 'sobrante') {
+  } else if (evalCantidad.tipo_discrepancia === 'cantidad_sobrante') {
     discrepancias.push({
       tipo: 'cantidad_sobrante',
       sku: lineaEsperada.sku,
@@ -110,6 +130,8 @@ function evaluarLinea(ifTranid, ifSo, ifLocation, ifFecha, lineaEsperada, escane
       cantidad_m2_esperada: lineaEsperada.quantity,
       area_placa_m2: evalCantidad.area_placa_m2,
       id_lote: evalCantidad.id_lote,
+      es_media_placa: false,
+      diff_m2: evalCantidad.diff_m2,
       if_tranid: ifTranid,
       if_so: ifSo,
       if_location: ifLocation,
@@ -300,25 +322,38 @@ function confrontar(ifsEsperadas, escaneos) {
   };
 
   // Función interna para inyectar plan de acción a las discrepancias
+  const formatM2 = (disc) => {
+    if (!disc.cantidad_m2_esperada) return '';
+    const expectedM2 = disc.m2_esperados ?? parseFloat(parseFloat(disc.cantidad_m2_esperada || 0).toFixed(2));
+    const scannedM2 = disc.m2_escaneados ?? ((disc.area_placa_m2 && disc.placas_escaneadas) 
+                      ? parseFloat((disc.placas_escaneadas * disc.area_placa_m2).toFixed(2)) 
+                      : 0);
+    const diffM2 = disc.diff_m2 ?? parseFloat(Math.abs(scannedM2 - expectedM2).toFixed(2));
+    return `[Esperado: ${expectedM2.toFixed(2)}m² | Escaneado: ${scannedM2.toFixed(2)}m² | Diferencia: ${diffM2.toFixed(2)}m²] `;
+  };
+
   const asignarPlanAccion = (disc) => {
     switch (disc.tipo) {
+      case 'media_placa':
+        disc.plan_accion = `Error de etiquetado (Media Placa). ${formatM2(disc)}Se solicitó una fracción de placa (${disc.cantidad_m2_esperada}m²) pero se escaneó placa completa. Re-etiquetar física con lote y medidas reales.`;
+        break;
       case 'cantidad_faltante':
-        disc.plan_accion = 'Faltante físico. Buscar material en andén/rack y completar tarima.';
+        disc.plan_accion = `Faltante físico. ${formatM2(disc)}Buscar material en andén/rack y completar tarima.`;
         break;
       case 'cantidad_sobrante':
-        disc.plan_accion = 'Sobrante físico. Retirar material extra de la tarima y regresar a ubicación.';
+        disc.plan_accion = `Placas de más. ${formatM2(disc)}Se escanearon más placas físicas de las requeridas. Retirar placa(s) extra de la tarima.`;
         break;
       case 'ubicacion_incorrecta':
-        disc.plan_accion = 'Error de ubicación física. Mover material a ubicación correcta.';
+        disc.plan_accion = `Error de ubicación física. Se escaneó en "${disc.ubicacion_escaneada}", se esperaba "${disc.ubicacion_esperada}". Mover material a ubicación correcta.`;
         break;
       case 'sku_lote_no_esperado':
-        disc.plan_accion = 'Artículo incorrecto. Bajar de tarima e intercambiar por el SKU/Lote correcto.';
+        disc.plan_accion = `Artículo no esperado (Huérfano). No pertenece a esta IF. Retirar de tarima y reubicar en rack.`;
         break;
       case 'linea_faltante':
-        disc.plan_accion = 'Línea omitida. Surtir línea completa faltante.';
+        disc.plan_accion = `Línea omitida. ${formatM2(disc)}Surtir línea completa requerida.`;
         break;
       case 'if_no_encontrada':
-        disc.plan_accion = 'IF Cancelada en ERP. Mercancía despachada. Solicitar a facturación revisión / retorno de material.';
+        disc.plan_accion = `IF Cancelada en ERP. Mercancía despachada físicamente por almacén pero no localizada/cancelada en NetSuite. Notificar a facturación / ventas para refacturación o retorno.`;
         break;
       default:
         disc.plan_accion = 'Revisar manualmente.';
@@ -355,7 +390,7 @@ function confrontar(ifsEsperadas, escaneos) {
       // Acumular contadores
       resultado.total_lineas++;
       if (lineaEvaluada.status === 'con_errores') resultado.lineas_con_error++;
-      if (lineaEvaluada.evaluacion_cantidad?.placas_esperadas) {
+      if (lineaEvaluada.evaluacion_cantidad && typeof lineaEvaluada.evaluacion_cantidad.placas_esperadas === 'number') {
         resultado.total_placas_esperadas += lineaEvaluada.evaluacion_cantidad.placas_esperadas;
       }
     }
@@ -405,18 +440,12 @@ function confrontar(ifsEsperadas, escaneos) {
   }
 
   // ── IFs escaneadas en Sheets pero sin registro en NetSuite ─────────────────
-  // La clave de match es el tranid de la IF. Si un escaneo referencia una IF
-  // que no aparece en ifsEsperadas (su trandate quedó fuera de la ventana, el
-  // registro no existe, o la saved search no la devolvió), se reporta como
-  // error if_no_encontrada usando la información que sí existe: la del escaneo.
-  // (escaneosPorIF ya está agrupado arriba y se reutiliza aquí.)
   const tranidsProcesados = new Set(resultado.ifs.map(i => i.tranid));
-  let placas_en_ifs_canceladas = 0; // Para restarlo del total al final
+  let placas_en_ifs_canceladas = 0;
 
   for (const [tranid, escaneosDeLaIF] of escaneosPorIF) {
     if (tranidsProcesados.has(tranid)) continue;
 
-    // Agrupar los escaneos por (sku, lote) para armar "líneas" mínimas
     const lineasMap = new Map();
     for (const e of escaneosDeLaIF) {
       if (!e.sku || !e.lote) continue;
@@ -459,12 +488,11 @@ function confrontar(ifsEsperadas, escaneos) {
       total_lineas: lineas.length,
       lineas_con_error: 0,
       discrepancias: [discCancelada],
-      status: 'cancelada_erp' // Marcada explícitamente para el frontend
+      status: 'cancelada_erp'
     };
 
-    resultado.ifs.push(ifSintetica); // Visible en la tabla general
-    resultado.ifs_canceladas_erp.push(ifSintetica); // Aislada de ifs_con_errores
-    // Importante: No la agregamos a todas_las_discrepancias para que no ensucie el top de errores
+    resultado.ifs.push(ifSintetica);
+    resultado.ifs_canceladas_erp.push(ifSintetica);
   }
 
   // Top errores agregados
@@ -474,32 +502,87 @@ function confrontar(ifsEsperadas, escaneos) {
   resultado.top_ubicaciones = tops.top_ubicaciones;
   resultado.top_operadores = tops.top_operadores;
 
-  // Total de placas escaneadas: viene directo de Google Sheets pero ahora
-  // restamos las IFs que fueron canceladas en ERP para no inflar los KPIs
+  // Total de placas escaneadas (excluyendo IFs canceladas en ERP)
   resultado.total_placas_escaneadas = escaneos.length - placas_en_ifs_canceladas;
 
-  // Conteo adicional: cuántas matchearon con IFs vs cuántas son huérfanas
-  let placasMatcheadas = 0;
-  for (const l of resultado.ifs_ok.concat(resultado.ifs_con_errores)) {
-    for (const ln of l.lineas) {
-      placasMatcheadas += ln.placas_escaneadas || 0;
-    }
-  }
-  resultado.placas_escaneadas_matcheadas = placasMatcheadas;
-  // Huerfanas son los escaneos que no matchearon pero que tampoco son de una IF cancelada
-  resultado.placas_escaneadas_huerfanas = resultado.total_placas_escaneadas - placasMatcheadas;
+  // Formatear placas esperadas totales
+  const fracTotal = resultado.total_placas_esperadas - Math.floor(resultado.total_placas_esperadas);
+  resultado.total_placas_esperadas = (fracTotal > 0.08 && fracTotal < 0.92)
+    ? parseFloat(resultado.total_placas_esperadas.toFixed(1))
+    : Math.round(resultado.total_placas_esperadas);
 
-  // Top artículos con más salidas (volumen de escaneos válidos)
-  // Deberíamos filtrar escaneos de ifs_canceladas, pero por simplicidad
-  // lo podemos dejar igual o filtrar si es necesario (se deja igual por el momento
-  // ya que sí fueron salidas físicas).
+  // Top artículos con más salidas
   const masSalidas = agregarTopArticulosMasSalidas(escaneos);
   resultado.top_articulos_mas_salidas = masSalidas;
 
-  // Tasa de exactitud (ya no se ve afectada porque lineas_con_error ya no cuenta IFs canceladas)
-  resultado.tasa_exactitud = resultado.total_lineas > 0
-    ? ((resultado.total_lineas - resultado.lineas_con_error) / resultado.total_lineas) * 100
+  // Tasa de exactitud (Perfect Order: IFs 100% OK / Total IFs evaluadas)
+  const totalIfsEvaluadas = resultado.ifs_ok.length + resultado.ifs_con_errores.length;
+  resultado.tasa_exactitud = totalIfsEvaluadas > 0
+    ? (resultado.ifs_ok.length / totalIfsEvaluadas) * 100
     : 100;
+
+  // Calcular m2 y desglose de causas raíz
+  let m2Sobrante = 0;
+  let m2Faltante = 0;
+  let m2MediaPlaca = 0;
+  let m2Canceladas = 0;
+
+  for (const d of resultado.todas_las_discrepancias) {
+    if (d.tipo === 'media_placa') {
+      m2MediaPlaca += Math.abs(d.diff_m2 || 0);
+    } else if (d.tipo === 'cantidad_sobrante') {
+      m2Sobrante += Math.abs(d.diff_m2 || ((d.diferencia || 0) * (d.area_placa_m2 || 0)));
+    } else if (d.tipo === 'cantidad_faltante') {
+      m2Faltante += Math.abs(d.diff_m2 || ((d.diferencia || 0) * (d.area_placa_m2 || 0)));
+    } else if (d.tipo === 'linea_faltante') {
+      m2Faltante += parseFloat(d.cantidad_m2_esperada || 0);
+    }
+  }
+
+  for (const ifCanc of resultado.ifs_canceladas_erp) {
+    for (const l of ifCanc.lineas) {
+      const parsed = parseLote(l.lote);
+      if (parsed) {
+        m2Canceladas += (l.placas_escaneadas * parsed.area);
+      }
+    }
+  }
+
+  const conteoDiscrepancias = {
+    media_placa: resultado.todas_las_discrepancias.filter(d => d.tipo === 'media_placa').length,
+    cantidad_sobrante: resultado.todas_las_discrepancias.filter(d => d.tipo === 'cantidad_sobrante').length,
+    cantidad_faltante: resultado.todas_las_discrepancias.filter(d => d.tipo === 'cantidad_faltante').length,
+    linea_faltante: resultado.todas_las_discrepancias.filter(d => d.tipo === 'linea_faltante').length,
+    sku_lote_no_esperado: resultado.todas_las_discrepancias.filter(d => d.tipo === 'sku_lote_no_esperado').length,
+    ubicacion_incorrecta: resultado.todas_las_discrepancias.filter(d => d.tipo === 'ubicacion_incorrecta').length,
+    ifs_canceladas_erp: resultado.ifs_canceladas_erp.length
+  };
+
+  const m2SobranteTotal = m2Sobrante + m2MediaPlaca;
+  const m2DesviacionTotal = m2SobranteTotal + m2Faltante;
+
+  resultado.kpis = {
+    ifs_totales: resultado.ifs_ok.length + resultado.ifs_con_errores.length,
+    ifs_ok: resultado.ifs_ok.length,
+    ifs_con_errores: resultado.ifs_con_errores.length,
+    ifs_canceladas_erp: resultado.ifs_canceladas_erp.length,
+    tasa_exactitud: resultado.tasa_exactitud,
+    total_lineas: resultado.total_lineas,
+    lineas_con_error: resultado.lineas_con_error,
+    placas_esperadas: resultado.total_placas_esperadas,
+    placas_escaneadas: resultado.total_placas_escaneadas,
+    placas_canceladas: placas_en_ifs_canceladas,
+    total_discrepancias: resultado.todas_las_discrepancias.length,
+    desglose_errores: conteoDiscrepancias,
+    m2: {
+      desviacion_total: parseFloat(m2DesviacionTotal.toFixed(2)),
+      media_placa: parseFloat(m2MediaPlaca.toFixed(2)),
+      sobrante: parseFloat(m2SobranteTotal.toFixed(2)),
+      sobrante_puro: parseFloat(m2Sobrante.toFixed(2)),
+      faltante: parseFloat(m2Faltante.toFixed(2)),
+      canceladas_erp: parseFloat(m2Canceladas.toFixed(2))
+    }
+  };
 
   return resultado;
 }
