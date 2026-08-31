@@ -119,17 +119,15 @@ function renderPaginador(tableKey) {
   const total = dataset.length;
   const totalPaginas = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
-  if (total <= PAGE_SIZE) {
-    container.innerHTML = '';
-    return;
-  }
-
   container.innerHTML = '';
+
   const prev = el('button', { class: 'btn btn-ghost' }, '‹ Anterior');
   prev.disabled = t.page <= 1;
   prev.onclick = () => { t.page--; renderTabla(tableKey); };
 
-  const info = el('span', { class: 'pagination-info' }, `Página ${t.page} de ${totalPaginas} · ${total} registros`);
+  const startIdx = total === 0 ? 0 : (t.page - 1) * PAGE_SIZE + 1;
+  const endIdx = Math.min(total, t.page * PAGE_SIZE);
+  const info = el('span', { class: 'pagination-info' }, `Página ${t.page} de ${totalPaginas} · Mostrando ${startIdx}-${endIdx} de ${total} registros (10 por pág.)`);
 
   const next = el('button', { class: 'btn btn-ghost' }, 'Siguiente ›');
   next.disabled = t.page >= totalPaginas;
@@ -572,6 +570,14 @@ function abrirModalConciliacion(kpiTipo) {
               <td style="text-align:right; font-weight:600; color:#8b5cf6;">+${(m2.media_placa || 0).toFixed(2)} m²</td>
             </tr>
             <tr>
+              <td>🔀 Lotes Cruzados (Variación por medidas de corte)</td>
+              <td style="text-align:center;">
+                <div style="font-weight:600; font-size:13px;">${desglose.lote_cruzado || 0}</div>
+                ${(desglose.lote_cruzado || 0) > 0 ? `<div style="margin-top:3px;"><button class="tabla-filtro-link" onclick="cerrarConciliacion(); filtrarPorSubKpi('lote_cruzado');">Ver ↗</button></div>` : ''}
+              </td>
+              <td style="text-align:right; font-weight:600; color:#d97706;">${(m2.cruzados_diff && m2.cruzados_diff > 0) ? ('+' + m2.cruzados_diff.toFixed(2) + ' m²') : '0.00 m² (Mismo tamaño)'}</td>
+            </tr>
+            <tr>
               <td>📦 Placas de Más (Sobrantes físicos completos)</td>
               <td style="text-align:center;">
                 <div style="font-weight:600; font-size:13px;">${desglose.cantidad_sobrante || 0}</div>
@@ -692,7 +698,7 @@ function renderMalSacadas() {
       <td style="text-align:center; font-weight:700; color:#dc2626;">${totalIncidencias}</td>
       <td style="text-align:center;">${semaforoBadge}</td>
       <td>${tiposBadges}</td>
-      <td style="text-align:center;"><button class="btn btn-ghost" onclick="verDetalle('${i.tranid}')">Ver detalle</button></td>
+      <td style="text-align:center;"><button class="btn-detalle" onclick="verDetalle('${i.tranid}')">Ver detalle</button></td>
     `;
     tbody.appendChild(tr);
   });
@@ -736,7 +742,7 @@ function renderIFsOK() {
       <td>${escapeHTML(i.location || '—')}</td>
       <td>${escapeHTML(i.operador || '—')}</td>
       <td style="text-align:center;">${i.total_lineas}</td>
-      <td style="text-align:center;"><button class="btn btn-ghost" onclick="verDetalle('${i.tranid}')">Ver detalle</button></td>
+      <td style="text-align:center;"><button class="btn-detalle" onclick="verDetalle('${i.tranid}')">Ver detalle</button></td>
     `;
     tbody.appendChild(tr);
   });

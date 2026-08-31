@@ -488,14 +488,14 @@
 
 .table-wrap {
   width: 100%;
-  overflow-x: hidden;
+  overflow-x: auto;
   overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 
 .table-wrap table {
   width: 100%;
   border-collapse: collapse;
-  table-layout: auto;
 }
 
 .table-wrap thead th {
@@ -519,9 +519,24 @@
   white-space: nowrap;
 }
 
-.table-wrap tbody td .btn-ghost {
-  padding: 4px 8px;
+.btn-detalle {
+  padding: 4px 10px;
   font-size: 12px;
+  font-weight: 600;
+  color: #004a99;
+  border: 1px solid #bfdbfe;
+  background: #f0f7ff;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  display: inline-block;
+  transition: all 0.15s ease;
+}
+
+.btn-detalle:hover {
+  background: #004a99;
+  color: #ffffff;
+  border-color: #004a99;
 }
 
 .table-wrap tbody tr:hover { background: var(--gray-1, #f9fafb); }

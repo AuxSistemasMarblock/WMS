@@ -633,9 +633,24 @@ function confrontar(ifsEsperadas, escaneos) {
   let m2Faltante = 0;
   let m2MediaPlaca = 0;
   let m2Canceladas = 0;
+  let m2CruzadosDiff = 0;
 
   for (const d of resultado.todas_las_discrepancias) {
-    if (d.tipo === 'media_placa') {
+    if (d.es_cruzado) {
+      if (d.tipo === 'linea_faltante' || d.tipo === 'cantidad_faltante') {
+        const parsedEntregado = parseLote(d.lote_entregado);
+        const areaEntregada = parsedEntregado ? parsedEntregado.area : (d.area_placa_m2 || 0);
+        const areaEsperada = d.area_placa_m2 || ((parseFloat(d.cantidad_m2_esperada) || 0) / (d.placas_esperadas || 1)) || 0;
+        const diffDim = (areaEntregada - areaEsperada) * (d.placas_esperadas || 1);
+        if (diffDim > 0.001) {
+          m2Sobrante += diffDim;
+          m2CruzadosDiff += diffDim;
+        } else if (diffDim < -0.001) {
+          m2Faltante += Math.abs(diffDim);
+          m2CruzadosDiff += Math.abs(diffDim);
+        }
+      }
+    } else if (d.tipo === 'media_placa') {
       m2MediaPlaca += Math.abs(d.diff_m2 || 0);
     } else if (d.tipo === 'cantidad_sobrante') {
       m2Sobrante += Math.abs(d.diff_m2 || ((d.diferencia || 0) * (d.area_placa_m2 || 0)));
@@ -740,6 +755,7 @@ function confrontar(ifsEsperadas, escaneos) {
       media_placa: parseFloat(m2MediaPlaca.toFixed(2)),
       sobrante: parseFloat(m2SobranteTotal.toFixed(2)),
       sobrante_puro: parseFloat(m2Sobrante.toFixed(2)),
+      cruzados_diff: parseFloat(m2CruzadosDiff.toFixed(2)),
       faltante: parseFloat(m2Faltante.toFixed(2)),
       canceladas_erp: parseFloat(m2Canceladas.toFixed(2))
     }
