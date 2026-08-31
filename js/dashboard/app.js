@@ -669,9 +669,17 @@ function renderMalSacadas() {
   tbody.innerHTML = '';
   paginadas.forEach(i => {
     const isCancelada = (i.status === 'cancelada_erp') || (i.tipos_error || []).includes('if_no_encontrada');
+    const isOnlyCruzados = !isCancelada && (i.tipos_error || []).length === 1 && i.tipos_error[0] === 'lote_cruzado';
+
     const semaforoBadge = isCancelada
       ? '<span class="tipo-badge" style="background:#fee2e2; color:#b91c1c; font-weight:700;">🚨 Alerta ERP</span>'
-      : '<span class="tipo-badge error" style="font-weight:700;">🔴 Error Surtido</span>';
+      : (isOnlyCruzados
+        ? '<span class="tipo-badge warn" style="font-weight:700;">🟡 Discrepancia Lote</span>'
+        : '<span class="tipo-badge error" style="font-weight:700;">🔴 Error Surtido</span>');
+
+    const cruzadasCount = (i.discrepancias || []).filter(d => d.es_cruzado && (d.tipo === 'linea_faltante' || d.tipo === 'cantidad_faltante')).length;
+    const noCruzadasCount = (i.discrepancias || []).filter(d => !d.es_cruzado).length;
+    const totalIncidencias = cruzadasCount + noCruzadasCount;
 
     const tiposBadges = (i.tipos_error || []).map(t => badgeTipo(t)).join(' ');
     const tr = el('tr');
@@ -681,7 +689,7 @@ function renderMalSacadas() {
       <td>${escapeHTML(i.so || '—')}</td>
       <td>${escapeHTML(i.location || '—')}</td>
       <td>${escapeHTML(i.operador || '—')}</td>
-      <td style="text-align:center; font-weight:700; color:#dc2626;">${i.discrepancias.length}</td>
+      <td style="text-align:center; font-weight:700; color:#dc2626;">${totalIncidencias}</td>
       <td style="text-align:center;">${semaforoBadge}</td>
       <td>${tiposBadges}</td>
       <td style="text-align:center;"><button class="btn btn-ghost" onclick="verDetalle('${i.tranid}')">Ver detalle</button></td>
@@ -742,19 +750,26 @@ async function verDetalle(tranid) {
   $('detalleModal').style.display = 'flex';
   try {
     const data = await apiFetch(`/api/dashboard/if/${encodeURIComponent(tranid)}/detalle?` + buildParams());
-    renderDetalle(data.if);
+    if (data.if) {
+      renderDetalle(data.if);
+    } else {
+      $('detalleBody').innerHTML = '<div class="empty-state">No se encontraron datos para esta IF.</div>';
+    }
   } catch (e) {
-    $('detalleBody').innerHTML = `<div class="empty-state">Error: ${escapeHTML(e.message)}</div>`;
+    $('detalleBody').innerHTML = `<div class="empty-state">Error cargando detalle: ${escapeHTML(e.message)}</div>`;
   }
 }
 
 function renderDetalle(ifDoc) {
   const isCancelada = ifDoc.status === 'cancelada_erp' || (ifDoc.discrepancias || []).some(d => d.tipo === 'if_no_encontrada');
+  const allCruzados = (ifDoc.discrepancias && ifDoc.discrepancias.length > 0) && ifDoc.discrepancias.every(d => d.es_cruzado);
   const statusBadge = isCancelada
     ? '<span class="tipo-badge" style="background:#fee2e2; color:#b91c1c; font-weight:700;">🚨 Cancelada en NetSuite</span>'
-    : ((ifDoc.discrepancias && ifDoc.discrepancias.length > 0)
-      ? '<span class="tipo-badge error" style="font-weight:700;">🔴 Con Errores de Surtido</span>'
-      : '<span class="tipo-badge ok" style="font-weight:700;">🟢 100% Correcta</span>');
+    : (allCruzados
+      ? '<span class="tipo-badge warn" style="font-weight:700;">🟡 Discrepancia de Lote (Mercancía entregada)</span>'
+      : ((ifDoc.discrepancias && ifDoc.discrepancias.length > 0)
+        ? '<span class="tipo-badge error" style="font-weight:700;">🔴 Con Errores de Surtido</span>'
+        : '<span class="tipo-badge ok" style="font-weight:700;">🟢 100% Correcta</span>'));
 
   const html = [];
   html.push(`
