@@ -723,6 +723,7 @@ function confrontar(ifsEsperadas, escaneos) {
 
   const m2SobranteTotal = m2Sobrante + m2MediaPlaca;
   const m2DesviacionTotal = m2SobranteTotal + m2Faltante + Math.abs(m2CruzadosDiff);
+  const m2BalanceNeto = (m2SobranteTotal + m2CruzadosDiff) - m2Faltante;
 
   resultado.kpis = {
     ifs_totales: resultado.ifs_ok.length + resultado.ifs_con_errores.length,
@@ -749,6 +750,7 @@ function confrontar(ifsEsperadas, escaneos) {
     },
     m2: {
       desviacion_total: parseFloat(m2DesviacionTotal.toFixed(2)),
+      balance_neto: parseFloat(m2BalanceNeto.toFixed(2)),
       media_placa: parseFloat(m2MediaPlaca.toFixed(2)),
       sobrante: parseFloat(m2SobranteTotal.toFixed(2)),
       sobrante_puro: parseFloat(m2Sobrante.toFixed(2)),

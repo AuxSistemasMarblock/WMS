@@ -513,7 +513,7 @@ function abrirModalConciliacion(kpiTipo) {
               <td>VARIACIÓN FÍSICA NETA TOTAL</td>
               <td style="text-align:center;">${k.total_discrepancias} incidencias</td>
               <td style="text-align:center; color:#004a99; font-size:14px;">${diffSign}${diffPlacas} placas</td>
-              <td style="text-align:right; color:#dc2626; font-size:14px;">${(m2.desviacion_total || 0).toFixed(2)} m²</td>
+              <td style="text-align:right; color:#004a99; font-size:14px;">${(m2.balance_neto ?? (m2.sobrante - m2.faltante)) >= 0 ? '+' : ''}${(m2.balance_neto ?? (m2.sobrante - m2.faltante)).toFixed(2)} m²</td>
             </tr>
           </tbody>
         </table>
