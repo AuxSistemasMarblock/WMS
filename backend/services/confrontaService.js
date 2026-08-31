@@ -581,6 +581,9 @@ function confrontar(ifsEsperadas, escaneos) {
     }
   }
 
+  const m2SobranteTotal = m2Sobrante + m2MediaPlaca;
+  const m2DesviacionTotal = m2SobranteTotal + m2Faltante;
+
   resultado.kpis = {
     ifs_totales: resultado.ifs_ok.length + resultado.ifs_con_errores.length,
     ifs_ok: resultado.ifs_ok.length,
