@@ -417,15 +417,26 @@ function abrirModalConciliacion(kpiTipo) {
 
   quickActionsEl.innerHTML = '';
 
-  if (kpiTipo === 'volumen') {
-    titleEl.textContent = '📦 Conciliación Matemática: Volumen Despachado';
+    const linkMediaPlaca = (desglose.media_placa || 0) > 0
+      ? `<button class="tabla-filtro-link" onclick="cerrarConciliacion(); filtrarPorSubKpi('media_placa');">Ver ${desglose.media_placa} ↗</button>`
+      : '';
+    const linkHuerfanos = (desglose.sku_lote_no_esperado || 0) > 0
+      ? `<button class="tabla-filtro-link" onclick="cerrarConciliacion(); filtrarPorSubKpi('sku_lote_no_esperado');">Ver ${desglose.sku_lote_no_esperado} ↗</button>`
+      : '';
+    const linkSobrantes = (desglose.cantidad_sobrante || 0) > 0
+      ? `<button class="tabla-filtro-link" onclick="cerrarConciliacion(); filtrarPorSubKpi('cantidad_sobrante');">Ver ${desglose.cantidad_sobrante} ↗</button>`
+      : '';
+    const linkFaltantes = totalFaltantesCasos > 0
+      ? `<button class="tabla-filtro-link" onclick="cerrarConciliacion(); filtrarPorSubKpi('faltantes_grupo');">Ver ${totalFaltantesCasos} ↗</button>`
+      : '';
+
     bodyEl.innerHTML = `
       <div class="balance-card-summary">
-        <div style="font-size:16px; font-weight:700; color:#004a99; margin-bottom:8px;">
+        <div style="font-size:15px; font-weight:700; color:#004a99; margin-bottom:6px;">
           ${escPlacas} placas físicas escaneadas vs ${espPlacas} placas requeridas en ERP
         </div>
-        <div style="color:var(--gray-7, #374151); line-height:1.5;">
-          Existe una variación neta de <strong>${diffSign}${diffPlacas} placas físicas</strong> despachadas en este período. A continuación se desglosa el balance exacto por causa raíz:
+        <div style="color:var(--gray-7, #374151); font-size:13px; line-height:1.4;">
+          Variación neta de <strong>${diffSign}${diffPlacas} placas físicas</strong> en este período. A continuación se desglosa el balance exacto por causa raíz:
         </div>
       </div>
 
@@ -442,63 +453,68 @@ function abrirModalConciliacion(kpiTipo) {
           <tbody>
             <tr>
               <td><strong>🖨️ Medias Placas (Error de etiquetado)</strong><br><small style="color:var(--gray-6);">Se pidió fracción (ej. 0.5 o 1.5) y se escaneó placa completa</small></td>
-              <td style="text-align:center;">${desglose.media_placa || 0} órdenes</td>
+              <td style="text-align:center;">${desglose.media_placa || 0} órdenes ${linkMediaPlaca}</td>
               <td style="text-align:center; font-weight:700; color:#8b5cf6;">+${imp.media_placa || 0} pzs</td>
               <td style="text-align:right; font-weight:600;">+${(m2.media_placa || 0).toFixed(2)} m²</td>
             </tr>
             <tr>
               <td><strong>🔄 Huérfanos / Cruzados</strong><br><small style="color:var(--gray-6);">Placas físicas escaneadas que no pertenecían a la IF</small></td>
-              <td style="text-align:center;">${desglose.sku_lote_no_esperado || 0} piezas</td>
+              <td style="text-align:center;">${desglose.sku_lote_no_esperado || 0} piezas ${linkHuerfanos}</td>
               <td style="text-align:center; font-weight:700; color:#4b5563;">+${imp.huerfanos || desglose.sku_lote_no_esperado || 0} pzs</td>
               <td style="text-align:right; color:var(--gray-5);">—</td>
             </tr>
             <tr>
               <td><strong>📦 Placas de Más (Sobrantes puros)</strong><br><small style="color:var(--gray-6);">Partidas donde se escanearon placas completas adicionales</small></td>
-              <td style="text-align:center;">${desglose.cantidad_sobrante || 0} partidas</td>
+              <td style="text-align:center;">${desglose.cantidad_sobrante || 0} partidas ${linkSobrantes}</td>
               <td style="text-align:center; font-weight:700; color:#2563eb;">+${imp.sobrantes || 0} pzs</td>
               <td style="text-align:right; font-weight:600;">+${(m2.sobrante_puro || 0).toFixed(2)} m²</td>
             </tr>
             <tr>
               <td><strong>🔻 Faltantes Físicos / Líneas Omitidas</strong><br><small style="color:var(--gray-6);">Partidas con faltante parcial o líneas no escaneadas</small></td>
-              <td style="text-align:center;">${totalFaltantesCasos} partidas</td>
+              <td style="text-align:center;">${totalFaltantesCasos} partidas ${linkFaltantes}</td>
               <td style="text-align:center; font-weight:700; color:#dc2626;">-${totalFaltantesPzs} pzs</td>
               <td style="text-align:right; font-weight:600; color:#dc2626;">-${(m2.faltante || 0).toFixed(2)} m²</td>
             </tr>
             <tr style="background:#f8fafc; font-weight:700;">
               <td>VARIACIÓN FÍSICA NETA TOTAL</td>
               <td style="text-align:center;">${k.total_discrepancias} incidencias</td>
-              <td style="text-align:center; color:#004a99; font-size:15px;">${diffSign}${diffPlacas} placas</td>
-              <td style="text-align:right; color:#dc2626; font-size:15px;">${(m2.desviacion_total || 0).toFixed(2)} m²</td>
+              <td style="text-align:center; color:#004a99; font-size:14px;">${diffSign}${diffPlacas} placas</td>
+              <td style="text-align:right; color:#dc2626; font-size:14px;">${(m2.desviacion_total || 0).toFixed(2)} m²</td>
             </tr>
           </tbody>
         </table>
       </div>
     `;
 
-    // Generar botones de acción rápida DINÁMICAMENTE solo si existen casos
+    // Generar botones de acción rápida DINÁMICAMENTE y COMPACTOS
     const actionBtns = [];
     if ((desglose.media_placa || 0) > 0) {
-      actionBtns.push(`<button class="btn btn-primary" onclick="cerrarConciliacion(); filtrarPorSubKpi('media_placa');">Ver Medias Placas (${desglose.media_placa})</button>`);
+      actionBtns.push(`<button class="conciliacion-filter-btn" onclick="cerrarConciliacion(); filtrarPorSubKpi('media_placa');">🖨️ Medias Placas (${desglose.media_placa})</button>`);
     }
     if ((desglose.sku_lote_no_esperado || 0) > 0) {
-      actionBtns.push(`<button class="btn btn-ghost" onclick="cerrarConciliacion(); filtrarPorSubKpi('sku_lote_no_esperado');">Ver Huérfanos (${desglose.sku_lote_no_esperado})</button>`);
+      actionBtns.push(`<button class="conciliacion-filter-btn" onclick="cerrarConciliacion(); filtrarPorSubKpi('sku_lote_no_esperado');">🔄 Huérfanos (${desglose.sku_lote_no_esperado})</button>`);
     }
     if ((desglose.cantidad_sobrante || 0) > 0) {
-      actionBtns.push(`<button class="btn btn-ghost" onclick="cerrarConciliacion(); filtrarPorSubKpi('cantidad_sobrante');">Ver Sobrantes (${desglose.cantidad_sobrante})</button>`);
+      actionBtns.push(`<button class="conciliacion-filter-btn" onclick="cerrarConciliacion(); filtrarPorSubKpi('cantidad_sobrante');">📦 Sobrantes (${desglose.cantidad_sobrante})</button>`);
     }
     if (totalFaltantesCasos > 0) {
-      actionBtns.push(`<button class="btn btn-ghost" onclick="cerrarConciliacion(); filtrarPorSubKpi('faltantes_grupo');">Ver Faltantes/Omitidas (${totalFaltantesCasos})</button>`);
+      actionBtns.push(`<button class="conciliacion-filter-btn" onclick="cerrarConciliacion(); filtrarPorSubKpi('faltantes_grupo');">🔻 Faltantes/Omitidas (${totalFaltantesCasos})</button>`);
     }
-    quickActionsEl.innerHTML = actionBtns.join(' ');
+    quickActionsEl.innerHTML = `
+      <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+        <span style="font-size:12px; font-weight:600; color:var(--gray-6, #6b7280);">🔍 Filtrar en tabla:</span>
+        ${actionBtns.join('')}
+      </div>
+    `;
 
   } else if (kpiTipo === 'desviacion') {
     titleEl.textContent = '📐 Conciliación Matemática: Desviación Total de Área (m²)';
     bodyEl.innerHTML = `
       <div class="balance-card-summary">
-        <div style="font-size:16px; font-weight:700; color:#dc2626; margin-bottom:8px;">
+        <div style="font-size:15px; font-weight:700; color:#dc2626; margin-bottom:6px;">
           ${(m2.desviacion_total || 0).toFixed(2)} m² de Desviación Absoluta Total
         </div>
-        <div style="color:var(--gray-7, #374151); line-height:1.5;">
+        <div style="color:var(--gray-7, #374151); font-size:13px; line-height:1.4;">
           El impacto físico se compone de <strong>+${(m2.sobrante || 0).toFixed(2)} m²</strong> despachados de más (por no re-etiquetar fracciones o surtir placas extra) y <strong>-${(m2.faltante || 0).toFixed(2)} m²</strong> de material pendiente/omitido.
         </div>
       </div>
@@ -530,7 +546,7 @@ function abrirModalConciliacion(kpiTipo) {
             <tr style="background:#f8fafc; font-weight:700;">
               <td>DESVIACIÓN TOTAL ACUMULADA</td>
               <td style="text-align:center;">—</td>
-              <td style="text-align:right; color:#dc2626; font-size:15px;">${(m2.desviacion_total || 0).toFixed(2)} m²</td>
+              <td style="text-align:right; color:#dc2626; font-size:14px;">${(m2.desviacion_total || 0).toFixed(2)} m²</td>
             </tr>
           </tbody>
         </table>
@@ -539,12 +555,17 @@ function abrirModalConciliacion(kpiTipo) {
 
     const actionBtns = [];
     if ((desglose.media_placa || 0) > 0) {
-      actionBtns.push(`<button class="btn btn-primary" onclick="cerrarConciliacion(); filtrarPorSubKpi('media_placa');">Ver Medias Placas (${desglose.media_placa})</button>`);
+      actionBtns.push(`<button class="conciliacion-filter-btn" onclick="cerrarConciliacion(); filtrarPorSubKpi('media_placa');">🖨️ Medias Placas (${desglose.media_placa})</button>`);
     }
     if (totalFaltantesCasos > 0) {
-      actionBtns.push(`<button class="btn btn-ghost" onclick="cerrarConciliacion(); filtrarPorSubKpi('faltantes_grupo');">Ver Faltantes/Omitidas (${totalFaltantesCasos})</button>`);
+      actionBtns.push(`<button class="conciliacion-filter-btn" onclick="cerrarConciliacion(); filtrarPorSubKpi('faltantes_grupo');">🔻 Faltantes/Omitidas (${totalFaltantesCasos})</button>`);
     }
-    quickActionsEl.innerHTML = actionBtns.join(' ');
+    quickActionsEl.innerHTML = `
+      <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+        <span style="font-size:12px; font-weight:600; color:var(--gray-6, #6b7280);">🔍 Filtrar en tabla:</span>
+        ${actionBtns.join('')}
+      </div>
+    `;
   }
 
   $('conciliacionModal').style.display = 'flex';

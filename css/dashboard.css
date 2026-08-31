@@ -162,6 +162,53 @@
   padding-top: 12px;
 }
 
+.conciliacion-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #ffffff;
+  border: 1px solid var(--gray-3, #e5e7eb);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--gray-7, #374151);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.conciliacion-filter-btn:hover {
+  background: #eff6ff;
+  border-color: #004a99;
+  color: #004a99;
+  box-shadow: 0 1px 3px rgba(0, 74, 153, 0.15);
+}
+
+.conciliacion-filter-btn:active {
+  background: #dbeafe;
+}
+
+.tabla-filtro-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: none;
+  border: none;
+  color: #004a99;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  margin-left: 6px;
+}
+
+.tabla-filtro-link:hover {
+  background: #eff6ff;
+  text-decoration: underline;
+}
+
 /* ─────────────────────────────────────────────
    GRÁFICAS
    ───────────────────────────────────────────── */
