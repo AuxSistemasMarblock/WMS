@@ -477,9 +477,9 @@ function abrirModalConciliacion(kpiTipo) {
               </td>
               <td style="text-align:center; font-weight:700; color:#d97706;">0 pzs <small style="color:var(--gray-6); font-weight:400;">(Entregado 1 a 1)</small></td>
               <td style="text-align:right; font-weight:600; color:#d97706;">
-                ${(m2.cruzados_entregado || 0) > 0 
-                  ? `${(m2.cruzados_entregado || 0).toFixed(2)} m² <small style="color:var(--gray-6); font-weight:400;">(${Math.abs(m2.cruzados_diff || 0) > 0.001 ? ((m2.cruzados_diff > 0 ? '+' : '') + m2.cruzados_diff.toFixed(2) + ' m² var') : 'mismo tamaño'})</small>`
-                  : '0.00 m²'}
+                ${Math.abs(m2.cruzados_diff || 0) > 0.001 
+                  ? `${(m2.cruzados_diff > 0 ? '+' : '') + m2.cruzados_diff.toFixed(2)} m² <small style="color:var(--gray-6);">(${(m2.cruzados_entregado || 0).toFixed(2)} m² entregados)</small>` 
+                  : '0.00 m² <small style="color:var(--gray-6);">(Mismo tamaño)</small>'}
               </td>
             </tr>
             <tr>
