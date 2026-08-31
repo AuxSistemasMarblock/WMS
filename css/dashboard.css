@@ -94,9 +94,20 @@
 
 .kpis-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(4, 1fr);
   gap: 12px;
   padding: 0;
+}
+
+@media (max-width: 1024px) {
+  .kpis-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 640px) {
+  .kpis-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ─────────────────────────────────────────────
@@ -425,36 +436,57 @@
 .tipo-badge.warn   { background: #fef3c7; color: #92400e; }
 .tipo-badge.ok     { background: #d1fae5; color: #065f46; }
 
-/* Modal detalle */
-.detalle-section {
-  margin: 12px 0;
-  padding: 12px;
+/* Modal detalle consolidado */
+.detalle-modal-header {
   background: var(--gray-1, #f9fafb);
+  border: 1px solid var(--gray-3, #e5e7eb);
   border-radius: 6px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+.detalle-header-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px 16px;
   font-size: 13px;
 }
-
-.detalle-section h4 {
-  margin: 0 0 6px 0;
-  color: var(--gray-7, #374151);
+.detalle-header-grid .label {
+  color: var(--gray-6, #6b7280);
+  font-weight: 500;
+}
+.detalle-header-grid .val {
+  color: var(--gray-9, #111827);
+  font-weight: 600;
+}
+.detalle-table-wrap {
+  border: 1px solid var(--gray-3, #e5e7eb);
+  border-radius: 6px;
+  overflow-x: auto;
+}
+.detalle-table {
+  width: 100%;
+  border-collapse: collapse;
   font-size: 13px;
+}
+.detalle-table thead th {
+  background: var(--gray-1, #f9fafb);
+  padding: 10px 12px;
+  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  color: var(--gray-6, #6b7280);
+  border-bottom: 1px solid var(--gray-3, #e5e7eb);
+  text-align: left;
 }
-
-.detalle-linea {
-  display: grid;
-  grid-template-columns: 1fr 1fr 80px 80px 1fr 80px;
-  gap: 8px;
-  padding: 6px 8px;
+.detalle-table tbody td {
+  padding: 10px 12px;
   border-bottom: 1px solid var(--gray-2, #f3f4f6);
-  align-items: center;
-  font-size: 13px;
+  vertical-align: middle;
+}
+.detalle-table tbody tr:last-child td {
+  border-bottom: none;
+}
+.detalle-table tbody tr:hover {
+  background: var(--gray-1, #f9fafb);
 }
 
-.detalle-linea:last-child { border-bottom: none; }
-
-.detalle-linea .status-ok      { color: #059669; font-weight: 600; }
-.detalle-linea .status-faltante { color: #b91c1c; font-weight: 600; }
-.detalle-linea .status-sobrante { color: #92400e; font-weight: 600; }
-.detalle-linea .status-sin_medidas { color: #6b7280; font-style: italic; }

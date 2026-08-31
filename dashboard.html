@@ -11,12 +11,12 @@
   />
   <link rel="stylesheet" href="css/variables.css" />
   <link rel="stylesheet" href="css/styles.css" />
-  <link rel="stylesheet" href="css/dashboard.css?v=8" />
+  <link rel="stylesheet" href="css/dashboard.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
 </head>
 <body>
 
-<div id="toast" class="toast"></div>
+<div id="toast" class="toast" style="display: none;"></div>
 
 <div id="mainApp" style="display: none;">
 
@@ -47,96 +47,82 @@
   <section class="filters-card">
     <div class="filters-row">
       <div class="filter-group">
-        <label title="Selecciona el período de tiempo a consultar">Período</label>
+        <label>Período</label>
         <div class="preset-buttons" id="presetButtons">
-          <button class="preset-btn" data-preset="hoy" title="Consultar operaciones del día de hoy">Hoy</button>
-          <button class="preset-btn" data-preset="semana" title="Consultar desde el lunes de esta semana hasta hoy">Esta semana</button>
-          <button class="preset-btn" data-preset="mes" title="Consultar desde el primer día de este mes hasta hoy">Este mes</button>
-          <button class="preset-btn" data-preset="mes_pasado" title="Consultar el mes calendario anterior completo">Mes pasado</button>
-          <button class="preset-btn" data-preset="personalizado" title="Habilitar rango personalizado de fechas (Desde / Hasta)">Personalizado</button>
+          <button class="preset-btn active" data-preset="hoy">Hoy</button>
+          <button class="preset-btn" data-preset="semana">Esta semana</button>
+          <button class="preset-btn" data-preset="mes">Este mes</button>
+          <button class="preset-btn" data-preset="mes_pasado">Mes pasado</button>
+          <button class="preset-btn" data-preset="personalizado">Personalizado</button>
         </div>
       </div>
       <div class="filter-group">
-        <label title="Filtrar por almacén o sucursal">Sucursal</label>
-        <select id="filtroSucursal" class="filter-select" aria-label="Filtrar por sucursal" title="Selecciona una sucursal específica o 'Todas las sucursales' para consolidado">
-          <option value="">Todas las sucursales</option>
+        <label for="filtroSucursal">Sucursal</label>
+        <select id="filtroSucursal" class="filter-select">
+          <option value="">Cargando...</option>
         </select>
       </div>
-      <button class="btn btn-primary" onclick="aplicarFiltros()" title="Aplicar filtros y recargar todos los datos del dashboard">Aplicar</button>
+      <button class="btn btn-primary" onclick="aplicarFiltros()">Aplicar</button>
     </div>
     <div class="filters-row custom-range" id="customRange" style="display: none;">
       <div class="filter-group">
-        <label title="Fecha inicial del rango">Desde</label>
-        <input type="date" id="filtroDesde" placeholder="AAAA-MM-DD" title="Fecha de inicio del período a consultar (AAAA-MM-DD)" />
+        <label for="filtroDesde">Desde</label>
+        <input type="date" id="filtroDesde" class="filter-select" />
       </div>
       <div class="filter-group">
-        <label title="Fecha final del rango">Hasta</label>
-        <input type="date" id="filtroHasta" placeholder="AAAA-MM-DD" title="Fecha de fin del período a consultar (AAAA-MM-DD)" />
+        <label for="filtroHasta">Hasta</label>
+        <input type="date" id="filtroHasta" class="filter-select" />
       </div>
     </div>
   </section>
 
-  <!-- KPIs (fila horizontal compacta) -->
+  <!-- FILA 1: KPIs PRINCIPALES (SALUD OPERATIVA - 4 EN LÍNEA) -->
   <section class="kpis-section">
+    <div style="font-size: 13px; font-weight: 700; color: var(--gray-6, #6b7280); text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px;">
+      📊 Indicadores Clave de Desempeño (Supply Chain)
+    </div>
     <div class="kpis-grid">
-      <div class="kpi-card" id="cardKpiOK" data-tooltip="IFs 100% correctas: Órdenes de fabricación concluidas sin ninguna discrepancia de cantidad, lote o ubicación.">
-        <div class="kpi-label">
-          <span>IFs OK</span>
-          <span class="info-icon" title="Más información">ⓘ</span>
-        </div>
-        <div class="kpi-value text-success" id="kpiOK">–</div>
-        <div class="kpi-sub" id="subKpiOK">100% correctas</div>
+      <div class="kpi-card" id="cardKpiExactitud" data-tooltip="Fórmula: (IFs sin ningún error físico / Total IFs evaluadas) × 100. Excluye cancelaciones de ERP.">
+        <div class="kpi-label"><span>🎯 Tasa Exactitud (Perfect Order)</span><span class="info-icon">ⓘ</span></div>
+        <div class="kpi-value text-success" id="kpiExactitud">–</div>
+        <div class="kpi-sub" id="kpiExactitudSub">Conforme a pedidos sin error</div>
       </div>
-      <div class="kpi-card" id="cardKpiErrores" data-tooltip="IFs con error: Órdenes que presentaron al menos una discrepancia física vs lo esperado en NetSuite.">
-        <div class="kpi-label">
-          <span>IFs con error</span>
-          <span class="info-icon" title="Más información">ⓘ</span>
-        </div>
-        <div class="kpi-value text-error" id="kpiErrores">–</div>
-        <div class="kpi-sub" id="subKpiErrores">Con discrepancias</div>
+
+      <div class="kpi-card" id="cardKpiVolumen" data-tooltip="Piezas físicas escaneadas en almacén vs piezas teóricas solicitadas por NetSuite.">
+        <div class="kpi-label"><span>📦 Volumen Despachado</span><span class="info-icon">ⓘ</span></div>
+        <div class="kpi-value" id="kpiVolumen">–</div>
+        <div class="kpi-sub" id="kpiVolumenSub">0 placas de variación física</div>
       </div>
-      <div class="kpi-card" id="cardKpiDiscrepancias" data-tooltip="Discrepancias: Conteo acumulado de todas las anomalías individuales detectadas en las partidas.">
-        <div class="kpi-label">
-          <span>Discrepancias</span>
-          <span class="info-icon" title="Más información">ⓘ</span>
-        </div>
-        <div class="kpi-value" id="kpiDiscrepancias">–</div>
-        <div class="kpi-sub" id="subKpiDiscrepancias">Anomalías totales</div>
+
+      <div class="kpi-card" id="cardKpiDesviacion" data-tooltip="Suma acumulada de metros cuadrados desviados por medias placas, sobrantes y faltantes.">
+        <div class="kpi-label"><span>📐 Desviación Total (Área)</span><span class="info-icon">ⓘ</span></div>
+        <div class="kpi-value text-error" id="kpiDesviacion">–</div>
+        <div class="kpi-sub" id="kpiDesviacionSub">Impacto en metros cuadrados</div>
       </div>
-      <div class="kpi-card" id="cardKpiLineas" data-tooltip="Líneas afectadas: Renglones de producto con error / Total de renglones solicitados en las IFs. Mide la exactitud por partida.">
-        <div class="kpi-label">
-          <span>Líneas afectadas</span>
-          <span class="info-icon" title="Más información">ⓘ</span>
-        </div>
-        <div class="kpi-value" id="kpiLineas">–</div>
-        <div class="kpi-sub" id="subKpiLineas">Con error / Totales</div>
-      </div>
-      <div class="kpi-card" id="cardKpiPlacas" data-tooltip="Placas escaneadas: Cantidad de piezas físicas leídas con el escáner vs placas teóricas esperadas en NetSuite.">
-        <div class="kpi-label">
-          <span>Placas escaneadas</span>
-          <span class="info-icon" title="Más información">ⓘ</span>
-        </div>
-        <div class="kpi-value" id="kpiPlacas">–</div>
-        <div class="kpi-sub" id="subKpiPlacas">Físicas / Esperadas</div>
+
+      <div class="kpi-card" id="cardKpiCanceladas" data-tooltip="Órdenes que salieron físicamente de almacén pero fueron canceladas o eliminadas en NetSuite.">
+        <div class="kpi-label"><span>🚨 Fugas / Canceladas ERP</span><span class="info-icon">ⓘ</span></div>
+        <div class="kpi-value" style="color: #d97706;" id="kpiCanceladas">–</div>
+        <div class="kpi-sub" id="kpiCanceladasSub">Mercancía fuera de NetSuite</div>
       </div>
     </div>
   </section>
 
-  <!-- GRÁFICAS: Tasa de exactitud + Top 5 artículos con más salidas -->
+  <!-- GRÁFICAS -->
   <section class="charts-section">
-    <div class="chart-card" title="Tasa de exactitud = (Líneas Totales - Líneas Afectadas) / Líneas Totales * 100%">
+    <div class="chart-card">
       <div class="chart-header">
-        <span class="chart-title">Tasa de exactitud</span>
-        <span class="chart-subtitle" id="tasaExactitudTexto" title="Porcentaje de líneas de IF despachadas sin error">–</span>
+        <span class="chart-title">Tasa de exactitud de surtido</span>
+        <span class="chart-subtitle" id="tasaExactitudTexto">–</span>
       </div>
       <div class="chart-wrap">
         <canvas id="chartExactitud"></canvas>
       </div>
     </div>
-    <div class="chart-card" title="Ranking de los 5 artículos (SKUs) con mayor volumen de piezas físicas despachadas">
+    <div class="chart-card">
       <div class="chart-header">
         <span class="chart-title">Top 5 artículos con más salidas</span>
-        <span class="chart-subtitle" id="topArticulosTotal" title="Total de placas escaneadas de estos artículos">–</span>
+        <span class="chart-subtitle" id="topArticulosTotal">–</span>
       </div>
       <div class="chart-wrap">
         <canvas id="chartTopArticulos"></canvas>
@@ -144,63 +130,55 @@
     </div>
   </section>
 
-  <!-- IFs MAL SACADAS -->
-  <section class="table-card">
-    <div class="table-header">
-      <div class="table-title" title="Órdenes de fabricación que presentaron alguna discrepancia en el surtido">
-        🔴 IFs mal sacadas
-        <span class="count-badge" id="badCount" title="Total de IFs con error en este período">0</span>
+  <!-- FILA 2: DIAGNÓSTICO RÁPIDO DE ERRORES (SUB-KPIS ASOCIADOS A LA TABLA DE ERRORES) -->
+  <section class="kpis-section" style="padding-top: 0;">
+    <div style="font-size: 13px; font-weight: 700; color: var(--gray-6, #6b7280); text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px;">
+      🔍 Diagnóstico Rápido de Errores
+    </div>
+    <div class="kpis-grid">
+      <div class="kpi-card" data-tooltip="Casos donde NetSuite solicitó una fracción pero se escaneó placa entera por falta de re-etiquetado.">
+        <div class="kpi-label"><span>🖨️ Medias Placas (Etiquetado)</span><span class="info-icon">ⓘ</span></div>
+        <div class="kpi-value" style="color: #8b5cf6;" id="kpiMediaPlaca">0</div>
+        <div class="kpi-sub" id="kpiMediaPlacaSub">0.00 m² sin re-etiquetar</div>
+      </div>
+
+      <div class="kpi-card" data-tooltip="Partidas donde se escanearon placas completas adicionales a las requeridas.">
+        <div class="kpi-label"><span>📦 Placas de Más (Sobrantes)</span><span class="info-icon">ⓘ</span></div>
+        <div class="kpi-value" style="color: #2563eb;" id="kpiSobrantes">0</div>
+        <div class="kpi-sub" id="kpiSobrantesSub">0.00 m² exceso</div>
+      </div>
+
+      <div class="kpi-card" data-tooltip="Partidas donde faltó escanear placas o se omitió la línea completa requerida.">
+        <div class="kpi-label"><span>🔻 Faltantes / Omitidas</span><span class="info-icon">ⓘ</span></div>
+        <div class="kpi-value text-error" id="kpiFaltantes">0</div>
+        <div class="kpi-sub" id="kpiFaltantesSub">0.00 m² faltantes</div>
+      </div>
+
+      <div class="kpi-card" data-tooltip="Material escaneado que no estaba registrado en la orden de NetSuite.">
+        <div class="kpi-label"><span>🔄 Huérfanos / Cruzados</span><span class="info-icon">ⓘ</span></div>
+        <div class="kpi-value" style="color: #4b5563;" id="kpiHuerfanos">0</div>
+        <div class="kpi-sub">SKUs fuera de la IF</div>
       </div>
     </div>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th class="sortable" data-table="malSacadas" data-sort="tranid" title="Clic para ordenar por Folio de IF">IF</th>
-            <th class="sortable" data-table="malSacadas" data-sort="trandate" title="Clic para ordenar por Fecha de transacción">Fecha</th>
-            <th class="sortable" data-table="malSacadas" data-sort="so" title="Clic para ordenar por Sales Order (Orden de Venta)">SO</th>
-            <th class="sortable" data-table="malSacadas" data-sort="location" title="Clic para ordenar por Sucursal/Almacén">Sucursal</th>
-            <th class="sortable" data-table="malSacadas" data-sort="operador" title="Clic para ordenar por Operador">Operador</th>
-            <th class="sortable" data-table="malSacadas" data-sort="errores" title="Clic para ordenar por Cantidad de errores">Errores</th>
-            <th title="Tipos de discrepancias detectadas en esta IF">Tipos</th>
-            <th title="Ver auditoría partida por partida">Acción</th>
-          </tr>
-        </thead>
-        <tbody id="tbodyMalSacadas">
-          <tr><td colspan="8"><div class="empty-state">Cargando…</div></td></tr>
-        </tbody>
-      </table>
-    </div>
-    <div class="pagination" id="pagMalSacadas"></div>
   </section>
 
-  <!-- DETALLE (modal) -->
-  <div id="detalleModal" class="confirm-modal" style="display: none;">
-    <div class="confirm-card" style="max-width: 900px; text-align: left;">
-      <h3 class="confirm-title" id="detalleTitle">Detalle de IF</h3>
-      <div id="detalleBody" style="max-height: 60vh; overflow: auto;"></div>
-      <div class="confirm-actions">
-        <button class="btn btn-ghost" onclick="cerrarDetalle()">Cerrar</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- DISCREPANCIAS A RESOLVER -->
-  <section class="table-card">
+  <!-- TABLA 1: IFs CON DISCREPANCIAS Y ALERTAS DE SURTIDO (CONSOLIDADAS) -->
+  <section class="table-card" style="margin-top: 16px;">
     <div class="table-header">
-      <div class="table-title" title="Listado detallado de cada anomalía individual encontrada">
-        📋 Discrepancias a resolver
-        <span class="count-badge" id="discCount" title="Total de discrepancias registradas">0</span>
+      <div class="table-title">
+        🔴 IFs con Discrepancias y Alertas de Surtido
+        <span class="count-badge text-error" id="badCount">0</span>
       </div>
       <div class="table-actions">
-        <select id="filtroTipoDisc" onchange="cargarDiscrepancias()" class="filter-select" aria-label="Filtrar por tipo de discrepancia" title="Filtrar la tabla por una categoría específica de discrepancia">
-          <option value="">Todos los tipos de discrepancia</option>
-          <option value="cantidad_faltante">Cantidad faltante</option>
-          <option value="cantidad_sobrante">Cantidad sobrante</option>
-          <option value="ubicacion_incorrecta">Ubicación incorrecta</option>
-          <option value="linea_faltante">Línea faltante</option>
-          <option value="sku_lote_no_esperado">SKU/lote no esperado (huérfano)</option>
-          <option value="if_no_encontrada">IF no encontrada en NetSuite</option>
+        <select id="filtroTipoError" onchange="filtrarTablaMalSacadas()" class="filter-select" aria-label="Filtrar por causa raíz">
+          <option value="">Todas las incidencias</option>
+          <option value="if_no_encontrada">🚨 Canceladas en ERP (Fugas)</option>
+          <option value="media_placa">🖨️ Error de Etiquetado (Media Placa)</option>
+          <option value="cantidad_sobrante">📦 Placas de más (Sobrante)</option>
+          <option value="cantidad_faltante">🔻 Cantidad faltante</option>
+          <option value="linea_faltante">📋 Línea omitida</option>
+          <option value="sku_lote_no_esperado">🔄 Artículo no esperado (Huérfano)</option>
+          <option value="ubicacion_incorrecta">📍 Ubicación incorrecta</option>
         </select>
       </div>
     </div>
@@ -208,64 +186,44 @@
       <table>
         <thead>
           <tr>
-            <th class="sortable" data-table="discrepancias" data-sort="if_tranid" title="Clic para ordenar por Folio de IF">IF</th>
-            <th class="sortable" data-table="discrepancias" data-sort="if_fecha" title="Clic para ordenar por Fecha de transacción">Fecha</th>
-            <th class="sortable" data-table="discrepancias" data-sort="if_so" title="Clic para ordenar por Sales Order origen">SO</th>
-            <th class="sortable" data-table="discrepancias" data-sort="if_location" title="Clic para ordenar por Sucursal">Sucursal</th>
-            <th class="sortable" data-table="discrepancias" data-sort="sku" title="Clic para ordenar por Código de SKU">SKU</th>
-            <th class="sortable" data-table="discrepancias" data-sort="lote" title="Clic para ordenar por Identificador de Lote">Lote</th>
-            <th class="sortable" data-table="discrepancias" data-sort="tipo" title="Clic para ordenar por Tipo de discrepancia">Tipo</th>
-            <th title="Comparativa entre lo solicitado y lo escaneado">Detalle</th>
+            <th class="sortable" data-table="malSacadas" data-sort="tranid">IF</th>
+            <th class="sortable" data-table="malSacadas" data-sort="trandate">Fecha</th>
+            <th class="sortable" data-table="malSacadas" data-sort="so">SO</th>
+            <th class="sortable" data-table="malSacadas" data-sort="location">Sucursal</th>
+            <th class="sortable" data-table="malSacadas" data-sort="operador">Operador</th>
+            <th class="sortable" data-table="malSacadas" data-sort="errores" style="text-align:center;">Incidencias</th>
+            <th style="text-align:center;">Semáforo</th>
+            <th>Causas Detectadas</th>
+            <th style="text-align:center;">Acción</th>
           </tr>
         </thead>
-        <tbody id="tbodyDiscrepancias">
-          <tr><td colspan="8"><div class="empty-state">Cargando…</div></td></tr>
+        <tbody id="tbodyMalSacadas">
+          <tr><td colspan="9"><div class="empty-state">Cargando…</div></td></tr>
         </tbody>
       </table>
     </div>
-    <div class="pagination" id="pagDiscrepancias"></div>
+    <div class="pagination" id="pagMalSacadas"></div>
   </section>
 
-  <!-- TOP ERRORES -->
+  <!-- TABLA 2: IFs BIEN SACADAS (100% EXACTITUD) -->
   <section class="table-card">
     <div class="table-header">
-      <div class="table-title" title="Top de recurrencia de fallas por artículo, lote y operador para identificar causas raíz">🏆 Top errores</div>
-    </div>
-    <div class="top-grid">
-      <div>
-        <h4 style="margin: 8px 0;" title="Artículos que concentran la mayor cantidad de errores en salidas">Por SKU</h4>
-        <ol id="topSkus" class="top-list"></ol>
-      </div>
-      <div>
-        <h4 style="margin: 8px 0;" title="Lotes de material con más incidencias registradas">Por lote</h4>
-        <ol id="topLotes" class="top-list"></ol>
-      </div>
-      <div>
-        <h4 style="margin: 8px 0;" title="Auxiliares de almacén con mayor número de incidencias acumuladas">Por operador</h4>
-        <ol id="topOperadores" class="top-list"></ol>
-      </div>
-    </div>
-  </section>
-
-  <!-- IFs OK (refuerzo) -->
-  <section class="table-card">
-    <div class="table-header">
-      <div class="table-title" title="Órdenes de fabricación despachadas con 100% de precisión">
-        ✅ IFs bien sacadas
-        <span class="count-badge text-success" id="okCount" title="Total de IFs 100% correctas en este período">0</span>
+      <div class="table-title">
+        ✅ IFs Bien Sacadas (100% Exactitud)
+        <span class="count-badge text-success" id="okCount">0</span>
       </div>
     </div>
     <div class="table-wrap">
       <table>
         <thead>
           <tr>
-            <th class="sortable" data-table="ifsOK" data-sort="tranid" title="Clic para ordenar por Folio de IF">IF</th>
-            <th class="sortable" data-table="ifsOK" data-sort="trandate" title="Clic para ordenar por Fecha de transacción">Fecha</th>
-            <th class="sortable" data-table="ifsOK" data-sort="so" title="Clic para ordenar por Sales Order">SO</th>
-            <th class="sortable" data-table="ifsOK" data-sort="location" title="Clic para ordenar por Sucursal">Sucursal</th>
-            <th class="sortable" data-table="ifsOK" data-sort="operador" title="Clic para ordenar por Operador">Operador</th>
-            <th class="sortable" data-table="ifsOK" data-sort="total_lineas" title="Clic para ordenar por Cantidad de líneas">Líneas</th>
-            <th title="Ver auditoría partida por partida">Acción</th>
+            <th class="sortable" data-table="ifsOK" data-sort="tranid">IF</th>
+            <th class="sortable" data-table="ifsOK" data-sort="trandate">Fecha</th>
+            <th class="sortable" data-table="ifsOK" data-sort="so">SO</th>
+            <th class="sortable" data-table="ifsOK" data-sort="location">Sucursal</th>
+            <th class="sortable" data-table="ifsOK" data-sort="operador">Operador</th>
+            <th class="sortable" data-table="ifsOK" data-sort="total_lineas" style="text-align:center;">Líneas</th>
+            <th style="text-align:center;">Acción</th>
           </tr>
         </thead>
         <tbody id="tbodyOK">
@@ -276,14 +234,28 @@
     <div class="pagination" id="pagOK"></div>
   </section>
 
+  <!-- MODAL DETALLE DE IF (CONSOLIDADO, SIN REPETICIÓN) -->
+  <div id="detalleModal" class="confirm-modal" style="display: none;">
+    <div class="confirm-card" style="max-width: 1050px; text-align: left; width: 95%;">
+      <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--gray-3, #e5e7eb); padding-bottom:12px; margin-bottom:16px;">
+        <h3 class="confirm-title" id="detalleTitle" style="margin:0;">Auditoría y Detalle de IF</h3>
+        <button class="btn btn-ghost" onclick="cerrarDetalle()" style="padding:4px 8px; font-size:16px;">✕</button>
+      </div>
+      <div id="detalleBody" style="max-height: 70vh; overflow-y: auto;"></div>
+      <div class="confirm-actions" style="margin-top: 16px;">
+        <button class="btn btn-ghost" onclick="cerrarDetalle()">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
 </main>
 
 <footer class="app-footer" id="appFooter"></footer>
 </div>
 
-<script src="js/config.js?v=8"></script>
-<script src="js/nav.js?v=8"></script>
-<script src="js/footer.js?v=8"></script>
-<script src="js/dashboard/app.js?v=8"></script>
+<script src="js/config.js?v=55"></script>
+<script src="js/nav.js?v=55"></script>
+<script src="js/footer.js?v=55"></script>
+<script src="js/dashboard/app.js?v=55"></script>
 </body>
 </html>
