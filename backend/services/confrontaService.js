@@ -633,6 +633,7 @@ function confrontar(ifsEsperadas, escaneos) {
   let m2Faltante = 0;
   let m2MediaPlaca = 0;
   let m2Canceladas = 0;
+  let m2CruzadosEntregado = 0;
   let m2CruzadosDiff = 0;
 
   for (const d of resultado.todas_las_discrepancias) {
@@ -641,14 +642,10 @@ function confrontar(ifsEsperadas, escaneos) {
         const parsedEntregado = parseLote(d.lote_entregado);
         const areaEntregada = parsedEntregado ? parsedEntregado.area : (d.area_placa_m2 || 0);
         const areaEsperada = d.area_placa_m2 || ((parseFloat(d.cantidad_m2_esperada) || 0) / (d.placas_esperadas || 1)) || 0;
-        const diffDim = (areaEntregada - areaEsperada) * (d.placas_esperadas || 1);
-        if (diffDim > 0.001) {
-          m2Sobrante += diffDim;
-          m2CruzadosDiff += diffDim;
-        } else if (diffDim < -0.001) {
-          m2Faltante += Math.abs(diffDim);
-          m2CruzadosDiff += Math.abs(diffDim);
-        }
+        const cant = (d.placas_esperadas || 1);
+        m2CruzadosEntregado += areaEntregada * cant;
+        const diffDim = (areaEntregada - areaEsperada) * cant;
+        m2CruzadosDiff += diffDim;
       }
     } else if (d.tipo === 'media_placa') {
       m2MediaPlaca += Math.abs(d.diff_m2 || 0);
@@ -725,7 +722,7 @@ function confrontar(ifsEsperadas, escaneos) {
   };
 
   const m2SobranteTotal = m2Sobrante + m2MediaPlaca;
-  const m2DesviacionTotal = m2SobranteTotal + m2Faltante;
+  const m2DesviacionTotal = m2SobranteTotal + m2Faltante + Math.abs(m2CruzadosDiff);
 
   resultado.kpis = {
     ifs_totales: resultado.ifs_ok.length + resultado.ifs_con_errores.length,
@@ -755,6 +752,7 @@ function confrontar(ifsEsperadas, escaneos) {
       media_placa: parseFloat(m2MediaPlaca.toFixed(2)),
       sobrante: parseFloat(m2SobranteTotal.toFixed(2)),
       sobrante_puro: parseFloat(m2Sobrante.toFixed(2)),
+      cruzados_entregado: parseFloat(m2CruzadosEntregado.toFixed(2)),
       cruzados_diff: parseFloat(m2CruzadosDiff.toFixed(2)),
       faltante: parseFloat(m2Faltante.toFixed(2)),
       canceladas_erp: parseFloat(m2Canceladas.toFixed(2))

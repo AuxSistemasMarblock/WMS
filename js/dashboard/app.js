@@ -476,7 +476,11 @@ function abrirModalConciliacion(kpiTipo) {
                 ${linkCruzados ? `<div style="margin-top:3px;">${linkCruzados}</div>` : ''}
               </td>
               <td style="text-align:center; font-weight:700; color:#d97706;">0 pzs <small style="color:var(--gray-6); font-weight:400;">(Entregado 1 a 1)</small></td>
-              <td style="text-align:right; color:var(--gray-5);">—</td>
+              <td style="text-align:right; font-weight:600; color:#d97706;">
+                ${(m2.cruzados_entregado || 0) > 0 
+                  ? `${(m2.cruzados_entregado || 0).toFixed(2)} m² <small style="color:var(--gray-6); font-weight:400;">(${Math.abs(m2.cruzados_diff || 0) > 0.001 ? ((m2.cruzados_diff > 0 ? '+' : '') + m2.cruzados_diff.toFixed(2) + ' m² var') : 'mismo tamaño'})</small>`
+                  : '0.00 m²'}
+              </td>
             </tr>
             <tr>
               <td><strong>🔄 Huérfanos Puros (Placas extra sin orden)</strong><br><small style="color:var(--gray-6);">Placas físicas escaneadas que no sustituyeron a ninguna faltante</small></td>
@@ -503,7 +507,7 @@ function abrirModalConciliacion(kpiTipo) {
                 ${linkFaltantes ? `<div style="margin-top:3px;">${linkFaltantes}</div>` : ''}
               </td>
               <td style="text-align:center; font-weight:700; color:#dc2626;">-${totalFaltantesPzs} pzs</td>
-              <td style="text-align:right; font-weight:600; color:#dc2626;">-${(m2.faltante || 0).toFixed(2)} m²</td>
+              <td style="text-align:right; font-weight:600; color:#dc2626;">${(m2.faltante || 0) > 0 ? `-${(m2.faltante || 0).toFixed(2)} m²` : '0.00 m²'}</td>
             </tr>
             <tr style="background:#f8fafc; font-weight:700;">
               <td>VARIACIÓN FÍSICA NETA TOTAL</td>
@@ -548,7 +552,7 @@ function abrirModalConciliacion(kpiTipo) {
           ${(m2.desviacion_total || 0).toFixed(2)} m² de Desviación Absoluta Total
         </div>
         <div style="color:var(--gray-7, #374151); font-size:13px; line-height:1.4;">
-          El impacto físico se compone de <strong>+${(m2.sobrante || 0).toFixed(2)} m²</strong> despachados de más (por no re-etiquetar fracciones o surtir placas extra) y <strong>-${(m2.faltante || 0).toFixed(2)} m²</strong> de material pendiente/omitido.
+          El impacto físico se compone de <strong>+${(m2.sobrante || 0).toFixed(2)} m²</strong> despachados de más (por no re-etiquetar fracciones o surtir placas extra), <strong>${Math.abs(m2.cruzados_diff || 0) > 0.001 ? ((m2.cruzados_diff > 0 ? '+' : '') + m2.cruzados_diff.toFixed(2) + ' m²') : '0.00 m²'}</strong> de variación por cortes en lotes cruzados y <strong>-${(m2.faltante || 0).toFixed(2)} m²</strong> de material pendiente/omitido.
         </div>
       </div>
       <div class="detalle-table-wrap">
@@ -570,12 +574,16 @@ function abrirModalConciliacion(kpiTipo) {
               <td style="text-align:right; font-weight:600; color:#8b5cf6;">+${(m2.media_placa || 0).toFixed(2)} m²</td>
             </tr>
             <tr>
-              <td>🔀 Lotes Cruzados (Variación por medidas de corte)</td>
+              <td>🔀 Lotes Cruzados (Variación dimensional por corte)</td>
               <td style="text-align:center;">
                 <div style="font-weight:600; font-size:13px;">${desglose.lote_cruzado || 0}</div>
                 ${(desglose.lote_cruzado || 0) > 0 ? `<div style="margin-top:3px;"><button class="tabla-filtro-link" onclick="cerrarConciliacion(); filtrarPorSubKpi('lote_cruzado');">Ver ↗</button></div>` : ''}
               </td>
-              <td style="text-align:right; font-weight:600; color:#d97706;">${(m2.cruzados_diff && m2.cruzados_diff > 0) ? ('+' + m2.cruzados_diff.toFixed(2) + ' m²') : '0.00 m² (Mismo tamaño)'}</td>
+              <td style="text-align:right; font-weight:600; color:#d97706;">
+                ${Math.abs(m2.cruzados_diff || 0) > 0.001 
+                  ? `${(m2.cruzados_diff > 0 ? '+' : '') + m2.cruzados_diff.toFixed(2)} m² <small style="color:var(--gray-6);">(${(m2.cruzados_entregado || 0).toFixed(2)} m² entregados)</small>` 
+                  : '0.00 m² (Mismo tamaño)'}
+              </td>
             </tr>
             <tr>
               <td>📦 Placas de Más (Sobrantes físicos completos)</td>
@@ -591,7 +599,7 @@ function abrirModalConciliacion(kpiTipo) {
                 <div style="font-weight:600; font-size:13px;">${totalFaltantesCasos}</div>
                 ${totalFaltantesCasos > 0 ? `<div style="margin-top:3px;"><button class="tabla-filtro-link" onclick="cerrarConciliacion(); filtrarPorSubKpi('faltantes_grupo');">Ver ↗</button></div>` : ''}
               </td>
-              <td style="text-align:right; font-weight:600; color:#dc2626;">-${(m2.faltante || 0).toFixed(2)} m²</td>
+              <td style="text-align:right; font-weight:600; color:#dc2626;">${(m2.faltante || 0) > 0 ? `-${(m2.faltante || 0).toFixed(2)} m²` : '0.00 m²'}</td>
             </tr>
             <tr style="background:#f8fafc; font-weight:700;">
               <td>DESVIACIÓN TOTAL ACUMULADA</td>
