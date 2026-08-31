@@ -246,14 +246,13 @@
   <!-- MODAL 1: CONCILIACIÓN MATEMÁTICA DE KPI -->
   <div id="conciliacionModal" class="confirm-modal" style="display: none;">
     <div class="confirm-card" style="max-width: 780px; text-align: left; width: 95%;">
-      <div class="confirm-header">
-        <h3 id="conciliacionTitle" style="margin:0; font-size:18px; font-weight:700; color:var(--gray-8, #1f2937);">📦 Conciliación Matemática</h3>
-        <button class="confirm-close" onclick="cerrarConciliacion()">&times;</button>
+      <div style="border-bottom:1px solid var(--gray-3, #e5e7eb); padding-bottom:12px; margin-bottom:16px;">
+        <h3 class="confirm-title" id="conciliacionTitle" style="margin:0;">📦 Conciliación Matemática</h3>
       </div>
-      <div class="confirm-body" id="conciliacionBody" style="padding: 16px 20px;"></div>
-      <div class="confirm-footer" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; border-top:1px solid var(--gray-3, #e5e7eb); padding:12px 20px;">
+      <div id="conciliacionBody"></div>
+      <div class="confirm-actions" style="margin-top: 16px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
         <div id="conciliacionQuickActions"></div>
-        <button class="btn btn-secondary" onclick="cerrarConciliacion()">Cerrar</button>
+        <button class="btn btn-ghost" onclick="cerrarConciliacion()">Cerrar</button>
       </div>
     </div>
   </div>
@@ -261,12 +260,11 @@
   <!-- MODAL 2: DETALLE DE IF (CONSOLIDADO, SIN REPETICIÓN) -->
   <div id="detalleModal" class="confirm-modal" style="display: none;">
     <div class="confirm-card" style="max-width: 1050px; text-align: left; width: 95%;">
-      <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--gray-3, #e5e7eb); padding-bottom:12px; margin-bottom:16px;">
+      <div style="border-bottom:1px solid var(--gray-3, #e5e7eb); padding-bottom:12px; margin-bottom:16px;">
         <h3 class="confirm-title" id="detalleTitle" style="margin:0;">Auditoría y Detalle de IF</h3>
-        <button class="btn btn-ghost" onclick="cerrarDetalle()" style="padding:4px 8px; font-size:16px;">✕</button>
       </div>
       <div id="detalleBody" style="max-height: 70vh; overflow-y: auto;"></div>
-      <div class="confirm-actions" style="margin-top: 16px;">
+      <div class="confirm-actions" style="margin-top: 16px; display:flex; justify-content:flex-end;">
         <button class="btn btn-ghost" onclick="cerrarDetalle()">Cerrar</button>
       </div>
     </div>
@@ -274,12 +272,13 @@
 
 </main>
 
+<div class="toast" id="toast"></div>
 <footer class="app-footer" id="appFooter"></footer>
 </div>
 
-<script src="js/config.js?v=130"></script>
-<script src="js/nav.js?v=130"></script>
-<script src="js/footer.js?v=130"></script>
-<script src="js/dashboard/app.js?v=130"></script>
+<script src="js/config.js?v=135"></script>
+<script src="js/nav.js?v=135"></script>
+<script src="js/footer.js?v=135"></script>
+<script src="js/dashboard/app.js?v=135"></script>
 </body>
 </html>
