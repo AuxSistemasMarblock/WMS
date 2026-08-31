@@ -417,6 +417,8 @@ function abrirModalConciliacion(kpiTipo) {
 
   quickActionsEl.innerHTML = '';
 
+  if (kpiTipo === 'volumen') {
+    titleEl.textContent = '📦 Conciliación Matemática: Volumen Despachado';
     const linkMediaPlaca = (desglose.media_placa || 0) > 0
       ? `<button class="tabla-filtro-link" onclick="cerrarConciliacion(); filtrarPorSubKpi('media_placa');">Ver ${desglose.media_placa} ↗</button>`
       : '';
