@@ -10,7 +10,8 @@ const state = {
   periodo: 'hoy',
   loading: false,
   sucursales: [],
-  sucursalUsuario: null
+  sucursalUsuario: null,
+  currentKPIs: null
 };
 
 const PAGE_SIZE = 10;
@@ -308,6 +309,7 @@ async function cargarKPIs() {
     const data = await apiFetch('/api/dashboard/resumen?' + buildParams());
     const k = data.kpis;
     if (!k) return;
+    state.currentKPIs = k;
 
     // Fila 1: Indicadores Clave
     $('kpiExactitud').textContent = (k.tasa_exactitud || 0).toFixed(1) + '%';
@@ -327,22 +329,225 @@ async function cargarKPIs() {
 
     // Fila 2: Sub-KPIs de Diagnóstico Rápido
     const desglose = k.desglose_errores || {};
+    const imp = k.impacto_placas || {};
+
     $('kpiMediaPlaca').textContent = `${desglose.media_placa || 0} casos`;
-    $('kpiMediaPlacaSub').textContent = `${(m2.media_placa || 0).toFixed(2)} m² sin re-etiquetar`;
+    $('kpiMediaPlacaSub').textContent = `+${imp.media_placa || 0} pzs (+${(m2.media_placa || 0).toFixed(2)} m²)`;
 
     $('kpiSobrantes').textContent = `${desglose.cantidad_sobrante || 0} casos`;
-    $('kpiSobrantesSub').textContent = `+${(m2.sobrante_puro || 0).toFixed(2)} m² exceso`;
+    $('kpiSobrantesSub').textContent = `+${imp.sobrantes || 0} pzs (+${(m2.sobrante_puro || 0).toFixed(2)} m²)`;
 
     const totalFaltantes = (desglose.cantidad_faltante || 0) + (desglose.linea_faltante || 0);
     $('kpiFaltantes').textContent = `${totalFaltantes} casos`;
-    $('kpiFaltantesSub').textContent = `-${(m2.faltante || 0).toFixed(2)} m² por surtir`;
+    $('kpiFaltantesSub').textContent = `-${imp.faltantes || 0} pzs fis / ${desglose.linea_faltante || 0} omit`;
 
     $('kpiHuerfanos').textContent = `${desglose.sku_lote_no_esperado || 0} pzs`;
+    $('kpiHuerfanosSub').textContent = `+${imp.huerfanos || desglose.sku_lote_no_esperado || 0} pzs fuera de IF`;
 
     renderChartExactitud(k.ifs_ok, k.ifs_con_errores, k.tasa_exactitud);
   } catch (e) {
     showToast('Error cargando KPIs: ' + e.message, 'error');
   }
+}
+
+// =================== INTERACTIVIDAD: SUB-KPIS CLICK-TO-FILTER (OPCIÓN 3) ===================
+function filtrarPorSubKpi(tipo) {
+  const sel = $('filtroTipoError');
+  if (tipo === 'faltantes_grupo') {
+    sel.value = 'linea_faltante'; // filtra omisiones o faltantes
+  } else {
+    sel.value = tipo;
+  }
+
+  // Quitar active de todas y marcar la actual
+  document.querySelectorAll('.sub-kpi-card').forEach(c => c.classList.remove('active-filter'));
+  const cardMap = {
+    'media_placa': 'subKpiMediaPlaca',
+    'cantidad_sobrante': 'subKpiSobrantes',
+    'faltantes_grupo': 'subKpiFaltantes',
+    'cantidad_faltante': 'subKpiFaltantes',
+    'sku_lote_no_esperado': 'subKpiHuerfanos'
+  };
+  const cardId = cardMap[tipo];
+  if (cardId && $(cardId)) $(cardId).classList.add('active-filter');
+
+  filtrarTablaMalSacadas();
+
+  // Scroll suave hacia la tabla
+  const seccion = $('seccionTablaIncidencias');
+  if (seccion) {
+    seccion.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  const nombres = {
+    'media_placa': 'Medias Placas (Etiquetado)',
+    'cantidad_sobrante': 'Placas de Más (Sobrantes)',
+    'faltantes_grupo': 'Líneas Faltantes / Omitidas',
+    'sku_lote_no_esperado': 'Huérfanos / No esperados'
+  };
+  showToast(`Filtrando tabla por: ${nombres[tipo] || tipo}`, 'info');
+}
+
+// =================== MODAL 1: CONCILIACIÓN MATEMÁTICA DE KPI (OPCIÓN 1) ===================
+function abrirModalConciliacion(kpiTipo) {
+  const k = state.currentKPIs;
+  if (!k) return;
+
+  const titleEl = $('conciliacionTitle');
+  const bodyEl = $('conciliacionBody');
+  const quickActionsEl = $('conciliacionQuickActions');
+  const diffPlacas = (k.placas_escaneadas || 0) - (k.placas_esperadas || 0);
+  const m2 = k.m2 || {};
+  const desglose = k.desglose_errores || {};
+  const imp = k.impacto_placas || {};
+
+  quickActionsEl.innerHTML = '';
+
+  if (kpiTipo === 'volumen') {
+    titleEl.textContent = '📦 Conciliación Matemática: Volumen Despachado';
+    bodyEl.innerHTML = `
+      <div class="balance-card-summary">
+        <div style="font-size:16px; font-weight:700; color:#004a99; margin-bottom:8px;">
+          ${k.placas_escaneadas} placas físicas escaneadas vs ${k.placas_esperadas} placas requeridas en ERP
+        </div>
+        <div style="color:var(--gray-7, #374151); line-height:1.5;">
+          Existe una variación neta de <strong>+${diffPlacas} placas físicas</strong> despachadas en exceso durante este período. A continuación se desglosa el origen exacto de cada pieza:
+        </div>
+      </div>
+
+      <div class="detalle-table-wrap">
+        <table class="detalle-table">
+          <thead>
+            <tr>
+              <th>Causa Raíz Operativa</th>
+              <th style="text-align:center;">Órdenes / Casos</th>
+              <th style="text-align:center;">Impacto en Placas</th>
+              <th style="text-align:right;">Impacto en Área</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>🖨️ Medias Placas (Error de etiquetado)</strong><br><small style="color:var(--gray-6);">Se pidió fracción (ej. 0.5 o 1.5) y se escaneó placa completa</small></td>
+              <td style="text-align:center;">${desglose.media_placa || 0} órdenes</td>
+              <td style="text-align:center; font-weight:700; color:#8b5cf6;">+${imp.media_placa || 0} pzs</td>
+              <td style="text-align:right; font-weight:600;">+${(m2.media_placa || 0).toFixed(2)} m²</td>
+            </tr>
+            <tr>
+              <td><strong>🔄 Huérfanos / Cruzados</strong><br><small style="color:var(--gray-6);">Placas físicas escaneadas que no pertenecían a la IF</small></td>
+              <td style="text-align:center;">${desglose.sku_lote_no_esperado || 0} piezas</td>
+              <td style="text-align:center; font-weight:700; color:#4b5563;">+${imp.huerfanos || desglose.sku_lote_no_esperado || 0} pzs</td>
+              <td style="text-align:right; color:var(--gray-5);">—</td>
+            </tr>
+            <tr>
+              <td><strong>📦 Placas de Más (Sobrantes puros)</strong><br><small style="color:var(--gray-6);">Partidas donde se escanearon placas completas adicionales</small></td>
+              <td style="text-align:center;">${desglose.cantidad_sobrante || 0} partidas</td>
+              <td style="text-align:center; font-weight:700; color:#2563eb;">+${imp.sobrantes || 0} pzs</td>
+              <td style="text-align:right; font-weight:600;">+${(m2.sobrante_puro || 0).toFixed(2)} m²</td>
+            </tr>
+            <tr>
+              <td><strong>🔻 Faltantes Parciales Físicos</strong><br><small style="color:var(--gray-6);">Partidas donde faltó escanear material físico</small></td>
+              <td style="text-align:center;">${desglose.cantidad_faltante || 0} partidas</td>
+              <td style="text-align:center; font-weight:700; color:#dc2626;">-${imp.faltantes || 0} pzs</td>
+              <td style="text-align:right; font-weight:600; color:#dc2626;">-${(m2.faltante || 0).toFixed(2)} m²</td>
+            </tr>
+            <tr style="background:#f8fafc; font-weight:700;">
+              <td>VARIACIÓN FÍSICA NETA TOTAL</td>
+              <td style="text-align:center;">${k.total_discrepancias} incidencias</td>
+              <td style="text-align:center; color:#004a99; font-size:15px;">+${diffPlacas} placas</td>
+              <td style="text-align:right; color:#dc2626; font-size:15px;">${m2.desviacion_total.toFixed(2)} m²</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    `;
+
+    quickActionsEl.innerHTML = `
+      <button class="btn btn-primary" onclick="cerrarConciliacion(); filtrarPorSubKpi('media_placa');">Ver Medias Placas</button>
+      <button class="btn btn-ghost" onclick="cerrarConciliacion(); filtrarPorSubKpi('sku_lote_no_esperado');">Ver Huérfanos</button>
+    `;
+  } else if (kpiTipo === 'desviacion') {
+    titleEl.textContent = '📐 Conciliación Matemática: Desviación Total de Área (m²)';
+    bodyEl.innerHTML = `
+      <div class="balance-card-summary">
+        <div style="font-size:16px; font-weight:700; color:#dc2626; margin-bottom:8px;">
+          ${(m2.desviacion_total || 0).toFixed(2)} m² de Desviación Absoluta Total
+        </div>
+        <div style="color:var(--gray-7, #374151); line-height:1.5;">
+          El impacto físico se compone de <strong>+${(m2.sobrante || 0).toFixed(2)} m²</strong> despachados de más (por no re-etiquetar fracciones o surtir placas extra) y <strong>-${(m2.faltante || 0).toFixed(2)} m²</strong> de material pendiente/omitido.
+        </div>
+      </div>
+      <div class="detalle-table-wrap">
+        <table class="detalle-table">
+          <thead>
+            <tr>
+              <th>Concepto de Impacto</th>
+              <th style="text-align:center;">Casos</th>
+              <th style="text-align:right;">Metros Cuadrados (m²)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>🖨️ Medias Placas (Exceso por falta de re-etiquetado)</td>
+              <td style="text-align:center;">${desglose.media_placa || 0}</td>
+              <td style="text-align:right; font-weight:600; color:#8b5cf6;">+${(m2.media_placa || 0).toFixed(2)} m²</td>
+            </tr>
+            <tr>
+              <td>📦 Placas de Más (Sobrantes físicos completos)</td>
+              <td style="text-align:center;">${desglose.cantidad_sobrante || 0}</td>
+              <td style="text-align:right; font-weight:600; color:#2563eb;">+${(m2.sobrante_puro || 0).toFixed(2)} m²</td>
+            </tr>
+            <tr>
+              <td>🔻 Faltantes Físicos + Líneas Omitidas en NetSuite</td>
+              <td style="text-align:center;">${(desglose.cantidad_faltante || 0) + (desglose.linea_faltante || 0)}</td>
+              <td style="text-align:right; font-weight:600; color:#dc2626;">-${(m2.faltante || 0).toFixed(2)} m²</td>
+            </tr>
+            <tr style="background:#f8fafc; font-weight:700;">
+              <td>DESVIACIÓN TOTAL ACUMULADA</td>
+              <td style="text-align:center;">—</td>
+              <td style="text-align:right; color:#dc2626; font-size:15px;">${(m2.desviacion_total || 0).toFixed(2)} m²</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    `;
+  } else if (kpiTipo === 'exactitud') {
+    titleEl.textContent = '🎯 Conciliación: Tasa de Exactitud (Perfect Order)';
+    bodyEl.innerHTML = `
+      <div class="balance-card-summary">
+        <div style="font-size:16px; font-weight:700; color:#059669; margin-bottom:8px;">
+          ${(k.tasa_exactitud || 0).toFixed(1)}% de Exactitud Perfect Order
+        </div>
+        <div style="color:var(--gray-7, #374151); line-height:1.5;">
+          Fórmula estándar de Supply Chain: <br>
+          <code>(IFs 100% Correctas [${k.ifs_ok}] / Total IFs evaluadas [${k.ifs_totales}]) × 100 = ${(k.tasa_exactitud || 0).toFixed(1)}%</code><br><br>
+          • <strong>${k.ifs_ok} IFs</strong> se surtieron de forma impecable sin ningún faltante, sobrante ni error de lote.<br>
+          • <strong>${k.ifs_con_errores} IFs</strong> presentaron alguna discrepancia física que requiere corrección en almacén.<br>
+          • <em>Nota: Las ${k.ifs_canceladas_erp} IFs canceladas en ERP se excluyen de la evaluación para no castigar al almacén por errores administrativos.</em>
+        </div>
+      </div>
+    `;
+  } else if (kpiTipo === 'canceladas') {
+    titleEl.textContent = '🚨 Conciliación: Fugas / IFs Canceladas en NetSuite';
+    bodyEl.innerHTML = `
+      <div class="balance-card-summary">
+        <div style="font-size:16px; font-weight:700; color:#d97706; margin-bottom:8px;">
+          ${k.ifs_canceladas_erp} Órdenes (${k.placas_canceladas} placas | ${(m2.canceladas_erp || 0).toFixed(2)} m²)
+        </div>
+        <div style="color:var(--gray-7, #374151); line-height:1.5;">
+          Estas órdenes fueron escaneadas y despachadas físicamente por el almacén, pero en NetSuite fueron eliminadas o canceladas. Representan una <strong>fuga de inventario</strong> que requiere refacturación inmediata o coordinación de retorno.
+        </div>
+      </div>
+    `;
+    quickActionsEl.innerHTML = `
+      <button class="btn btn-primary" onclick="cerrarConciliacion(); filtrarPorSubKpi('if_no_encontrada');">Ver IFs Canceladas en Tabla</button>
+    `;
+  }
+
+  $('conciliacionModal').style.display = 'flex';
+}
+
+function cerrarConciliacion() {
+  $('conciliacionModal').style.display = 'none';
 }
 
 // =================== TABLA 1: IFs MAL SACADAS Y CANCELADAS ===================
@@ -454,7 +659,7 @@ function renderIFsOK() {
   renderPaginador('ifsOK');
 }
 
-// =================== MODAL DETALLE CONSOLIDADO (SIN REPETICIÓN) ===================
+// =================== MODAL 2: DETALLE CONSOLIDADO (SIN REPETICIÓN) ===================
 async function verDetalle(tranid) {
   $('detalleTitle').textContent = 'Auditoría y Detalle de ' + tranid;
   $('detalleBody').innerHTML = '<div class="empty-state">Cargando análisis partida por partida…</div>';
@@ -505,7 +710,7 @@ function renderDetalle(ifDoc) {
         <tbody>
   `);
 
-  // Agrupar discrepancias por clave SKU|LOTE para inyectar directamente en cada renglón
+  // Agrupar discrepancias por clave SKU|LOTE
   const discPorLinea = new Map();
   (ifDoc.discrepancias || []).forEach(d => {
     const key = `${d.sku || ''}|${d.lote || ''}`;
@@ -513,11 +718,11 @@ function renderDetalle(ifDoc) {
     discPorLinea.get(key).push(d);
   });
 
-  // Renderizar cada línea evaluada
+  // Renderizar cada línea esperada
   (ifDoc.lineas || []).forEach(l => {
     const key = `${l.sku || ''}|${l.lote || ''}`;
     const discs = discPorLinea.get(key) || [];
-    discPorLinea.delete(key); // Marcar como consumida
+    discPorLinea.delete(key);
 
     const parsedArea = l.evaluacion_cantidad?.area_placa_m2 || 0;
     const m2Esp = l.quantity ? parseFloat(l.quantity).toFixed(2) + 'm²' : '—';
@@ -559,7 +764,7 @@ function renderDetalle(ifDoc) {
     `);
   });
 
-  // Renderizar discrepancias huérfanas que no coincidieron con ninguna línea esperada
+  // Renderizar discrepancias huérfanas
   discPorLinea.forEach((discs, key) => {
     const d = discs[0];
     const skuStr = d.sku || '—';

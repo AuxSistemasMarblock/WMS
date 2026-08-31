@@ -110,6 +110,60 @@
   }
 }
 
+.kpi-card.clickable {
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+  position: relative;
+}
+
+.kpi-card.clickable:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 74, 153, 0.1);
+  border-color: #93c5fd;
+}
+
+.sub-kpi-card {
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.sub-kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  border-color: #cbd5e1;
+  background-color: #f8fafc;
+}
+
+.sub-kpi-card.active-filter {
+  border-color: #004a99;
+  background-color: #eff6ff;
+  box-shadow: 0 0 0 2px rgba(0, 74, 153, 0.2);
+}
+
+.balance-card-summary {
+  background: var(--gray-1, #f9fafb);
+  border: 1px solid var(--gray-3, #e5e7eb);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+
+.balance-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--gray-2, #f3f4f6);
+}
+
+.balance-row:last-child {
+  border-bottom: none;
+  font-weight: 700;
+  font-size: 15px;
+  padding-top: 12px;
+}
+
 /* ─────────────────────────────────────────────
    GRÁFICAS
    ───────────────────────────────────────────── */

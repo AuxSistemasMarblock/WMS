@@ -76,32 +76,37 @@
     </div>
   </section>
 
-  <!-- FILA 1: KPIs PRINCIPALES (SALUD OPERATIVA - 4 EN LÍNEA) -->
+  <!-- FILA 1: KPIs PRINCIPALES (SALUD OPERATIVA - CLICKEABLES) -->
   <section class="kpis-section">
-    <div style="font-size: 13px; font-weight: 700; color: var(--gray-6, #6b7280); text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px;">
-      📊 Indicadores Clave de Desempeño (Supply Chain)
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+      <div style="font-size: 13px; font-weight: 700; color: var(--gray-6, #6b7280); text-transform: uppercase; letter-spacing: 0.5px;">
+        📊 Indicadores Clave de Desempeño (Supply Chain)
+      </div>
+      <div style="font-size: 11px; color: #004a99; font-weight: 600;">
+        💡 Da clic en cualquier tarjeta para ver su conciliación matemática
+      </div>
     </div>
     <div class="kpis-grid">
-      <div class="kpi-card" id="cardKpiExactitud" data-tooltip="Fórmula: (IFs sin ningún error físico / Total IFs evaluadas) × 100. Excluye cancelaciones de ERP.">
-        <div class="kpi-label"><span>🎯 Tasa Exactitud (Perfect Order)</span><span class="info-icon">ⓘ</span></div>
+      <div class="kpi-card clickable" id="cardKpiExactitud" onclick="abrirModalConciliacion('exactitud')" data-tooltip="Fórmula: (IFs 100% correctas / Total IFs evaluadas) × 100. Da clic para ver desglose.">
+        <div class="kpi-label"><span>🎯 Tasa Exactitud (Perfect Order)</span><span class="info-icon">🔍</span></div>
         <div class="kpi-value text-success" id="kpiExactitud">–</div>
         <div class="kpi-sub" id="kpiExactitudSub">Conforme a pedidos sin error</div>
       </div>
 
-      <div class="kpi-card" id="cardKpiVolumen" data-tooltip="Piezas físicas escaneadas en almacén vs piezas teóricas solicitadas por NetSuite.">
-        <div class="kpi-label"><span>📦 Volumen Despachado</span><span class="info-icon">ⓘ</span></div>
+      <div class="kpi-card clickable" id="cardKpiVolumen" onclick="abrirModalConciliacion('volumen')" data-tooltip="Placas físicas escaneadas vs placas teóricas solicitadas. Da clic para ver balance.">
+        <div class="kpi-label"><span>📦 Volumen Despachado</span><span class="info-icon">🔍</span></div>
         <div class="kpi-value" id="kpiVolumen">–</div>
         <div class="kpi-sub" id="kpiVolumenSub">0 placas de variación física</div>
       </div>
 
-      <div class="kpi-card" id="cardKpiDesviacion" data-tooltip="Suma acumulada de metros cuadrados desviados por medias placas, sobrantes y faltantes.">
-        <div class="kpi-label"><span>📐 Desviación Total (Área)</span><span class="info-icon">ⓘ</span></div>
+      <div class="kpi-card clickable" id="cardKpiDesviacion" onclick="abrirModalConciliacion('desviacion')" data-tooltip="Metros cuadrados desviados por sobrantes, medias placas y faltantes. Da clic para ver balance.">
+        <div class="kpi-label"><span>📐 Desviación Total (Área)</span><span class="info-icon">🔍</span></div>
         <div class="kpi-value text-error" id="kpiDesviacion">–</div>
         <div class="kpi-sub" id="kpiDesviacionSub">Impacto en metros cuadrados</div>
       </div>
 
-      <div class="kpi-card" id="cardKpiCanceladas" data-tooltip="Órdenes que salieron físicamente de almacén pero fueron canceladas o eliminadas en NetSuite.">
-        <div class="kpi-label"><span>🚨 Fugas / Canceladas ERP</span><span class="info-icon">ⓘ</span></div>
+      <div class="kpi-card clickable" id="cardKpiCanceladas" onclick="abrirModalConciliacion('canceladas')" data-tooltip="Órdenes despachadas en almacén pero borradas/canceladas en NetSuite. Da clic para ver detalle.">
+        <div class="kpi-label"><span>🚨 Fugas / Canceladas ERP</span><span class="info-icon">🔍</span></div>
         <div class="kpi-value" style="color: #d97706;" id="kpiCanceladas">–</div>
         <div class="kpi-sub" id="kpiCanceladasSub">Mercancía fuera de NetSuite</div>
       </div>
@@ -130,40 +135,45 @@
     </div>
   </section>
 
-  <!-- FILA 2: DIAGNÓSTICO RÁPIDO DE ERRORES (SUB-KPIS ASOCIADOS A LA TABLA DE ERRORES) -->
+  <!-- FILA 2: DIAGNÓSTICO RÁPIDO DE ERRORES (SUB-KPIS CON FILTRO DIRECTO) -->
   <section class="kpis-section" style="padding-top: 0;">
-    <div style="font-size: 13px; font-weight: 700; color: var(--gray-6, #6b7280); text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px;">
-      🔍 Diagnóstico Rápido de Errores
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+      <div style="font-size: 13px; font-weight: 700; color: var(--gray-6, #6b7280); text-transform: uppercase; letter-spacing: 0.5px;">
+        🔍 Diagnóstico Rápido de Errores
+      </div>
+      <div style="font-size: 11px; color: var(--gray-6, #6b7280); font-weight: 500;">
+        👆 Da clic en cualquier categoría para filtrar la tabla inferior automáticamente
+      </div>
     </div>
     <div class="kpis-grid">
-      <div class="kpi-card" data-tooltip="Casos donde NetSuite solicitó una fracción pero se escaneó placa entera por falta de re-etiquetado.">
-        <div class="kpi-label"><span>🖨️ Medias Placas (Etiquetado)</span><span class="info-icon">ⓘ</span></div>
+      <div class="kpi-card sub-kpi-card" id="subKpiMediaPlaca" onclick="filtrarPorSubKpi('media_placa')" data-tooltip="Placas fraccionadas escaneadas completas por falta de re-etiquetado. Da clic para filtrar.">
+        <div class="kpi-label"><span>🖨️ Medias Placas (Etiquetado)</span><span class="info-icon">⬎</span></div>
         <div class="kpi-value" style="color: #8b5cf6;" id="kpiMediaPlaca">0</div>
         <div class="kpi-sub" id="kpiMediaPlacaSub">0.00 m² sin re-etiquetar</div>
       </div>
 
-      <div class="kpi-card" data-tooltip="Partidas donde se escanearon placas completas adicionales a las requeridas.">
-        <div class="kpi-label"><span>📦 Placas de Más (Sobrantes)</span><span class="info-icon">ⓘ</span></div>
+      <div class="kpi-card sub-kpi-card" id="subKpiSobrantes" onclick="filtrarPorSubKpi('cantidad_sobrante')" data-tooltip="Partidas donde se escanearon placas completas adicionales. Da clic para filtrar.">
+        <div class="kpi-label"><span>📦 Placas de Más (Sobrantes)</span><span class="info-icon">⬎</span></div>
         <div class="kpi-value" style="color: #2563eb;" id="kpiSobrantes">0</div>
         <div class="kpi-sub" id="kpiSobrantesSub">0.00 m² exceso</div>
       </div>
 
-      <div class="kpi-card" data-tooltip="Partidas donde faltó escanear placas o se omitió la línea completa requerida.">
-        <div class="kpi-label"><span>🔻 Faltantes / Omitidas</span><span class="info-icon">ⓘ</span></div>
+      <div class="kpi-card sub-kpi-card" id="subKpiFaltantes" onclick="filtrarPorSubKpi('faltantes_grupo')" data-tooltip="Partidas con piezas faltantes o líneas omitidas en NetSuite. Da clic para filtrar.">
+        <div class="kpi-label"><span>🔻 Faltantes / Omitidas</span><span class="info-icon">⬎</span></div>
         <div class="kpi-value text-error" id="kpiFaltantes">0</div>
         <div class="kpi-sub" id="kpiFaltantesSub">0.00 m² faltantes</div>
       </div>
 
-      <div class="kpi-card" data-tooltip="Material escaneado que no estaba registrado en la orden de NetSuite.">
-        <div class="kpi-label"><span>🔄 Huérfanos / Cruzados</span><span class="info-icon">ⓘ</span></div>
+      <div class="kpi-card sub-kpi-card" id="subKpiHuerfanos" onclick="filtrarPorSubKpi('sku_lote_no_esperado')" data-tooltip="Material escaneado que no estaba registrado en la orden de NetSuite. Da clic para filtrar.">
+        <div class="kpi-label"><span>🔄 Huérfanos / Cruzados</span><span class="info-icon">⬎</span></div>
         <div class="kpi-value" style="color: #4b5563;" id="kpiHuerfanos">0</div>
-        <div class="kpi-sub">SKUs fuera de la IF</div>
+        <div class="kpi-sub" id="kpiHuerfanosSub">SKUs fuera de la IF</div>
       </div>
     </div>
   </section>
 
   <!-- TABLA 1: IFs CON DISCREPANCIAS Y ALERTAS DE SURTIDO (CONSOLIDADAS) -->
-  <section class="table-card" style="margin-top: 16px;">
+  <section class="table-card" id="seccionTablaIncidencias" style="margin-top: 16px;">
     <div class="table-header">
       <div class="table-title">
         🔴 IFs con Discrepancias y Alertas de Surtido
@@ -234,7 +244,22 @@
     <div class="pagination" id="pagOK"></div>
   </section>
 
-  <!-- MODAL DETALLE DE IF (CONSOLIDADO, SIN REPETICIÓN) -->
+  <!-- MODAL 1: CONCILIACIÓN MATEMÁTICA DE KPI -->
+  <div id="conciliacionModal" class="confirm-modal" style="display: none;">
+    <div class="confirm-card" style="max-width: 780px; text-align: left; width: 95%;">
+      <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--gray-3, #e5e7eb); padding-bottom:12px; margin-bottom:16px;">
+        <h3 class="confirm-title" id="conciliacionTitle" style="margin:0;">Conciliación de Indicador</h3>
+        <button class="btn btn-ghost" onclick="cerrarConciliacion()" style="padding:4px 8px; font-size:16px;">✕</button>
+      </div>
+      <div id="conciliacionBody" style="max-height: 70vh; overflow-y: auto;"></div>
+      <div class="confirm-actions" style="margin-top: 16px; display:flex; justify-content:space-between; align-items:center;">
+        <div id="conciliacionQuickActions"></div>
+        <button class="btn btn-ghost" onclick="cerrarConciliacion()">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 2: DETALLE DE IF (CONSOLIDADO, SIN REPETICIÓN) -->
   <div id="detalleModal" class="confirm-modal" style="display: none;">
     <div class="confirm-card" style="max-width: 1050px; text-align: left; width: 95%;">
       <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--gray-3, #e5e7eb); padding-bottom:12px; margin-bottom:16px;">
@@ -253,9 +278,9 @@
 <footer class="app-footer" id="appFooter"></footer>
 </div>
 
-<script src="js/config.js?v=55"></script>
-<script src="js/nav.js?v=55"></script>
-<script src="js/footer.js?v=55"></script>
-<script src="js/dashboard/app.js?v=55"></script>
+<script src="js/config.js?v=60"></script>
+<script src="js/nav.js?v=60"></script>
+<script src="js/footer.js?v=60"></script>
+<script src="js/dashboard/app.js?v=60"></script>
 </body>
 </html>

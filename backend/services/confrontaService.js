@@ -558,8 +558,28 @@ function confrontar(ifsEsperadas, escaneos) {
     ifs_canceladas_erp: resultado.ifs_canceladas_erp.length
   };
 
-  const m2SobranteTotal = m2Sobrante + m2MediaPlaca;
-  const m2DesviacionTotal = m2SobranteTotal + m2Faltante;
+  // Calcular impacto neto en placas por cada causa raíz
+  let impactoPlacasMediaPlaca = 0;
+  let impactoPlacasSobrantes = 0;
+  let impactoPlacasFaltantes = 0;
+  let impactoPlacasLineasOmitidas = 0;
+  let impactoPlacasHuerfanos = 0;
+
+  for (const d of resultado.todas_las_discrepancias) {
+    if (d.tipo === 'media_placa') {
+      const esc = d.placas_escaneadas || 0;
+      const esp = d.placas_esperadas || 0;
+      impactoPlacasMediaPlaca += (esc - esp);
+    } else if (d.tipo === 'cantidad_sobrante') {
+      impactoPlacasSobrantes += (d.diferencia || 0);
+    } else if (d.tipo === 'cantidad_faltante') {
+      impactoPlacasFaltantes += (d.diferencia || 0);
+    } else if (d.tipo === 'linea_faltante') {
+      impactoPlacasLineasOmitidas += (d.placas_esperadas || 0);
+    } else if (d.tipo === 'sku_lote_no_esperado') {
+      impactoPlacasHuerfanos += (d.placas_escaneadas || 1);
+    }
+  }
 
   resultado.kpis = {
     ifs_totales: resultado.ifs_ok.length + resultado.ifs_con_errores.length,
@@ -574,6 +594,13 @@ function confrontar(ifsEsperadas, escaneos) {
     placas_canceladas: placas_en_ifs_canceladas,
     total_discrepancias: resultado.todas_las_discrepancias.length,
     desglose_errores: conteoDiscrepancias,
+    impacto_placas: {
+      media_placa: parseFloat(impactoPlacasMediaPlaca.toFixed(1)),
+      sobrantes: impactoPlacasSobrantes,
+      huerfanos: impactoPlacasHuerfanos,
+      faltantes: impactoPlacasFaltantes,
+      lineas_omitidas: impactoPlacasLineasOmitidas
+    },
     m2: {
       desviacion_total: parseFloat(m2DesviacionTotal.toFixed(2)),
       media_placa: parseFloat(m2MediaPlaca.toFixed(2)),
