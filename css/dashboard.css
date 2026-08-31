@@ -532,9 +532,12 @@
   color: var(--gray-7, #374151);
 }
 
-.tipo-badge.error { background: #fee2e2; color: #b91c1c; }
-.tipo-badge.warn   { background: #fef3c7; color: #92400e; }
-.tipo-badge.ok     { background: #d1fae5; color: #065f46; }
+.tipo-badge.error   { background: #fee2e2; color: #b91c1c; font-weight: 600; }
+.tipo-badge.warn    { background: #fef3c7; color: #92400e; font-weight: 600; }
+.tipo-badge.ok      { background: #d1fae5; color: #065f46; font-weight: 600; }
+.tipo-badge.cruzado { background: #fef3c7; color: #b45309; border: 1px solid #fde68a; font-weight: 700; }
+.tipo-badge.media   { background: #f5f3ff; color: #6d28d9; border: 1px solid #ddd6fe; font-weight: 700; }
+.tipo-badge.sobrante{ background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; font-weight: 700; }
 
 /* Modal detalle consolidado */
 .detalle-modal-header {

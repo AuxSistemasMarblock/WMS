@@ -64,20 +64,23 @@ function escapeHTML(s) {
 
 function badgeTipo(tipo) {
   switch (tipo) {
+    case 'lote_cruzado':
+    case 'sku_cruzado':
+      return '<span class="tipo-badge cruzado">🔀 Lote / SKU Cruzado</span>';
     case 'media_placa':
-      return '<span class="tipo-badge" style="background:#ede9fe; color:#6d28d9; font-weight:600;">🖨️ Media Placa (Etiquetado)</span>';
+      return '<span class="tipo-badge media">🖨️ Media Placa (Etiquetado)</span>';
     case 'cantidad_sobrante':
-      return '<span class="tipo-badge" style="background:#dbeafe; color:#1d4ed8; font-weight:600;">📦 Placas de más</span>';
+      return '<span class="tipo-badge sobrante">📦 Placas de más</span>';
     case 'cantidad_faltante':
-      return '<span class="tipo-badge error" style="font-weight:600;">🔻 Faltante físico</span>';
+      return '<span class="tipo-badge error">🔻 Faltante físico</span>';
     case 'linea_faltante':
-      return '<span class="tipo-badge error" style="font-weight:600;">📋 Línea omitida</span>';
+      return '<span class="tipo-badge error">📋 Línea omitida</span>';
     case 'sku_lote_no_esperado':
-      return '<span class="tipo-badge warn" style="font-weight:600;">🔄 No esperado (Huérfano)</span>';
+      return '<span class="tipo-badge warn">🔄 Huérfana pura</span>';
     case 'if_no_encontrada':
-      return '<span class="tipo-badge" style="background:#fee2e2; color:#b91c1c; font-weight:600;">🚨 Cancelada en ERP</span>';
+      return '<span class="tipo-badge" style="background:#fee2e2; color:#b91c1c; font-weight:700;">🚨 Cancelada en ERP</span>';
     case 'ubicacion_incorrecta':
-      return '<span class="tipo-badge warn" style="font-weight:600;">📍 Ubicación</span>';
+      return '<span class="tipo-badge warn">📍 Ubicación</span>';
     default:
       return `<span class="tipo-badge">${escapeHTML(tipo.replace(/_/g, ' '))}</span>`;
   }
@@ -340,16 +343,18 @@ async function cargarKPIs() {
     $('kpiMediaPlaca').textContent = `${desglose.media_placa || 0} casos`;
     $('kpiMediaPlacaSub').textContent = `+${imp.media_placa || 0} pzs (+${(m2.media_placa || 0).toFixed(2)} m²)`;
 
-    $('kpiSobrantes').textContent = `${desglose.cantidad_sobrante || 0} casos`;
-    $('kpiSobrantesSub').textContent = `+${imp.sobrantes || 0} pzs (+${(m2.sobrante_puro || 0).toFixed(2)} m²)`;
+    $('kpiCruzados').textContent = `${desglose.lote_cruzado || 0} casos`;
+    $('kpiCruzadosSub').textContent = `${imp.lote_cruzado || 0} pzs entregadas (Neto: 0)`;
+
+    const totalSobrantesCasos = (desglose.cantidad_sobrante || 0) + (desglose.huerfanos_puros || 0);
+    const totalSobrantesPzs = (imp.sobrantes || 0) + (imp.huerfanos_puros || 0);
+    $('kpiSobrantes').textContent = `${totalSobrantesCasos} casos`;
+    $('kpiSobrantesSub').textContent = `+${totalSobrantesPzs} pzs (+${(m2.sobrante_puro || 0).toFixed(2)} m²)`;
 
     const totalFaltantesCasos = (desglose.cantidad_faltante || 0) + (desglose.linea_faltante || 0);
-    const totalFaltantesPzs = imp.total_faltantes ?? ((imp.faltantes || 0) + (imp.lineas_omitidas || 0));
+    const totalFaltantesPzs = (imp.faltantes_reales || 0) + (imp.lineas_omitidas || 0);
     $('kpiFaltantes').textContent = `${totalFaltantesCasos} casos`;
     $('kpiFaltantesSub').textContent = `-${totalFaltantesPzs} pzs (-${(m2.faltante || 0).toFixed(2)} m²)`;
-
-    $('kpiHuerfanos').textContent = `${desglose.sku_lote_no_esperado || 0} pzs`;
-    $('kpiHuerfanosSub').textContent = `+${imp.huerfanos || desglose.sku_lote_no_esperado || 0} pzs fuera de IF`;
 
     renderChartExactitud(k.ifs_ok, k.ifs_con_errores, k.tasa_exactitud);
   } catch (e) {
@@ -361,9 +366,9 @@ async function cargarKPIs() {
 function syncSubKpiHighlight(filtro) {
   document.querySelectorAll('.sub-kpi-card').forEach(c => c.classList.remove('active-filter'));
   if (filtro === 'media_placa' && $('subKpiMediaPlaca')) $('subKpiMediaPlaca').classList.add('active-filter');
-  else if (filtro === 'cantidad_sobrante' && $('subKpiSobrantes')) $('subKpiSobrantes').classList.add('active-filter');
+  else if (filtro === 'lote_cruzado' && $('subKpiCruzados')) $('subKpiCruzados').classList.add('active-filter');
+  else if ((filtro === 'cantidad_sobrante' || filtro === 'sku_lote_no_esperado') && $('subKpiSobrantes')) $('subKpiSobrantes').classList.add('active-filter');
   else if ((filtro === 'linea_faltante' || filtro === 'cantidad_faltante' || filtro === 'faltantes_grupo') && $('subKpiFaltantes')) $('subKpiFaltantes').classList.add('active-filter');
-  else if (filtro === 'sku_lote_no_esperado' && $('subKpiHuerfanos')) $('subKpiHuerfanos').classList.add('active-filter');
 }
 
 function filtrarPorSubKpi(tipo) {
@@ -384,10 +389,11 @@ function filtrarPorSubKpi(tipo) {
 
   const nombres = {
     'media_placa': 'Medias Placas (Etiquetado)',
+    'lote_cruzado': 'Lotes / SKUs Cruzados',
     'cantidad_sobrante': 'Placas de Más (Sobrantes)',
     'faltantes_grupo': 'Líneas Faltantes / Omitidas',
     'linea_faltante': 'Líneas Faltantes / Omitidas',
-    'sku_lote_no_esperado': 'Huérfanos / No esperados'
+    'sku_lote_no_esperado': 'Huérfanas Puras'
   };
   showToast(`Filtrando tabla por: ${nombres[tipo] || tipo}`, 'info');
 }
@@ -413,7 +419,7 @@ function abrirModalConciliacion(kpiTipo) {
   const desglose = k.desglose_errores || {};
   const imp = k.impacto_placas || {};
   const totalFaltantesCasos = (desglose.cantidad_faltante || 0) + (desglose.linea_faltante || 0);
-  const totalFaltantesPzs = imp.total_faltantes ?? ((imp.faltantes || 0) + (imp.lineas_omitidas || 0));
+  const totalFaltantesPzs = (imp.faltantes_reales || 0) + (imp.lineas_omitidas || 0);
 
   quickActionsEl.innerHTML = '';
 
@@ -422,8 +428,11 @@ function abrirModalConciliacion(kpiTipo) {
     const linkMediaPlaca = (desglose.media_placa || 0) > 0
       ? `<button class="tabla-filtro-link" onclick="cerrarConciliacion(); filtrarPorSubKpi('media_placa');">Ver ${desglose.media_placa} ↗</button>`
       : '';
-    const linkHuerfanos = (desglose.sku_lote_no_esperado || 0) > 0
-      ? `<button class="tabla-filtro-link" onclick="cerrarConciliacion(); filtrarPorSubKpi('sku_lote_no_esperado');">Ver ${desglose.sku_lote_no_esperado} ↗</button>`
+    const linkCruzados = (desglose.lote_cruzado || 0) > 0
+      ? `<button class="tabla-filtro-link" onclick="cerrarConciliacion(); filtrarPorSubKpi('lote_cruzado');">Ver ${desglose.lote_cruzado} ↗</button>`
+      : '';
+    const linkHuerfanos = (desglose.huerfanos_puros || 0) > 0
+      ? `<button class="tabla-filtro-link" onclick="cerrarConciliacion(); filtrarPorSubKpi('sku_lote_no_esperado');">Ver ${desglose.huerfanos_puros} ↗</button>`
       : '';
     const linkSobrantes = (desglose.cantidad_sobrante || 0) > 0
       ? `<button class="tabla-filtro-link" onclick="cerrarConciliacion(); filtrarPorSubKpi('cantidad_sobrante');">Ver ${desglose.cantidad_sobrante} ↗</button>`
@@ -463,12 +472,21 @@ function abrirModalConciliacion(kpiTipo) {
               <td style="text-align:right; font-weight:600;">+${(m2.media_placa || 0).toFixed(2)} m²</td>
             </tr>
             <tr>
-              <td><strong>🔄 Huérfanos / Cruzados</strong><br><small style="color:var(--gray-6);">Placas físicas escaneadas que no pertenecían a la IF</small></td>
+              <td><strong>🔀 Lotes / SKUs Cruzados (Swap en patio)</strong><br><small style="color:var(--gray-6);">Placa física sí se entregó pero con lote/código cambiado (mismo pedido)</small></td>
               <td style="text-align:center;">
-                <div style="font-weight:600; font-size:13px;">${desglose.sku_lote_no_esperado || 0} piezas</div>
+                <div style="font-weight:600; font-size:13px;">${desglose.lote_cruzado || 0} casos (${imp.lote_cruzado || 0} pzs)</div>
+                ${linkCruzados ? `<div style="margin-top:3px;">${linkCruzados}</div>` : ''}
+              </td>
+              <td style="text-align:center; font-weight:700; color:#d97706;">0 pzs <small style="color:var(--gray-6); font-weight:400;">(Entregado 1 a 1)</small></td>
+              <td style="text-align:right; color:var(--gray-5);">—</td>
+            </tr>
+            <tr>
+              <td><strong>🔄 Huérfanos Puros (Placas extra sin orden)</strong><br><small style="color:var(--gray-6);">Placas físicas escaneadas que no sustituyeron a ninguna faltante</small></td>
+              <td style="text-align:center;">
+                <div style="font-weight:600; font-size:13px;">${desglose.huerfanos_puros || 0} piezas</div>
                 ${linkHuerfanos ? `<div style="margin-top:3px;">${linkHuerfanos}</div>` : ''}
               </td>
-              <td style="text-align:center; font-weight:700; color:#4b5563;">+${imp.huerfanos || desglose.sku_lote_no_esperado || 0} pzs</td>
+              <td style="text-align:center; font-weight:700; color:#4b5563;">+${imp.huerfanos_puros || 0} pzs</td>
               <td style="text-align:right; color:var(--gray-5);">—</td>
             </tr>
             <tr>
@@ -481,7 +499,7 @@ function abrirModalConciliacion(kpiTipo) {
               <td style="text-align:right; font-weight:600;">+${(m2.sobrante_puro || 0).toFixed(2)} m²</td>
             </tr>
             <tr>
-              <td><strong>🔻 Faltantes Físicos / Líneas Omitidas</strong><br><small style="color:var(--gray-6);">Partidas con faltante parcial o líneas no escaneadas</small></td>
+              <td><strong>🔻 Faltantes Físicos + Órdenes No Escaneadas</strong><br><small style="color:var(--gray-6);">${desglose.cantidad_faltante || 0} faltantes en rampa · ${desglose.linea_faltante || 0} líneas de ERP sin escaneo</small></td>
               <td style="text-align:center;">
                 <div style="font-weight:600; font-size:13px;">${totalFaltantesCasos} partidas</div>
                 ${linkFaltantes ? `<div style="margin-top:3px;">${linkFaltantes}</div>` : ''}
@@ -505,8 +523,11 @@ function abrirModalConciliacion(kpiTipo) {
     if ((desglose.media_placa || 0) > 0) {
       actionBtns.push(`<button class="conciliacion-filter-btn" onclick="cerrarConciliacion(); filtrarPorSubKpi('media_placa');">🖨️ Medias Placas (${desglose.media_placa})</button>`);
     }
-    if ((desglose.sku_lote_no_esperado || 0) > 0) {
-      actionBtns.push(`<button class="conciliacion-filter-btn" onclick="cerrarConciliacion(); filtrarPorSubKpi('sku_lote_no_esperado');">🔄 Huérfanos (${desglose.sku_lote_no_esperado})</button>`);
+    if ((desglose.lote_cruzado || 0) > 0) {
+      actionBtns.push(`<button class="conciliacion-filter-btn" onclick="cerrarConciliacion(); filtrarPorSubKpi('lote_cruzado');">🔀 Lotes Cruzados (${desglose.lote_cruzado})</button>`);
+    }
+    if ((desglose.huerfanos_puros || 0) > 0) {
+      actionBtns.push(`<button class="conciliacion-filter-btn" onclick="cerrarConciliacion(); filtrarPorSubKpi('sku_lote_no_esperado');">🔄 Huérfanos Puros (${desglose.huerfanos_puros})</button>`);
     }
     if ((desglose.cantidad_sobrante || 0) > 0) {
       actionBtns.push(`<button class="conciliacion-filter-btn" onclick="cerrarConciliacion(); filtrarPorSubKpi('cantidad_sobrante');">📦 Sobrantes (${desglose.cantidad_sobrante})</button>`);
@@ -579,6 +600,9 @@ function abrirModalConciliacion(kpiTipo) {
     const actionBtns = [];
     if ((desglose.media_placa || 0) > 0) {
       actionBtns.push(`<button class="conciliacion-filter-btn" onclick="cerrarConciliacion(); filtrarPorSubKpi('media_placa');">🖨️ Medias Placas (${desglose.media_placa})</button>`);
+    }
+    if ((desglose.lote_cruzado || 0) > 0) {
+      actionBtns.push(`<button class="conciliacion-filter-btn" onclick="cerrarConciliacion(); filtrarPorSubKpi('lote_cruzado');">🔀 Lotes Cruzados (${desglose.lote_cruzado})</button>`);
     }
     if (totalFaltantesCasos > 0) {
       actionBtns.push(`<button class="conciliacion-filter-btn" onclick="cerrarConciliacion(); filtrarPorSubKpi('faltantes_grupo');">🔻 Faltantes/Omitidas (${totalFaltantesCasos})</button>`);
@@ -786,7 +810,7 @@ function renderDetalle(ifDoc) {
     let planAccionTexto = '<span style="color:var(--gray-5, #9ca3af);">—</span>';
 
     if (discs.length > 0) {
-      diagnosticoBadge = discs.map(d => badgeTipo(d.tipo)).join(' ');
+      diagnosticoBadge = discs.map(d => badgeTipo(d.es_cruzado ? 'lote_cruzado' : d.tipo)).join(' ');
       planAccionTexto = discs.map(d => `<div style="margin-bottom:4px; font-weight:500;">${escapeHTML(d.plan_accion || d.mensaje)}</div>`).join('');
     } else if (isCancelada) {
       diagnosticoBadge = '<span class="tipo-badge" style="background:#fee2e2; color:#b91c1c; font-weight:600;">🚨 No en ERP</span>';
@@ -821,7 +845,7 @@ function renderDetalle(ifDoc) {
     const d = discs[0];
     const skuStr = d.sku || '—';
     const loteStr = d.lote || '—';
-    const diagBadge = discs.map(x => badgeTipo(x.tipo)).join(' ');
+    const diagBadge = discs.map(x => badgeTipo(x.es_cruzado ? 'lote_cruzado' : x.tipo)).join(' ');
     const planText = discs.map(x => `<div style="margin-bottom:4px; font-weight:500;">${escapeHTML(x.plan_accion || x.mensaje)}</div>`).join('');
 
     html.push(`

@@ -152,22 +152,22 @@
         <div class="kpi-sub" id="kpiMediaPlacaSub">0.00 m² sin re-etiquetar</div>
       </div>
 
-      <div class="kpi-card sub-kpi-card" id="subKpiSobrantes" onclick="filtrarPorSubKpi('cantidad_sobrante')" data-tooltip="Partidas donde se escanearon placas completas adicionales. Da clic para filtrar.">
+      <div class="kpi-card sub-kpi-card" id="subKpiCruzados" onclick="filtrarPorSubKpi('lote_cruzado')" data-tooltip="Partidas donde la placa física sí se entregó pero con Lote o SKU cambiado. Da clic para filtrar.">
+        <div class="kpi-label"><span>🔀 Lotes / SKUs Cruzados</span><span class="info-icon">⬎</span></div>
+        <div class="kpi-value" style="color: #d97706;" id="kpiCruzados">0</div>
+        <div class="kpi-sub" id="kpiCruzadosSub">0 pzs entregadas (Neto: 0)</div>
+      </div>
+
+      <div class="kpi-card sub-kpi-card" id="subKpiSobrantes" onclick="filtrarPorSubKpi('cantidad_sobrante')" data-tooltip="Partidas donde se escanearon placas completas adicionales o huérfanas puras. Da clic para filtrar.">
         <div class="kpi-label"><span>📦 Placas de Más (Sobrantes)</span><span class="info-icon">⬎</span></div>
         <div class="kpi-value" style="color: #2563eb;" id="kpiSobrantes">0</div>
         <div class="kpi-sub" id="kpiSobrantesSub">0.00 m² exceso</div>
       </div>
 
-      <div class="kpi-card sub-kpi-card" id="subKpiFaltantes" onclick="filtrarPorSubKpi('faltantes_grupo')" data-tooltip="Partidas con piezas faltantes o líneas omitidas en NetSuite. Da clic para filtrar.">
+      <div class="kpi-card sub-kpi-card" id="subKpiFaltantes" onclick="filtrarPorSubKpi('faltantes_grupo')" data-tooltip="Faltantes físicos reales en rampa y órdenes de NetSuite no escaneadas. Da clic para filtrar.">
         <div class="kpi-label"><span>🔻 Faltantes / Omitidas</span><span class="info-icon">⬎</span></div>
         <div class="kpi-value text-error" id="kpiFaltantes">0</div>
         <div class="kpi-sub" id="kpiFaltantesSub">0.00 m² faltantes</div>
-      </div>
-
-      <div class="kpi-card sub-kpi-card" id="subKpiHuerfanos" onclick="filtrarPorSubKpi('sku_lote_no_esperado')" data-tooltip="Material escaneado que no estaba registrado en la orden de NetSuite. Da clic para filtrar.">
-        <div class="kpi-label"><span>🔄 Huérfanos / Cruzados</span><span class="info-icon">⬎</span></div>
-        <div class="kpi-value" style="color: #4b5563;" id="kpiHuerfanos">0</div>
-        <div class="kpi-sub" id="kpiHuerfanosSub">SKUs fuera de la IF</div>
       </div>
     </div>
   </section>
@@ -182,12 +182,13 @@
       <div class="table-actions">
         <select id="filtroTipoError" onchange="filtrarTablaMalSacadas()" class="filter-select" aria-label="Filtrar por causa raíz">
           <option value="">Todas las incidencias</option>
-          <option value="if_no_encontrada">🚨 Canceladas en ERP (Fugas)</option>
+          <option value="lote_cruzado">🔀 Lotes / SKUs Cruzados</option>
           <option value="media_placa">🖨️ Error de Etiquetado (Media Placa)</option>
           <option value="cantidad_sobrante">📦 Placas de más (Sobrante)</option>
-          <option value="cantidad_faltante">🔻 Cantidad faltante</option>
-          <option value="linea_faltante">📋 Línea omitida</option>
-          <option value="sku_lote_no_esperado">🔄 Artículo no esperado (Huérfano)</option>
+          <option value="sku_lote_no_esperado">🔄 Huérfanas Puras</option>
+          <option value="cantidad_faltante">🔻 Faltante físico en rampa</option>
+          <option value="linea_faltante">📋 Líneas Omitidas / No escaneadas</option>
+          <option value="if_no_encontrada">🚨 Canceladas en ERP (Fugas)</option>
           <option value="ubicacion_incorrecta">📍 Ubicación incorrecta</option>
         </select>
       </div>
@@ -278,9 +279,9 @@
 <footer class="app-footer" id="appFooter"></footer>
 </div>
 
-<script src="js/config.js?v=90"></script>
-<script src="js/nav.js?v=90"></script>
-<script src="js/footer.js?v=90"></script>
-<script src="js/dashboard/app.js?v=90"></script>
+<script src="js/config.js?v=100"></script>
+<script src="js/nav.js?v=100"></script>
+<script src="js/footer.js?v=100"></script>
+<script src="js/dashboard/app.js?v=100"></script>
 </body>
 </html>

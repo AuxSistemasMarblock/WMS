@@ -195,7 +195,7 @@ const getIFsMalSacadas = async (req, res) => {
       lineas_con_error: i.lineas_con_error,
       discrepancias: i.discrepancias,
       status: i.status,
-      tipos_error: [...new Set(i.discrepancias.map(d => d.tipo))]
+      tipos_error: [...new Set(i.discrepancias.flatMap(d => d.es_cruzado ? ['lote_cruzado', d.tipo] : [d.tipo]))]
     }));
 
     res.json({
