@@ -140,10 +140,14 @@ function evaluarCantidad(cantidadM2, lote, placasEscaneadas) {
   const m2EscRedondeado = parseFloat(m2Escaneados.toFixed(2));
   const diffM2Final = parseFloat(Math.abs(m2EscRedondeado - m2EspRedondeado).toFixed(2));
 
+  const placasEsperadasNormalizadas = esFraccionEsperada
+    ? (Math.floor(placasTeoricas) + 0.5)
+    : placasEsp;
+
   return {
     status,
     tipo_discrepancia,
-    placas_esperadas: esFraccionEsperada ? parseFloat(placasTeoricas.toFixed(2)) : placasEsp,
+    placas_esperadas: placasEsperadasNormalizadas,
     placas_escaneadas: placasEscaneadas,
     diferencia: Math.abs(diffPlacas),
     m2_esperados: m2EspRedondeado,

@@ -193,20 +193,21 @@
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  background: none;
-  border: none;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
   color: #004a99;
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;
-  padding: 2px 4px;
+  padding: 1px 7px;
   border-radius: 4px;
-  margin-left: 6px;
+  transition: all 0.15s ease;
 }
 
 .tabla-filtro-link:hover {
-  background: #eff6ff;
-  text-decoration: underline;
+  background: #004a99;
+  color: #ffffff;
+  border-color: #004a99;
 }
 
 /* ─────────────────────────────────────────────

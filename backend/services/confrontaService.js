@@ -53,7 +53,7 @@ function evaluarLinea(ifTranid, ifSo, ifLocation, ifFecha, lineaEsperada, escane
       : 1;
     const fraccion = placasTeoricas - Math.floor(placasTeoricas);
     const esFraccionEsperada = (fraccion > 0.08 && fraccion < 0.92);
-    const placasEsp = esFraccionEsperada ? parseFloat(placasTeoricas.toFixed(2)) : Math.round(placasTeoricas);
+    const placasEsp = esFraccionEsperada ? (Math.floor(placasTeoricas) + 0.5) : Math.round(placasTeoricas);
 
     discrepancias.push({
       tipo: 'linea_faltante',

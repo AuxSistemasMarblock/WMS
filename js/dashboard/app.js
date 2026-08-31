@@ -455,25 +455,37 @@ function abrirModalConciliacion(kpiTipo) {
           <tbody>
             <tr>
               <td><strong>🖨️ Medias Placas (Error de etiquetado)</strong><br><small style="color:var(--gray-6);">Se pidió fracción (ej. 0.5 o 1.5) y se escaneó placa completa</small></td>
-              <td style="text-align:center;">${desglose.media_placa || 0} órdenes ${linkMediaPlaca}</td>
+              <td style="text-align:center;">
+                <div style="font-weight:600; font-size:13px;">${desglose.media_placa || 0} órdenes</div>
+                ${linkMediaPlaca ? `<div style="margin-top:3px;">${linkMediaPlaca}</div>` : ''}
+              </td>
               <td style="text-align:center; font-weight:700; color:#8b5cf6;">+${imp.media_placa || 0} pzs</td>
               <td style="text-align:right; font-weight:600;">+${(m2.media_placa || 0).toFixed(2)} m²</td>
             </tr>
             <tr>
               <td><strong>🔄 Huérfanos / Cruzados</strong><br><small style="color:var(--gray-6);">Placas físicas escaneadas que no pertenecían a la IF</small></td>
-              <td style="text-align:center;">${desglose.sku_lote_no_esperado || 0} piezas ${linkHuerfanos}</td>
+              <td style="text-align:center;">
+                <div style="font-weight:600; font-size:13px;">${desglose.sku_lote_no_esperado || 0} piezas</div>
+                ${linkHuerfanos ? `<div style="margin-top:3px;">${linkHuerfanos}</div>` : ''}
+              </td>
               <td style="text-align:center; font-weight:700; color:#4b5563;">+${imp.huerfanos || desglose.sku_lote_no_esperado || 0} pzs</td>
               <td style="text-align:right; color:var(--gray-5);">—</td>
             </tr>
             <tr>
               <td><strong>📦 Placas de Más (Sobrantes puros)</strong><br><small style="color:var(--gray-6);">Partidas donde se escanearon placas completas adicionales</small></td>
-              <td style="text-align:center;">${desglose.cantidad_sobrante || 0} partidas ${linkSobrantes}</td>
+              <td style="text-align:center;">
+                <div style="font-weight:600; font-size:13px;">${desglose.cantidad_sobrante || 0} partidas</div>
+                ${linkSobrantes ? `<div style="margin-top:3px;">${linkSobrantes}</div>` : ''}
+              </td>
               <td style="text-align:center; font-weight:700; color:#2563eb;">+${imp.sobrantes || 0} pzs</td>
               <td style="text-align:right; font-weight:600;">+${(m2.sobrante_puro || 0).toFixed(2)} m²</td>
             </tr>
             <tr>
               <td><strong>🔻 Faltantes Físicos / Líneas Omitidas</strong><br><small style="color:var(--gray-6);">Partidas con faltante parcial o líneas no escaneadas</small></td>
-              <td style="text-align:center;">${totalFaltantesCasos} partidas ${linkFaltantes}</td>
+              <td style="text-align:center;">
+                <div style="font-weight:600; font-size:13px;">${totalFaltantesCasos} partidas</div>
+                ${linkFaltantes ? `<div style="margin-top:3px;">${linkFaltantes}</div>` : ''}
+              </td>
               <td style="text-align:center; font-weight:700; color:#dc2626;">-${totalFaltantesPzs} pzs</td>
               <td style="text-align:right; font-weight:600; color:#dc2626;">-${(m2.faltante || 0).toFixed(2)} m²</td>
             </tr>
@@ -532,17 +544,26 @@ function abrirModalConciliacion(kpiTipo) {
           <tbody>
             <tr>
               <td>🖨️ Medias Placas (Exceso por falta de re-etiquetado)</td>
-              <td style="text-align:center;">${desglose.media_placa || 0}</td>
+              <td style="text-align:center;">
+                <div style="font-weight:600; font-size:13px;">${desglose.media_placa || 0}</div>
+                ${(desglose.media_placa || 0) > 0 ? `<div style="margin-top:3px;"><button class="tabla-filtro-link" onclick="cerrarConciliacion(); filtrarPorSubKpi('media_placa');">Ver ↗</button></div>` : ''}
+              </td>
               <td style="text-align:right; font-weight:600; color:#8b5cf6;">+${(m2.media_placa || 0).toFixed(2)} m²</td>
             </tr>
             <tr>
               <td>📦 Placas de Más (Sobrantes físicos completos)</td>
-              <td style="text-align:center;">${desglose.cantidad_sobrante || 0}</td>
+              <td style="text-align:center;">
+                <div style="font-weight:600; font-size:13px;">${desglose.cantidad_sobrante || 0}</div>
+                ${(desglose.cantidad_sobrante || 0) > 0 ? `<div style="margin-top:3px;"><button class="tabla-filtro-link" onclick="cerrarConciliacion(); filtrarPorSubKpi('cantidad_sobrante');">Ver ↗</button></div>` : ''}
+              </td>
               <td style="text-align:right; font-weight:600; color:#2563eb;">+${(m2.sobrante_puro || 0).toFixed(2)} m²</td>
             </tr>
             <tr>
               <td>🔻 Faltantes Físicos + Líneas Omitidas en NetSuite</td>
-              <td style="text-align:center;">${totalFaltantesCasos}</td>
+              <td style="text-align:center;">
+                <div style="font-weight:600; font-size:13px;">${totalFaltantesCasos}</div>
+                ${totalFaltantesCasos > 0 ? `<div style="margin-top:3px;"><button class="tabla-filtro-link" onclick="cerrarConciliacion(); filtrarPorSubKpi('faltantes_grupo');">Ver ↗</button></div>` : ''}
+              </td>
               <td style="text-align:right; font-weight:600; color:#dc2626;">-${(m2.faltante || 0).toFixed(2)} m²</td>
             </tr>
             <tr style="background:#f8fafc; font-weight:700;">
