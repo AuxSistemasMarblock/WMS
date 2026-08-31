@@ -486,17 +486,21 @@
 .count-badge.text-error { background: #fee2e2; color: #dc2626; }
 .count-badge.text-success { background: #d1fae5; color: #059669; }
 
-.table-wrap { overflow-x: auto; }
+.table-wrap {
+  width: 100%;
+  overflow-x: hidden;
+  overflow-y: hidden;
+}
 
 .table-wrap table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 14px;
+  table-layout: auto;
 }
 
 .table-wrap thead th {
   text-align: left;
-  padding: 10px 12px;
+  padding: 8px 10px;
   background: var(--gray-1, #f9fafb);
   color: var(--gray-6, #6b7280);
   font-weight: 600;
@@ -504,12 +508,20 @@
   font-size: 11px;
   letter-spacing: 0.5px;
   border-bottom: 1px solid var(--gray-3, #e5e7eb);
+  white-space: nowrap;
 }
 
 .table-wrap tbody td {
-  padding: 10px 12px;
+  padding: 8px 10px;
   border-bottom: 1px solid var(--gray-2, #f3f4f6);
   color: var(--gray-8, #1f2937);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.table-wrap tbody td .btn-ghost {
+  padding: 4px 8px;
+  font-size: 12px;
 }
 
 .table-wrap tbody tr:hover { background: var(--gray-1, #f9fafb); }
@@ -522,14 +534,17 @@
 }
 
 .tipo-badge {
-  display: inline-block;
-  padding: 2px 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
   border-radius: 4px;
   font-size: 11px;
   font-weight: 500;
   margin-right: 4px;
   background: var(--gray-2, #f3f4f6);
   color: var(--gray-7, #374151);
+  white-space: nowrap;
 }
 
 .tipo-badge.error   { background: #fee2e2; color: #b91c1c; font-weight: 600; }
