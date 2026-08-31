@@ -46,11 +46,25 @@ function evaluarLinea(ifTranid, ifSo, ifLocation, ifFecha, lineaEsperada, escane
   const cantEscaneada = escaneosDeEstaLinea.length;
 
   if (cantEscaneada === 0) {
+    const parsed = parseLote(lineaEsperada.lote);
+    const areaPlaca = parsed ? parsed.area : 0;
+    const placasTeoricas = (areaPlaca > 0 && lineaEsperada.quantity)
+      ? parseFloat(lineaEsperada.quantity) / areaPlaca
+      : 1;
+    const fraccion = placasTeoricas - Math.floor(placasTeoricas);
+    const esFraccionEsperada = (fraccion > 0.08 && fraccion < 0.92);
+    const placasEsp = esFraccionEsperada ? parseFloat(placasTeoricas.toFixed(2)) : Math.round(placasTeoricas);
+
     discrepancias.push({
       tipo: 'linea_faltante',
       sku: lineaEsperada.sku,
       lote: lineaEsperada.lote,
       cantidad_m2_esperada: lineaEsperada.quantity,
+      area_placa_m2: areaPlaca,
+      placas_esperadas: placasEsp,
+      placas_escaneadas: 0,
+      diferencia: placasEsp,
+      diff_m2: parseFloat((lineaEsperada.quantity || 0).toString()),
       mensaje: 'No se escaneó ninguna placa de este item',
       if_tranid: ifTranid,
       if_so: ifSo,
@@ -60,6 +74,17 @@ function evaluarLinea(ifTranid, ifSo, ifLocation, ifFecha, lineaEsperada, escane
     return {
       ...lineaEsperada,
       placas_escaneadas: 0,
+      evaluacion_cantidad: {
+        status: 'faltante',
+        tipo_discrepancia: 'linea_faltante',
+        placas_esperadas: placasEsp,
+        placas_escaneadas: 0,
+        diferencia: placasEsp,
+        m2_esperados: parseFloat((lineaEsperada.quantity || 0).toString()),
+        m2_escaneados: 0,
+        diff_m2: parseFloat((lineaEsperada.quantity || 0).toString()),
+        area_placa_m2: areaPlaca
+      },
       escaneos: [],
       discrepancias,
       status: 'faltante'
@@ -602,7 +627,8 @@ function confrontar(ifsEsperadas, escaneos) {
       sobrantes: impactoPlacasSobrantes,
       huerfanos: impactoPlacasHuerfanos,
       faltantes: impactoPlacasFaltantes,
-      lineas_omitidas: impactoPlacasLineasOmitidas
+      lineas_omitidas: impactoPlacasLineasOmitidas,
+      total_faltantes: impactoPlacasFaltantes + impactoPlacasLineasOmitidas
     },
     m2: {
       desviacion_total: parseFloat(m2DesviacionTotal.toFixed(2)),

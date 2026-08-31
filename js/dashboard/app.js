@@ -315,9 +315,15 @@ async function cargarKPIs() {
     $('kpiExactitud').textContent = (k.tasa_exactitud || 0).toFixed(1) + '%';
     $('kpiExactitudSub').textContent = `Conforme a pedidos sin error (${k.ifs_ok} de ${k.ifs_totales})`;
 
-    const diffPlacas = (k.placas_escaneadas || 0) - (k.placas_esperadas || 0);
+    const escPlacas = k.placas_escaneadas || 0;
+    const espPlacas = k.placas_esperadas || 0;
+    const diffPlacasRaw = escPlacas - espPlacas;
+    const diffPlacas = Math.abs(diffPlacasRaw - Math.round(diffPlacasRaw)) < 0.05
+      ? Math.round(diffPlacasRaw)
+      : parseFloat(diffPlacasRaw.toFixed(1));
     const diffSign = diffPlacas > 0 ? '+' : '';
-    $('kpiVolumen').textContent = `${k.placas_escaneadas || 0} / ${k.placas_esperadas || 0}`;
+
+    $('kpiVolumen').textContent = `${escPlacas} / ${espPlacas}`;
     $('kpiVolumenSub').textContent = `${diffSign}${diffPlacas} placas de variación física`;
 
     const m2 = k.m2 || {};
@@ -337,9 +343,10 @@ async function cargarKPIs() {
     $('kpiSobrantes').textContent = `${desglose.cantidad_sobrante || 0} casos`;
     $('kpiSobrantesSub').textContent = `+${imp.sobrantes || 0} pzs (+${(m2.sobrante_puro || 0).toFixed(2)} m²)`;
 
-    const totalFaltantes = (desglose.cantidad_faltante || 0) + (desglose.linea_faltante || 0);
-    $('kpiFaltantes').textContent = `${totalFaltantes} casos`;
-    $('kpiFaltantesSub').textContent = `-${imp.faltantes || 0} pzs fis / ${desglose.linea_faltante || 0} omit`;
+    const totalFaltantesCasos = (desglose.cantidad_faltante || 0) + (desglose.linea_faltante || 0);
+    const totalFaltantesPzs = imp.total_faltantes ?? ((imp.faltantes || 0) + (imp.lineas_omitidas || 0));
+    $('kpiFaltantes').textContent = `${totalFaltantesCasos} casos`;
+    $('kpiFaltantesSub').textContent = `-${totalFaltantesPzs} pzs (-${(m2.faltante || 0).toFixed(2)} m²)`;
 
     $('kpiHuerfanos').textContent = `${desglose.sku_lote_no_esperado || 0} pzs`;
     $('kpiHuerfanosSub').textContent = `+${imp.huerfanos || desglose.sku_lote_no_esperado || 0} pzs fuera de IF`;
@@ -350,30 +357,26 @@ async function cargarKPIs() {
   }
 }
 
-// =================== INTERACTIVIDAD: SUB-KPIS CLICK-TO-FILTER (OPCIÓN 3) ===================
+// =================== INTERACTIVIDAD: SINCRONIZACIÓN Y FILTRO SUB-KPIS ===================
+function syncSubKpiHighlight(filtro) {
+  document.querySelectorAll('.sub-kpi-card').forEach(c => c.classList.remove('active-filter'));
+  if (filtro === 'media_placa' && $('subKpiMediaPlaca')) $('subKpiMediaPlaca').classList.add('active-filter');
+  else if (filtro === 'cantidad_sobrante' && $('subKpiSobrantes')) $('subKpiSobrantes').classList.add('active-filter');
+  else if ((filtro === 'linea_faltante' || filtro === 'cantidad_faltante' || filtro === 'faltantes_grupo') && $('subKpiFaltantes')) $('subKpiFaltantes').classList.add('active-filter');
+  else if (filtro === 'sku_lote_no_esperado' && $('subKpiHuerfanos')) $('subKpiHuerfanos').classList.add('active-filter');
+}
+
 function filtrarPorSubKpi(tipo) {
   const sel = $('filtroTipoError');
   if (tipo === 'faltantes_grupo') {
-    sel.value = 'linea_faltante'; // filtra omisiones o faltantes
+    sel.value = 'linea_faltante';
   } else {
     sel.value = tipo;
   }
 
-  // Quitar active de todas y marcar la actual
-  document.querySelectorAll('.sub-kpi-card').forEach(c => c.classList.remove('active-filter'));
-  const cardMap = {
-    'media_placa': 'subKpiMediaPlaca',
-    'cantidad_sobrante': 'subKpiSobrantes',
-    'faltantes_grupo': 'subKpiFaltantes',
-    'cantidad_faltante': 'subKpiFaltantes',
-    'sku_lote_no_esperado': 'subKpiHuerfanos'
-  };
-  const cardId = cardMap[tipo];
-  if (cardId && $(cardId)) $(cardId).classList.add('active-filter');
-
+  syncSubKpiHighlight(tipo);
   filtrarTablaMalSacadas();
 
-  // Scroll suave hacia la tabla
   const seccion = $('seccionTablaIncidencias');
   if (seccion) {
     seccion.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -383,12 +386,13 @@ function filtrarPorSubKpi(tipo) {
     'media_placa': 'Medias Placas (Etiquetado)',
     'cantidad_sobrante': 'Placas de Más (Sobrantes)',
     'faltantes_grupo': 'Líneas Faltantes / Omitidas',
+    'linea_faltante': 'Líneas Faltantes / Omitidas',
     'sku_lote_no_esperado': 'Huérfanos / No esperados'
   };
   showToast(`Filtrando tabla por: ${nombres[tipo] || tipo}`, 'info');
 }
 
-// =================== MODAL 1: CONCILIACIÓN MATEMÁTICA DE KPI (OPCIÓN 1) ===================
+// =================== MODAL: CONCILIACIÓN MATEMÁTICA DE KPI ===================
 function abrirModalConciliacion(kpiTipo) {
   const k = state.currentKPIs;
   if (!k) return;
@@ -396,10 +400,20 @@ function abrirModalConciliacion(kpiTipo) {
   const titleEl = $('conciliacionTitle');
   const bodyEl = $('conciliacionBody');
   const quickActionsEl = $('conciliacionQuickActions');
-  const diffPlacas = (k.placas_escaneadas || 0) - (k.placas_esperadas || 0);
+
+  const escPlacas = k.placas_escaneadas || 0;
+  const espPlacas = k.placas_esperadas || 0;
+  const diffPlacasRaw = escPlacas - espPlacas;
+  const diffPlacas = Math.abs(diffPlacasRaw - Math.round(diffPlacasRaw)) < 0.05
+    ? Math.round(diffPlacasRaw)
+    : parseFloat(diffPlacasRaw.toFixed(1));
+  const diffSign = diffPlacas > 0 ? '+' : '';
+
   const m2 = k.m2 || {};
   const desglose = k.desglose_errores || {};
   const imp = k.impacto_placas || {};
+  const totalFaltantesCasos = (desglose.cantidad_faltante || 0) + (desglose.linea_faltante || 0);
+  const totalFaltantesPzs = imp.total_faltantes ?? ((imp.faltantes || 0) + (imp.lineas_omitidas || 0));
 
   quickActionsEl.innerHTML = '';
 
@@ -408,10 +422,10 @@ function abrirModalConciliacion(kpiTipo) {
     bodyEl.innerHTML = `
       <div class="balance-card-summary">
         <div style="font-size:16px; font-weight:700; color:#004a99; margin-bottom:8px;">
-          ${k.placas_escaneadas} placas físicas escaneadas vs ${k.placas_esperadas} placas requeridas en ERP
+          ${escPlacas} placas físicas escaneadas vs ${espPlacas} placas requeridas en ERP
         </div>
         <div style="color:var(--gray-7, #374151); line-height:1.5;">
-          Existe una variación neta de <strong>+${diffPlacas} placas físicas</strong> despachadas en exceso durante este período. A continuación se desglosa el origen exacto de cada pieza:
+          Existe una variación neta de <strong>${diffSign}${diffPlacas} placas físicas</strong> despachadas en este período. A continuación se desglosa el balance exacto por causa raíz:
         </div>
       </div>
 
@@ -445,26 +459,38 @@ function abrirModalConciliacion(kpiTipo) {
               <td style="text-align:right; font-weight:600;">+${(m2.sobrante_puro || 0).toFixed(2)} m²</td>
             </tr>
             <tr>
-              <td><strong>🔻 Faltantes Parciales Físicos</strong><br><small style="color:var(--gray-6);">Partidas donde faltó escanear material físico</small></td>
-              <td style="text-align:center;">${desglose.cantidad_faltante || 0} partidas</td>
-              <td style="text-align:center; font-weight:700; color:#dc2626;">-${imp.faltantes || 0} pzs</td>
+              <td><strong>🔻 Faltantes Físicos / Líneas Omitidas</strong><br><small style="color:var(--gray-6);">Partidas con faltante parcial o líneas no escaneadas</small></td>
+              <td style="text-align:center;">${totalFaltantesCasos} partidas</td>
+              <td style="text-align:center; font-weight:700; color:#dc2626;">-${totalFaltantesPzs} pzs</td>
               <td style="text-align:right; font-weight:600; color:#dc2626;">-${(m2.faltante || 0).toFixed(2)} m²</td>
             </tr>
             <tr style="background:#f8fafc; font-weight:700;">
               <td>VARIACIÓN FÍSICA NETA TOTAL</td>
               <td style="text-align:center;">${k.total_discrepancias} incidencias</td>
-              <td style="text-align:center; color:#004a99; font-size:15px;">+${diffPlacas} placas</td>
-              <td style="text-align:right; color:#dc2626; font-size:15px;">${m2.desviacion_total.toFixed(2)} m²</td>
+              <td style="text-align:center; color:#004a99; font-size:15px;">${diffSign}${diffPlacas} placas</td>
+              <td style="text-align:right; color:#dc2626; font-size:15px;">${(m2.desviacion_total || 0).toFixed(2)} m²</td>
             </tr>
           </tbody>
         </table>
       </div>
     `;
 
-    quickActionsEl.innerHTML = `
-      <button class="btn btn-primary" onclick="cerrarConciliacion(); filtrarPorSubKpi('media_placa');">Ver Medias Placas</button>
-      <button class="btn btn-ghost" onclick="cerrarConciliacion(); filtrarPorSubKpi('sku_lote_no_esperado');">Ver Huérfanos</button>
-    `;
+    // Generar botones de acción rápida DINÁMICAMENTE solo si existen casos
+    const actionBtns = [];
+    if ((desglose.media_placa || 0) > 0) {
+      actionBtns.push(`<button class="btn btn-primary" onclick="cerrarConciliacion(); filtrarPorSubKpi('media_placa');">Ver Medias Placas (${desglose.media_placa})</button>`);
+    }
+    if ((desglose.sku_lote_no_esperado || 0) > 0) {
+      actionBtns.push(`<button class="btn btn-ghost" onclick="cerrarConciliacion(); filtrarPorSubKpi('sku_lote_no_esperado');">Ver Huérfanos (${desglose.sku_lote_no_esperado})</button>`);
+    }
+    if ((desglose.cantidad_sobrante || 0) > 0) {
+      actionBtns.push(`<button class="btn btn-ghost" onclick="cerrarConciliacion(); filtrarPorSubKpi('cantidad_sobrante');">Ver Sobrantes (${desglose.cantidad_sobrante})</button>`);
+    }
+    if (totalFaltantesCasos > 0) {
+      actionBtns.push(`<button class="btn btn-ghost" onclick="cerrarConciliacion(); filtrarPorSubKpi('faltantes_grupo');">Ver Faltantes/Omitidas (${totalFaltantesCasos})</button>`);
+    }
+    quickActionsEl.innerHTML = actionBtns.join(' ');
+
   } else if (kpiTipo === 'desviacion') {
     titleEl.textContent = '📐 Conciliación Matemática: Desviación Total de Área (m²)';
     bodyEl.innerHTML = `
@@ -498,7 +524,7 @@ function abrirModalConciliacion(kpiTipo) {
             </tr>
             <tr>
               <td>🔻 Faltantes Físicos + Líneas Omitidas en NetSuite</td>
-              <td style="text-align:center;">${(desglose.cantidad_faltante || 0) + (desglose.linea_faltante || 0)}</td>
+              <td style="text-align:center;">${totalFaltantesCasos}</td>
               <td style="text-align:right; font-weight:600; color:#dc2626;">-${(m2.faltante || 0).toFixed(2)} m²</td>
             </tr>
             <tr style="background:#f8fafc; font-weight:700;">
@@ -510,37 +536,15 @@ function abrirModalConciliacion(kpiTipo) {
         </table>
       </div>
     `;
-  } else if (kpiTipo === 'exactitud') {
-    titleEl.textContent = '🎯 Conciliación: Tasa de Exactitud (Perfect Order)';
-    bodyEl.innerHTML = `
-      <div class="balance-card-summary">
-        <div style="font-size:16px; font-weight:700; color:#059669; margin-bottom:8px;">
-          ${(k.tasa_exactitud || 0).toFixed(1)}% de Exactitud Perfect Order
-        </div>
-        <div style="color:var(--gray-7, #374151); line-height:1.5;">
-          Fórmula estándar de Supply Chain: <br>
-          <code>(IFs 100% Correctas [${k.ifs_ok}] / Total IFs evaluadas [${k.ifs_totales}]) × 100 = ${(k.tasa_exactitud || 0).toFixed(1)}%</code><br><br>
-          • <strong>${k.ifs_ok} IFs</strong> se surtieron de forma impecable sin ningún faltante, sobrante ni error de lote.<br>
-          • <strong>${k.ifs_con_errores} IFs</strong> presentaron alguna discrepancia física que requiere corrección en almacén.<br>
-          • <em>Nota: Las ${k.ifs_canceladas_erp} IFs canceladas en ERP se excluyen de la evaluación para no castigar al almacén por errores administrativos.</em>
-        </div>
-      </div>
-    `;
-  } else if (kpiTipo === 'canceladas') {
-    titleEl.textContent = '🚨 Conciliación: Fugas / IFs Canceladas en NetSuite';
-    bodyEl.innerHTML = `
-      <div class="balance-card-summary">
-        <div style="font-size:16px; font-weight:700; color:#d97706; margin-bottom:8px;">
-          ${k.ifs_canceladas_erp} Órdenes (${k.placas_canceladas} placas | ${(m2.canceladas_erp || 0).toFixed(2)} m²)
-        </div>
-        <div style="color:var(--gray-7, #374151); line-height:1.5;">
-          Estas órdenes fueron escaneadas y despachadas físicamente por el almacén, pero en NetSuite fueron eliminadas o canceladas. Representan una <strong>fuga de inventario</strong> que requiere refacturación inmediata o coordinación de retorno.
-        </div>
-      </div>
-    `;
-    quickActionsEl.innerHTML = `
-      <button class="btn btn-primary" onclick="cerrarConciliacion(); filtrarPorSubKpi('if_no_encontrada');">Ver IFs Canceladas en Tabla</button>
-    `;
+
+    const actionBtns = [];
+    if ((desglose.media_placa || 0) > 0) {
+      actionBtns.push(`<button class="btn btn-primary" onclick="cerrarConciliacion(); filtrarPorSubKpi('media_placa');">Ver Medias Placas (${desglose.media_placa})</button>`);
+    }
+    if (totalFaltantesCasos > 0) {
+      actionBtns.push(`<button class="btn btn-ghost" onclick="cerrarConciliacion(); filtrarPorSubKpi('faltantes_grupo');">Ver Faltantes/Omitidas (${totalFaltantesCasos})</button>`);
+    }
+    quickActionsEl.innerHTML = actionBtns.join(' ');
   }
 
   $('conciliacionModal').style.display = 'flex';
@@ -568,9 +572,13 @@ async function cargarMalSacadas() {
 
 function filtrarTablaMalSacadas() {
   const filtro = $('filtroTipoError').value;
+  syncSubKpiHighlight(filtro);
   const t = tables.malSacadas;
+
   if (!filtro) {
     t.filtradas = [...t.data];
+  } else if (filtro === 'linea_faltante' || filtro === 'cantidad_faltante') {
+    t.filtradas = t.data.filter(i => (i.tipos_error || []).some(te => te === 'linea_faltante' || te === 'cantidad_faltante'));
   } else {
     t.filtradas = t.data.filter(i => (i.tipos_error || []).includes(filtro));
   }
