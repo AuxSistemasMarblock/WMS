@@ -285,6 +285,7 @@ function confrontar(ifsEsperadas, escaneos) {
     ifs: [],
     ifs_ok: [],
     ifs_con_errores: [],
+    ifs_canceladas_erp: [], // Nueva categoría para IFs huérfanas/canceladas
     ifs_pendientes: [],
     total_lineas: 0,
     lineas_con_error: 0,
@@ -296,6 +297,33 @@ function confrontar(ifsEsperadas, escaneos) {
     top_ubicaciones: [],
     top_operadores: [],
     top_articulos_mas_salidas: { top_skus: [], top_lotes: [], top_operadores: [] }
+  };
+
+  // Función interna para inyectar plan de acción a las discrepancias
+  const asignarPlanAccion = (disc) => {
+    switch (disc.tipo) {
+      case 'cantidad_faltante':
+        disc.plan_accion = 'Faltante físico. Buscar material en andén/rack y completar tarima.';
+        break;
+      case 'cantidad_sobrante':
+        disc.plan_accion = 'Sobrante físico. Retirar material extra de la tarima y regresar a ubicación.';
+        break;
+      case 'ubicacion_incorrecta':
+        disc.plan_accion = 'Error de ubicación física. Mover material a ubicación correcta.';
+        break;
+      case 'sku_lote_no_esperado':
+        disc.plan_accion = 'Artículo incorrecto. Bajar de tarima e intercambiar por el SKU/Lote correcto.';
+        break;
+      case 'linea_faltante':
+        disc.plan_accion = 'Línea omitida. Surtir línea completa faltante.';
+        break;
+      case 'if_no_encontrada':
+        disc.plan_accion = 'IF Cancelada en ERP. Mercancía despachada. Solicitar a facturación revisión / retorno de material.';
+        break;
+      default:
+        disc.plan_accion = 'Revisar manualmente.';
+    }
+    return disc;
   };
 
   for (const ifDoc of ifsEsperadas) {
@@ -363,7 +391,7 @@ function confrontar(ifsEsperadas, escaneos) {
       lineas: lineasEvaluadas,
       total_lineas: lineasEvaluadas.length,
       lineas_con_error: lineasEvaluadas.filter(l => l.status === 'con_errores').length,
-      discrepancias: discrepanciasDeEstaIF,
+      discrepancias: discrepanciasDeEstaIF.map(asignarPlanAccion),
       status: discrepanciasDeEstaIF.length > 0 ? 'con_errores' : 'ok'
     };
 
@@ -373,7 +401,7 @@ function confrontar(ifsEsperadas, escaneos) {
     } else {
       resultado.ifs_con_errores.push(ifResultado);
     }
-    resultado.todas_las_discrepancias.push(...discrepanciasDeEstaIF);
+    resultado.todas_las_discrepancias.push(...ifResultado.discrepancias);
   }
 
   // ── IFs escaneadas en Sheets pero sin registro en NetSuite ─────────────────
@@ -383,6 +411,7 @@ function confrontar(ifsEsperadas, escaneos) {
   // error if_no_encontrada usando la información que sí existe: la del escaneo.
   // (escaneosPorIF ya está agrupado arriba y se reutiliza aquí.)
   const tranidsProcesados = new Set(resultado.ifs.map(i => i.tranid));
+  let placas_en_ifs_canceladas = 0; // Para restarlo del total al final
 
   for (const [tranid, escaneosDeLaIF] of escaneosPorIF) {
     if (tranidsProcesados.has(tranid)) continue;
@@ -394,6 +423,7 @@ function confrontar(ifsEsperadas, escaneos) {
       const key = `${e.sku}|${e.lote}`;
       if (!lineasMap.has(key)) lineasMap.set(key, []);
       lineasMap.get(key).push(e);
+      placas_en_ifs_canceladas++;
     }
     const lineas = Array.from(lineasMap.entries()).map(([key, escs]) => {
       const [sku, lote] = key.split('|');
@@ -409,6 +439,15 @@ function confrontar(ifsEsperadas, escaneos) {
 
     const operador = escaneosDeLaIF.map(e => e.operador).find(Boolean) || null;
     const primera = escaneosDeLaIF[0];
+    const discCancelada = asignarPlanAccion({
+      tipo: 'if_no_encontrada',
+      mensaje: 'La IF fue escaneada en Google Sheets pero no se localizó en NetSuite (saved search de IFs enviadas)',
+      if_tranid: tranid,
+      if_so: primera.so || null,
+      if_location: primera.sucursal || null,
+      if_fecha: primera.fecha || null
+    });
+
     const ifSintetica = {
       internalid: null,
       tranid,
@@ -419,20 +458,13 @@ function confrontar(ifsEsperadas, escaneos) {
       lineas,
       total_lineas: lineas.length,
       lineas_con_error: 0,
-      discrepancias: [{
-        tipo: 'if_no_encontrada',
-        mensaje: 'La IF fue escaneada en Google Sheets pero no se localizó en NetSuite (saved search de IFs enviadas)',
-        if_tranid: tranid,
-        if_so: primera.so || null,
-        if_location: primera.sucursal || null,
-        if_fecha: primera.fecha || null
-      }],
-      status: 'con_errores'
+      discrepancias: [discCancelada],
+      status: 'cancelada_erp' // Marcada explícitamente para el frontend
     };
 
-    resultado.ifs.push(ifSintetica);
-    resultado.ifs_con_errores.push(ifSintetica);
-    resultado.todas_las_discrepancias.push(...ifSintetica.discrepancias);
+    resultado.ifs.push(ifSintetica); // Visible en la tabla general
+    resultado.ifs_canceladas_erp.push(ifSintetica); // Aislada de ifs_con_errores
+    // Importante: No la agregamos a todas_las_discrepancias para que no ensucie el top de errores
   }
 
   // Top errores agregados
@@ -442,25 +474,29 @@ function confrontar(ifsEsperadas, escaneos) {
   resultado.top_ubicaciones = tops.top_ubicaciones;
   resultado.top_operadores = tops.top_operadores;
 
-  // Total de placas escaneadas: viene directo de Google Sheets
-  // (independiente del match con NetSuite, refleja lo que realmente se escaneó)
-  resultado.total_placas_escaneadas = escaneos.length;
+  // Total de placas escaneadas: viene directo de Google Sheets pero ahora
+  // restamos las IFs que fueron canceladas en ERP para no inflar los KPIs
+  resultado.total_placas_escaneadas = escaneos.length - placas_en_ifs_canceladas;
 
   // Conteo adicional: cuántas matchearon con IFs vs cuántas son huérfanas
   let placasMatcheadas = 0;
-  for (const l of resultado.ifs) {
+  for (const l of resultado.ifs_ok.concat(resultado.ifs_con_errores)) {
     for (const ln of l.lineas) {
       placasMatcheadas += ln.placas_escaneadas || 0;
     }
   }
   resultado.placas_escaneadas_matcheadas = placasMatcheadas;
-  resultado.placas_escaneadas_huerfanas = escaneos.length - placasMatcheadas;
+  // Huerfanas son los escaneos que no matchearon pero que tampoco son de una IF cancelada
+  resultado.placas_escaneadas_huerfanas = resultado.total_placas_escaneadas - placasMatcheadas;
 
-  // Top artículos con más salidas (volumen de escaneos)
+  // Top artículos con más salidas (volumen de escaneos válidos)
+  // Deberíamos filtrar escaneos de ifs_canceladas, pero por simplicidad
+  // lo podemos dejar igual o filtrar si es necesario (se deja igual por el momento
+  // ya que sí fueron salidas físicas).
   const masSalidas = agregarTopArticulosMasSalidas(escaneos);
   resultado.top_articulos_mas_salidas = masSalidas;
 
-  // Tasa de exactitud
+  // Tasa de exactitud (ya no se ve afectada porque lineas_con_error ya no cuenta IFs canceladas)
   resultado.tasa_exactitud = resultado.total_lineas > 0
     ? ((resultado.total_lineas - resultado.lineas_con_error) / resultado.total_lineas) * 100
     : 100;
