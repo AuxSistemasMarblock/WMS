@@ -488,19 +488,18 @@
 
 .table-wrap {
   width: 100%;
-  overflow-x: auto;
-  overflow-y: hidden;
-  -webkit-overflow-scrolling: touch;
+  overflow: hidden;
 }
 
 .table-wrap table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
 }
 
 .table-wrap thead th {
   text-align: left;
-  padding: 8px 10px;
+  padding: 10px 10px;
   background: var(--gray-1, #f9fafb);
   color: var(--gray-6, #6b7280);
   font-weight: 600;
@@ -512,11 +511,13 @@
 }
 
 .table-wrap tbody td {
-  padding: 8px 10px;
+  padding: 10px 10px;
   border-bottom: 1px solid var(--gray-2, #f3f4f6);
   color: var(--gray-8, #1f2937);
   font-size: 13px;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .btn-detalle {

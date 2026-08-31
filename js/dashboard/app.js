@@ -694,7 +694,6 @@ function renderMalSacadas() {
       <td>${escapeHTML(i.trandate || '—')}</td>
       <td>${escapeHTML(i.so || '—')}</td>
       <td>${escapeHTML(i.location || '—')}</td>
-      <td>${escapeHTML(i.operador || '—')}</td>
       <td style="text-align:center; font-weight:700; color:#dc2626;">${totalIncidencias}</td>
       <td style="text-align:center;">${semaforoBadge}</td>
       <td>${tiposBadges}</td>
@@ -708,7 +707,7 @@ function renderMalSacadas() {
 // =================== TABLA 2: IFs OK ===================
 async function cargarIFsOK() {
   const tbody = $('tbodyOK');
-  tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state">Cargando…</div></td></tr>';
+  tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state">Cargando…</div></td></tr>';
   try {
     const data = await apiFetch('/api/dashboard/ifs-ok?' + buildParams());
     tables.ifsOK.data = data.ifs || [];
@@ -716,7 +715,7 @@ async function cargarIFsOK() {
     tables.ifsOK.page = 1;
     renderIFsOK();
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state">Error: ${escapeHTML(e.message)}</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">Error: ${escapeHTML(e.message)}</div></td></tr>`;
   }
 }
 
@@ -727,7 +726,7 @@ function renderIFsOK() {
   const paginadas = paginarFilas(filas, t.page);
 
   if (t.data.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state">Sin IFs OK en este período</div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state">Sin IFs OK en este período</div></td></tr>';
     renderPaginador('ifsOK');
     return;
   }
@@ -740,7 +739,6 @@ function renderIFsOK() {
       <td>${escapeHTML(i.trandate || '—')}</td>
       <td>${escapeHTML(i.so || '—')}</td>
       <td>${escapeHTML(i.location || '—')}</td>
-      <td>${escapeHTML(i.operador || '—')}</td>
       <td style="text-align:center;">${i.total_lineas}</td>
       <td style="text-align:center;"><button class="btn-detalle" onclick="verDetalle('${i.tranid}')">Ver detalle</button></td>
     `;
