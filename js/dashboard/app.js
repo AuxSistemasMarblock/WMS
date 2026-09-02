@@ -1,8 +1,5 @@
 /**
- * WMS Dashboard — Entry point
- *
- * Asume que la sesión ya está activa (el login se hace en index.html).
- * Si no hay token, redirige a index.html.
+ * WMS Dashboard — Supply Chain Control Center
  */
 
 // =================== ESTADO ===================
@@ -10,40 +7,30 @@ const state = {
   desde: null,
   hasta: null,
   sucursal: null,
-  periodo: 'mes',
+  periodo: 'hoy',
   loading: false,
   sucursales: [],
-  sucursalUsuario: null
+  sucursalUsuario: null,
+  currentKPIs: null
 };
 
-// Estado por tabla: dataset completo + paginación + ordenamiento
 const PAGE_SIZE = 10;
 const tables = {
-  malSacadas:   { data: [], page: 1, sortKey: null, sortDir: 'asc' },
-  discrepancias: { data: [], page: 1, sortKey: null, sortDir: 'asc' },
-  ifsOK:        { data: [], page: 1, sortKey: null, sortDir: 'asc' }
+  malSacadas: { data: [], filtradas: [], page: 1, sortKey: 'trandate', sortDir: -1 },
+  ifsOK:      { data: [], page: 1, sortKey: 'trandate', sortDir: -1 }
 };
 
-// Charts (inicializados lazy)
 let chartExactitud = null;
 let chartTopArticulos = null;
 
-// =================== CONFIG ===================
-// Misma convención que js/auth.js: el URL se lee de window.APP_CONFIG.BACKEND_URL
-// (config.js lo setea en el build de Docker). Si trae localhost (default) o falta,
-// se deriva del host desde el que se sirvió la página (mismo host, puerto 3001).
+// =================== CONFIG & HELPERS ===================
 function resolveBackendURL() {
   const cfg = window.APP_CONFIG?.BACKEND_URL;
   if (cfg && !cfg.includes('localhost')) return cfg;
   return `http://${window.location.hostname}:3001`;
 }
-
 const BACKEND_URL = resolveBackendURL();
-if (!window.APP_CONFIG?.BACKEND_URL) {
-  console.error('APP_CONFIG.BACKEND_URL no definido. Verifica js/config.js.');
-}
 
-// =================== HELPERS ===================
 function $(id) { return document.getElementById(id); }
 function el(tag, attrs = {}, ...children) {
   const e = document.createElement(tag);
@@ -76,24 +63,34 @@ function escapeHTML(s) {
 }
 
 function badgeTipo(tipo) {
-  const cls = ['cantidad_faltante', 'sku_lote_no_esperado', 'linea_faltante', 'if_no_encontrada'].includes(tipo) ? 'error'
-            : ['cantidad_sobrante', 'ubicacion_incorrecta'].includes(tipo) ? 'warn'
-            : '';
-  return `<span class="tipo-badge ${cls}">${tipo.replace(/_/g, ' ')}</span>`;
-}
-
-function formatearFecha(s) {
-  if (!s) return '—';
-  return s;
+  switch (tipo) {
+    case 'lote_cruzado':
+    case 'sku_cruzado':
+      return '<span class="tipo-badge cruzado">🔀 Lote / SKU Cruzado</span>';
+    case 'media_placa':
+      return '<span class="tipo-badge media">🖨️ Media Placa (Etiquetado)</span>';
+    case 'cantidad_sobrante':
+      return '<span class="tipo-badge sobrante">📦 Placas de más</span>';
+    case 'cantidad_faltante':
+      return '<span class="tipo-badge error">🔻 Faltante físico</span>';
+    case 'linea_faltante':
+      return '<span class="tipo-badge error">📋 Línea omitida</span>';
+    case 'sku_lote_no_esperado':
+      return '<span class="tipo-badge warn">🔄 Huérfana pura</span>';
+    case 'if_no_encontrada':
+      return '<span class="tipo-badge" style="background:#fee2e2; color:#b91c1c; font-weight:700;">🚨 Cancelada en ERP</span>';
+    case 'ubicacion_incorrecta':
+      return '<span class="tipo-badge warn">📍 Ubicación</span>';
+    default:
+      return `<span class="tipo-badge">${escapeHTML(tipo.replace(/_/g, ' '))}</span>`;
+  }
 }
 
 // =================== TABLAS: ORDENAMIENTO Y PAGINACIÓN ===================
-
 function valorOrdenable(row, key) {
   if (key === 'errores') return row.discrepancias ? row.discrepancias.length : 0;
   const v = row[key];
   if (v === null || v === undefined) return '';
-  if (typeof v === 'object' && v.text) return v.text;
   return v;
 }
 
@@ -114,22 +111,23 @@ function paginarFilas(rows, page) {
 
 function renderPaginador(tableKey) {
   const t = tables[tableKey];
-  const container = $('pag' + (tableKey === 'malSacadas' ? 'MalSacadas' : tableKey === 'discrepancias' ? 'Discrepancias' : 'OK'));
+  const containerId = tableKey === 'malSacadas' ? 'pagMalSacadas' : 'pagOK';
+  const container = $(containerId);
   if (!container) return;
-  const total = t.data.length;
+
+  const dataset = tableKey === 'malSacadas' ? t.filtradas : t.data;
+  const total = dataset.length;
   const totalPaginas = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
-  if (total <= PAGE_SIZE) {
-    container.innerHTML = '';
-    return;
-  }
-
   container.innerHTML = '';
+
   const prev = el('button', { class: 'btn btn-ghost' }, '‹ Anterior');
   prev.disabled = t.page <= 1;
   prev.onclick = () => { t.page--; renderTabla(tableKey); };
 
-  const info = el('span', { class: 'pagination-info' }, `Página ${t.page} de ${totalPaginas} · ${total} registros`);
+  const startIdx = total === 0 ? 0 : (t.page - 1) * PAGE_SIZE + 1;
+  const endIdx = Math.min(total, t.page * PAGE_SIZE);
+  const info = el('span', { class: 'pagination-info' }, `Página ${t.page} de ${totalPaginas} · Mostrando ${startIdx}-${endIdx} de ${total} registros (10 por pág.)`);
 
   const next = el('button', { class: 'btn btn-ghost' }, 'Siguiente ›');
   next.disabled = t.page >= totalPaginas;
@@ -142,7 +140,6 @@ function renderPaginador(tableKey) {
 
 function renderTabla(tableKey) {
   if (tableKey === 'malSacadas') renderMalSacadas();
-  else if (tableKey === 'discrepancias') renderDiscrepancias();
   else if (tableKey === 'ifsOK') renderIFsOK();
 }
 
@@ -152,6 +149,7 @@ function initSortableHeaders() {
       const tableKey = th.dataset.table;
       const sortKey = th.dataset.sort;
       const t = tables[tableKey];
+      if (!t) return;
       if (t.sortKey === sortKey) {
         t.sortDir = t.sortDir === 'asc' ? 'desc' : 'asc';
       } else {
@@ -159,7 +157,6 @@ function initSortableHeaders() {
         t.sortDir = 'asc';
       }
       t.page = 1;
-      // Quitar indicadores previos y marcar el actual
       document.querySelectorAll(`th[data-table="${tableKey}"]`).forEach(h => h.classList.remove('sorted-asc', 'sorted-desc'));
       th.classList.add(t.sortDir === 'asc' ? 'sorted-asc' : 'sorted-desc');
       renderTabla(tableKey);
@@ -168,15 +165,11 @@ function initSortableHeaders() {
 }
 
 // =================== AUTH ===================
-function getToken() {
-  return sessionStorage.getItem('authToken');
-}
-
+function getToken() { return sessionStorage.getItem('authToken'); }
 function getCurrentUser() {
   const s = sessionStorage.getItem('currentUser');
   return s ? JSON.parse(s) : null;
 }
-
 function handleLogout() {
   sessionStorage.removeItem('authToken');
   sessionStorage.removeItem('currentUser');
@@ -202,7 +195,7 @@ async function apiFetch(path, opts = {}) {
   return res.json();
 }
 
-// =================== PERÍODOS PRESET ===================
+// =================== PERÍODOS ===================
 function ymd(d) { return d.toISOString().split('T')[0]; }
 
 function calcularPeriodo(preset) {
@@ -211,12 +204,9 @@ function calcularPeriodo(preset) {
   let hasta = new Date();
 
   switch (preset) {
-    case 'hoy':
-      // desde = hoy
-      break;
+    case 'hoy': break;
     case 'semana':
-      // lunes de esta semana
-      const day = hoy.getDay() || 7; // lunes=1, domingo=7
+      const day = hoy.getDay() || 7;
       desde.setDate(hoy.getDate() - (day - 1));
       break;
     case 'mes':
@@ -224,13 +214,11 @@ function calcularPeriodo(preset) {
       break;
     case 'mes_pasado':
       desde.setMonth(hoy.getMonth() - 1, 1);
-      hasta.setDate(0); // último día del mes anterior
+      hasta.setDate(0);
       break;
-    case 'personalizado':
-      return null; // se usan los inputs
+    case 'personalizado': return null;
     default:
   }
-
   return { desde: ymd(desde), hasta: ymd(hasta) };
 }
 
@@ -267,7 +255,6 @@ async function cargarSucursales() {
     const sel = $('filtroSucursal');
     sel.innerHTML = '';
 
-    // Opción "Todas" solo si es admin (los admins pueden ver todo por default)
     if (user?.cargo === 'admin' || user?.rol === 'admin') {
       const optTodas = el('option', { value: '' }, 'Todas las sucursales');
       sel.appendChild(optTodas);
@@ -278,7 +265,6 @@ async function cargarSucursales() {
       sel.appendChild(opt);
     });
 
-    // Default: la ubicación del usuario
     if (state.sucursalUsuario && state.sucursales.some(s => s.nombre === state.sucursalUsuario)) {
       sel.value = state.sucursalUsuario;
       state.sucursal = state.sucursalUsuario;
@@ -291,7 +277,13 @@ async function cargarSucursales() {
   }
 }
 
-// =================== FILTROS ===================
+// =================== FILTROS & CARGA ===================
+function buildParams() {
+  const p = new URLSearchParams({ desde: state.desde, hasta: state.hasta });
+  if (state.sucursal) p.append('sucursal', state.sucursal);
+  return p;
+}
+
 function aplicarFiltros() {
   if (state.periodo === 'personalizado') {
     state.desde = $('filtroDesde').value;
@@ -308,8 +300,6 @@ function aplicarFiltros() {
 function cargarTodo() {
   cargarKPIs();
   cargarMalSacadas();
-  cargarDiscrepancias();
-  cargarTopErrores();
   cargarIFsOK();
   cargarTopArticulos();
 }
@@ -317,23 +307,52 @@ function cargarTodo() {
 // =================== KPIs ===================
 async function cargarKPIs() {
   try {
-    const params = buildParams();
-    const data = await apiFetch('/api/dashboard/resumen?' + params);
+    const data = await apiFetch('/api/dashboard/resumen?' + buildParams());
     const k = data.kpis;
-    $('kpiOK').textContent = k.ifs_ok;
-    $('cardKpiOK').setAttribute('data-tooltip', `${k.ifs_ok} IFs despachadas con 100% de exactitud`);
+    if (!k) return;
+    state.currentKPIs = k;
 
-    $('kpiErrores').textContent = k.ifs_con_errores;
-    $('cardKpiErrores').setAttribute('data-tooltip', `${k.ifs_con_errores} IFs con al menos una discrepancia física vs NetSuite`);
+    // Fila 1: Indicadores Clave
+    $('kpiExactitud').textContent = (k.tasa_exactitud || 0).toFixed(1) + '%';
+    $('kpiExactitudSub').textContent = `Conforme a pedidos sin error (${k.ifs_ok} de ${k.ifs_totales})`;
 
-    $('kpiDiscrepancias').textContent = k.total_discrepancias;
-    $('cardKpiDiscrepancias').setAttribute('data-tooltip', `${k.total_discrepancias} anomalías detectadas en total en las partidas`);
+    const escPlacas = k.placas_escaneadas || 0;
+    const espPlacas = k.placas_esperadas || 0;
+    const diffPlacasRaw = escPlacas - espPlacas;
+    const diffPlacas = Math.abs(diffPlacasRaw - Math.round(diffPlacasRaw)) < 0.05
+      ? Math.round(diffPlacasRaw)
+      : parseFloat(diffPlacasRaw.toFixed(1));
+    const diffSign = diffPlacas > 0 ? '+' : '';
 
-    $('kpiLineas').textContent = k.lineas_con_error + ' / ' + k.lineas_totales;
-    $('cardKpiLineas').setAttribute('data-tooltip', `${k.lineas_con_error} líneas con error de ${k.lineas_totales} líneas totales (${k.tasa_exactitud.toFixed(1)}% de exactitud)`);
+    $('kpiVolumen').textContent = `${escPlacas} / ${espPlacas}`;
+    $('kpiVolumenSub').textContent = `${diffSign}${diffPlacas} placas de variación física`;
 
-    $('kpiPlacas').textContent = k.placas_escaneadas + ' / ' + k.placas_esperadas;
-    $('cardKpiPlacas').setAttribute('data-tooltip', `${k.placas_escaneadas} placas escaneadas físicamente vs ${k.placas_esperadas} esperadas (${k.placas_escaneadas_matcheadas || 0} matcheadas, ${k.placas_escaneadas_huerfanas || 0} huérfanas)`);
+    const m2 = k.m2 || {};
+    $('kpiDesviacion').textContent = (m2.desviacion_total || 0).toFixed(2) + ' m²';
+    $('kpiDesviacionSub').textContent = `+${(m2.sobrante || 0).toFixed(2)}m² sob | -${(m2.faltante || 0).toFixed(2)}m² falt`;
+
+    $('kpiCanceladas').textContent = `${k.ifs_canceladas_erp || 0} IFs (${k.placas_canceladas || 0} pzs)`;
+    $('kpiCanceladasSub').textContent = `${(m2.canceladas_erp || 0).toFixed(2)} m² fuera de ERP`;
+
+    // Fila 2: Sub-KPIs de Diagnóstico Rápido
+    const desglose = k.desglose_errores || {};
+    const imp = k.impacto_placas || {};
+
+    $('kpiMediaPlaca').textContent = `${desglose.media_placa || 0} casos`;
+    $('kpiMediaPlacaSub').textContent = `+${imp.media_placa || 0} pzs (+${(m2.media_placa || 0).toFixed(2)} m²)`;
+
+    $('kpiCruzados').textContent = `${desglose.lote_cruzado || 0} casos`;
+    $('kpiCruzadosSub').textContent = `${imp.lote_cruzado || 0} pzs entregadas (Neto: 0)`;
+
+    const totalSobrantesCasos = (desglose.cantidad_sobrante || 0) + (desglose.huerfanos_puros || 0);
+    const totalSobrantesPzs = (imp.sobrantes || 0) + (imp.huerfanos_puros || 0);
+    $('kpiSobrantes').textContent = `${totalSobrantesCasos} casos`;
+    $('kpiSobrantesSub').textContent = `+${totalSobrantesPzs} pzs (+${(m2.sobrante_puro || 0).toFixed(2)} m²)`;
+
+    const totalFaltantesCasos = (desglose.cantidad_faltante || 0) + (desglose.linea_faltante || 0);
+    const totalFaltantesPzs = (imp.faltantes_reales || 0) + (imp.lineas_omitidas || 0);
+    $('kpiFaltantes').textContent = `${totalFaltantesCasos} casos`;
+    $('kpiFaltantesSub').textContent = `-${totalFaltantesPzs} pzs (-${(m2.faltante || 0).toFixed(2)} m²)`;
 
     renderChartExactitud(k.ifs_ok, k.ifs_con_errores, k.tasa_exactitud);
   } catch (e) {
@@ -341,18 +360,583 @@ async function cargarKPIs() {
   }
 }
 
-function buildParams() {
-  const p = new URLSearchParams({ desde: state.desde, hasta: state.hasta });
-  if (state.sucursal) p.append('sucursal', state.sucursal);
-  return p;
+// =================== INTERACTIVIDAD: SINCRONIZACIÓN Y FILTRO SUB-KPIS ===================
+function syncSubKpiHighlight(filtro) {
+  document.querySelectorAll('.sub-kpi-card').forEach(c => c.classList.remove('active-filter'));
+  if (filtro === 'media_placa' && $('subKpiMediaPlaca')) $('subKpiMediaPlaca').classList.add('active-filter');
+  else if (filtro === 'lote_cruzado' && $('subKpiCruzados')) $('subKpiCruzados').classList.add('active-filter');
+  else if ((filtro === 'sobrantes_grupo' || filtro === 'cantidad_sobrante' || filtro === 'sku_lote_no_esperado') && $('subKpiSobrantes')) $('subKpiSobrantes').classList.add('active-filter');
+  else if ((filtro === 'faltantes_grupo' || filtro === 'linea_faltante' || filtro === 'cantidad_faltante') && $('subKpiFaltantes')) $('subKpiFaltantes').classList.add('active-filter');
+}
+
+function filtrarPorSubKpi(tipo) {
+  const sel = $('filtroTipoError');
+  if (tipo === 'faltantes_grupo') {
+    sel.value = 'faltantes_grupo';
+  } else if (tipo === 'sobrantes_grupo') {
+    sel.value = 'sobrantes_grupo';
+  } else {
+    sel.value = tipo;
+  }
+
+  syncSubKpiHighlight(tipo);
+  filtrarTablaMalSacadas();
+
+  const seccion = $('seccionTablaIncidencias');
+  if (seccion) {
+    seccion.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  const nombres = {
+    'media_placa': 'Medias Placas (Etiquetado)',
+    'lote_cruzado': 'Lotes / SKUs Cruzados',
+    'sobrantes_grupo': 'Placas de Más / Sobrantes (Todos)',
+    'cantidad_sobrante': 'Placas de Más (En partida)',
+    'faltantes_grupo': 'Faltantes / Omitidas (Todos)',
+    'linea_faltante': 'Líneas Omitidas',
+    'cantidad_faltante': 'Faltante físico',
+    'sku_lote_no_esperado': 'Huérfanas Puras'
+  };
+  showToast(`Filtrando tabla por: ${nombres[tipo] || tipo}`, 'info');
+}
+
+// =================== MODAL: CONCILIACIÓN MATEMÁTICA DE KPI ===================
+function abrirModalConciliacion(kpiTipo) {
+  const k = state.currentKPIs;
+  if (!k) return;
+
+  const titleEl = $('conciliacionTitle');
+  const bodyEl = $('conciliacionBody');
+  const quickActionsEl = $('conciliacionQuickActions');
+
+  const escPlacas = k.placas_escaneadas || 0;
+  const espPlacas = k.placas_esperadas || 0;
+  const diffPlacasRaw = escPlacas - espPlacas;
+  const diffPlacas = Math.abs(diffPlacasRaw - Math.round(diffPlacasRaw)) < 0.05
+    ? Math.round(diffPlacasRaw)
+    : parseFloat(diffPlacasRaw.toFixed(1));
+  const diffSign = diffPlacas > 0 ? '+' : '';
+
+  const m2 = k.m2 || {};
+  const desglose = k.desglose_errores || {};
+  const imp = k.impacto_placas || {};
+  const totalSobrantesCasos = (desglose.cantidad_sobrante || 0) + (desglose.huerfanos_puros || 0);
+  const totalSobrantesPzs = (imp.sobrantes || 0) + (imp.huerfanos_puros || 0);
+  const totalFaltantesCasos = (desglose.cantidad_faltante || 0) + (desglose.linea_faltante || 0);
+  const totalFaltantesPzs = (imp.faltantes_reales || 0) + (imp.lineas_omitidas || 0);
+
+  quickActionsEl.innerHTML = '';
+
+  if (kpiTipo === 'volumen') {
+    titleEl.textContent = '📦 Conciliación Matemática: Volumen Despachado';
+    const linkMediaPlaca = (desglose.media_placa || 0) > 0
+      ? `<button class="tabla-filtro-link" onclick="cerrarConciliacion(); filtrarPorSubKpi('media_placa');">Ver ${desglose.media_placa} ↗</button>`
+      : '';
+    const linkCruzados = (desglose.lote_cruzado || 0) > 0
+      ? `<button class="tabla-filtro-link" onclick="cerrarConciliacion(); filtrarPorSubKpi('lote_cruzado');">Ver ${desglose.lote_cruzado} ↗</button>`
+      : '';
+    const linkHuerfanos = (desglose.huerfanos_puros || 0) > 0
+      ? `<button class="tabla-filtro-link" onclick="cerrarConciliacion(); filtrarPorSubKpi('sku_lote_no_esperado');">Ver ${desglose.huerfanos_puros} ↗</button>`
+      : '';
+    const linkSobrantes = (desglose.cantidad_sobrante || 0) > 0
+      ? `<button class="tabla-filtro-link" onclick="cerrarConciliacion(); filtrarPorSubKpi('cantidad_sobrante');">Ver ${desglose.cantidad_sobrante} ↗</button>`
+      : '';
+    const linkFaltantes = totalFaltantesCasos > 0
+      ? `<button class="tabla-filtro-link" onclick="cerrarConciliacion(); filtrarPorSubKpi('faltantes_grupo');">Ver ${totalFaltantesCasos} ↗</button>`
+      : '';
+
+    bodyEl.innerHTML = `
+      <div class="balance-card-summary">
+        <div style="font-size:15px; font-weight:700; color:#004a99; margin-bottom:6px;">
+          ${escPlacas} placas físicas escaneadas vs ${espPlacas} placas requeridas en ERP
+        </div>
+        <div style="color:var(--gray-7, #374151); font-size:13px; line-height:1.4;">
+          Variación neta de <strong>${diffSign}${diffPlacas} placas físicas</strong> en este período. A continuación se desglosa el balance exacto por causa raíz:
+        </div>
+      </div>
+
+      <div class="detalle-table-wrap">
+        <table class="detalle-table">
+          <thead>
+            <tr>
+              <th>Causa Raíz Operativa</th>
+              <th style="text-align:center;">Órdenes / Casos</th>
+              <th style="text-align:center;">Impacto en Placas</th>
+              <th style="text-align:right;">Impacto en Área</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>🖨️ Medias Placas (Error de etiquetado)</strong><br><small style="color:var(--gray-6);">Se pidió fracción (ej. 0.5 o 1.5) y se escaneó placa completa</small></td>
+              <td style="text-align:center;">
+                <div style="font-weight:600; font-size:13px;">${desglose.media_placa || 0} órdenes</div>
+                ${linkMediaPlaca ? `<div style="margin-top:3px;">${linkMediaPlaca}</div>` : ''}
+              </td>
+              <td style="text-align:center; font-weight:700; color:#8b5cf6;">+${imp.media_placa || 0} pzs</td>
+              <td style="text-align:right; font-weight:600;">+${(m2.media_placa || 0).toFixed(2)} m²</td>
+            </tr>
+            <tr>
+              <td><strong>🔀 Lotes / SKUs Cruzados (Swap en patio)</strong><br><small style="color:var(--gray-6);">Placa física sí se entregó pero con lote/código cambiado (mismo pedido)</small></td>
+              <td style="text-align:center;">
+                <div style="font-weight:600; font-size:13px;">${desglose.lote_cruzado || 0} casos (${imp.lote_cruzado || 0} pzs)</div>
+                ${linkCruzados ? `<div style="margin-top:3px;">${linkCruzados}</div>` : ''}
+              </td>
+              <td style="text-align:center; font-weight:700; color:#d97706;">0 pzs <small style="color:var(--gray-6); font-weight:400;">(Entregado 1 a 1)</small></td>
+              <td style="text-align:right; font-weight:600; color:#d97706;">
+                ${Math.abs(m2.cruzados_diff || 0) > 0.001 
+                  ? `${(m2.cruzados_diff > 0 ? '+' : '') + m2.cruzados_diff.toFixed(2)} m² <small style="color:var(--gray-6);">(${(m2.cruzados_entregado || 0).toFixed(2)} m² entregados)</small>` 
+                  : '0.00 m² <small style="color:var(--gray-6);">(Mismo tamaño)</small>'}
+              </td>
+            </tr>
+            <tr>
+              <td><strong>🔄 Huérfanos Puros (Placas extra sin orden)</strong><br><small style="color:var(--gray-6);">Placas físicas escaneadas que no sustituyeron a ninguna faltante</small></td>
+              <td style="text-align:center;">
+                <div style="font-weight:600; font-size:13px;">${desglose.huerfanos_puros || 0} piezas</div>
+                ${linkHuerfanos ? `<div style="margin-top:3px;">${linkHuerfanos}</div>` : ''}
+              </td>
+              <td style="text-align:center; font-weight:700; color:#4b5563;">+${imp.huerfanos_puros || 0} pzs</td>
+              <td style="text-align:right; font-weight:600; color:#4b5563;">+${(m2.huerfanos || 0).toFixed(2)} m²</td>
+            </tr>
+            <tr>
+              <td><strong>📦 Placas de Más (Sobrantes en partida)</strong><br><small style="color:var(--gray-6);">Partidas donde se escanearon placas completas adicionales</small></td>
+              <td style="text-align:center;">
+                <div style="font-weight:600; font-size:13px;">${desglose.cantidad_sobrante || 0} partidas</div>
+                ${linkSobrantes ? `<div style="margin-top:3px;">${linkSobrantes}</div>` : ''}
+              </td>
+              <td style="text-align:center; font-weight:700; color:#2563eb;">+${imp.sobrantes || 0} pzs</td>
+              <td style="text-align:right; font-weight:600;">+${(m2.sobrante_partida || 0).toFixed(2)} m²</td>
+            </tr>
+            <tr>
+              <td><strong>🔻 Faltantes Físicos + Órdenes No Escaneadas</strong><br><small style="color:var(--gray-6);">${desglose.cantidad_faltante || 0} faltantes en rampa · ${desglose.linea_faltante || 0} líneas de ERP sin escaneo</small></td>
+              <td style="text-align:center;">
+                <div style="font-weight:600; font-size:13px;">${totalFaltantesCasos} partidas</div>
+                ${linkFaltantes ? `<div style="margin-top:3px;">${linkFaltantes}</div>` : ''}
+              </td>
+              <td style="text-align:center; font-weight:700; color:#dc2626;">-${totalFaltantesPzs} pzs</td>
+              <td style="text-align:right; font-weight:600; color:#dc2626;">${(m2.faltante || 0) > 0 ? `-${(m2.faltante || 0).toFixed(2)} m²` : '0.00 m²'}</td>
+            </tr>
+            <tr style="background:#f8fafc; font-weight:700;">
+              <td>VARIACIÓN FÍSICA NETA TOTAL</td>
+              <td style="text-align:center;">${k.total_discrepancias} incidencias</td>
+              <td style="text-align:center; color:#004a99; font-size:14px;">${diffSign}${diffPlacas} placas</td>
+              <td style="text-align:right; color:#004a99; font-size:14px;">${(m2.balance_neto ?? (m2.sobrante - m2.faltante)) >= 0 ? '+' : ''}${(m2.balance_neto ?? (m2.sobrante - m2.faltante)).toFixed(2)} m²</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    `;
+
+    // Generar botones de acción rápida DINÁMICAMENTE y COMPACTOS
+    const actionBtns = [];
+    if ((desglose.media_placa || 0) > 0) {
+      actionBtns.push(`<button class="conciliacion-filter-btn" onclick="cerrarConciliacion(); filtrarPorSubKpi('media_placa');">🖨️ Medias Placas (${desglose.media_placa})</button>`);
+    }
+    if ((desglose.lote_cruzado || 0) > 0) {
+      actionBtns.push(`<button class="conciliacion-filter-btn" onclick="cerrarConciliacion(); filtrarPorSubKpi('lote_cruzado');">🔀 Lotes Cruzados (${desglose.lote_cruzado})</button>`);
+    }
+    if (totalSobrantesCasos > 0) {
+      actionBtns.push(`<button class="conciliacion-filter-btn" onclick="cerrarConciliacion(); filtrarPorSubKpi('sobrantes_grupo');">📦 Sobrantes (${totalSobrantesCasos})</button>`);
+    }
+    if (totalFaltantesCasos > 0) {
+      actionBtns.push(`<button class="conciliacion-filter-btn" onclick="cerrarConciliacion(); filtrarPorSubKpi('faltantes_grupo');">🔻 Faltantes/Omitidas (${totalFaltantesCasos})</button>`);
+    }
+    quickActionsEl.innerHTML = `
+      <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+        <span style="font-size:12px; font-weight:600; color:var(--gray-6, #6b7280);">🔍 Filtrar en tabla:</span>
+        ${actionBtns.join('')}
+      </div>
+    `;
+
+  } else if (kpiTipo === 'desviacion') {
+    titleEl.textContent = '📐 Conciliación Matemática: Desviación Total de Área (m²)';
+    bodyEl.innerHTML = `
+      <div class="balance-card-summary">
+        <div style="font-size:15px; font-weight:700; color:#dc2626; margin-bottom:6px;">
+          ${(m2.desviacion_total || 0).toFixed(2)} m² de Desviación Absoluta Total
+        </div>
+        <div style="color:var(--gray-7, #374151); font-size:13px; line-height:1.4;">
+          El impacto físico se compone de <strong>+${(m2.sobrante || 0).toFixed(2)} m²</strong> despachados de más (por no re-etiquetar fracciones o surtir placas extra), <strong>${Math.abs(m2.cruzados_diff || 0) > 0.001 ? ((m2.cruzados_diff > 0 ? '+' : '') + m2.cruzados_diff.toFixed(2) + ' m²') : '0.00 m²'}</strong> de variación por cortes en lotes cruzados y <strong>-${(m2.faltante || 0).toFixed(2)} m²</strong> de material pendiente/omitido.
+        </div>
+      </div>
+      <div class="detalle-table-wrap">
+        <table class="detalle-table">
+          <thead>
+            <tr>
+              <th>Concepto de Impacto</th>
+              <th style="text-align:center;">Casos</th>
+              <th style="text-align:right;">Metros Cuadrados (m²)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>🖨️ Medias Placas (Exceso por falta de re-etiquetado)</td>
+              <td style="text-align:center;">
+                <div style="font-weight:600; font-size:13px;">${desglose.media_placa || 0}</div>
+                ${(desglose.media_placa || 0) > 0 ? `<div style="margin-top:3px;"><button class="tabla-filtro-link" onclick="cerrarConciliacion(); filtrarPorSubKpi('media_placa');">Ver ↗</button></div>` : ''}
+              </td>
+              <td style="text-align:right; font-weight:600; color:#8b5cf6;">+${(m2.media_placa || 0).toFixed(2)} m²</td>
+            </tr>
+            <tr>
+              <td>🔀 Lotes Cruzados (Variación dimensional por corte)</td>
+              <td style="text-align:center;">
+                <div style="font-weight:600; font-size:13px;">${desglose.lote_cruzado || 0}</div>
+                ${(desglose.lote_cruzado || 0) > 0 ? `<div style="margin-top:3px;"><button class="tabla-filtro-link" onclick="cerrarConciliacion(); filtrarPorSubKpi('lote_cruzado');">Ver ↗</button></div>` : ''}
+              </td>
+              <td style="text-align:right; font-weight:600; color:#d97706;">
+                ${Math.abs(m2.cruzados_diff || 0) > 0.001 
+                  ? `${(m2.cruzados_diff > 0 ? '+' : '') + m2.cruzados_diff.toFixed(2)} m² <small style="color:var(--gray-6);">(${(m2.cruzados_entregado || 0).toFixed(2)} m² entregados)</small>` 
+                  : '0.00 m² (Mismo tamaño)'}
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <strong>📦 Placas de Más (Sobrantes en partida + Huérfanas)</strong><br>
+                <small style="color:var(--gray-6);">${desglose.cantidad_sobrante || 0} en partidas esperadas (${(m2.sobrante_partida || 0).toFixed(2)} m²) · ${desglose.huerfanos_puros || 0} huérfanas sin orden (${(m2.huerfanos || 0).toFixed(2)} m²)</small>
+              </td>
+              <td style="text-align:center;">
+                <div style="font-weight:600; font-size:13px;">${totalSobrantesCasos}</div>
+                ${totalSobrantesCasos > 0 ? `<div style="margin-top:3px;"><button class="tabla-filtro-link" onclick="cerrarConciliacion(); filtrarPorSubKpi('sobrantes_grupo');">Ver ↗</button></div>` : ''}
+              </td>
+              <td style="text-align:right; font-weight:600; color:#2563eb;">+${(m2.sobrante_puro || 0).toFixed(2)} m²</td>
+            </tr>
+            <tr>
+              <td>🔻 Faltantes Físicos + Líneas Omitidas en NetSuite</td>
+              <td style="text-align:center;">
+                <div style="font-weight:600; font-size:13px;">${totalFaltantesCasos}</div>
+                ${totalFaltantesCasos > 0 ? `<div style="margin-top:3px;"><button class="tabla-filtro-link" onclick="cerrarConciliacion(); filtrarPorSubKpi('faltantes_grupo');">Ver ↗</button></div>` : ''}
+              </td>
+              <td style="text-align:right; font-weight:600; color:#dc2626;">${(m2.faltante || 0) > 0 ? `-${(m2.faltante || 0).toFixed(2)} m²` : '0.00 m²'}</td>
+            </tr>
+            <tr style="background:#f8fafc; font-weight:700;">
+              <td>DESVIACIÓN TOTAL ACUMULADA</td>
+              <td style="text-align:center;">—</td>
+              <td style="text-align:right; color:#dc2626; font-size:14px;">${(m2.desviacion_total || 0).toFixed(2)} m²</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    `;
+
+    const actionBtns = [];
+    if ((desglose.media_placa || 0) > 0) {
+      actionBtns.push(`<button class="conciliacion-filter-btn" onclick="cerrarConciliacion(); filtrarPorSubKpi('media_placa');">🖨️ Medias Placas (${desglose.media_placa})</button>`);
+    }
+    if ((desglose.lote_cruzado || 0) > 0) {
+      actionBtns.push(`<button class="conciliacion-filter-btn" onclick="cerrarConciliacion(); filtrarPorSubKpi('lote_cruzado');">🔀 Lotes Cruzados (${desglose.lote_cruzado})</button>`);
+    }
+    if (totalSobrantesCasos > 0) {
+      actionBtns.push(`<button class="conciliacion-filter-btn" onclick="cerrarConciliacion(); filtrarPorSubKpi('sobrantes_grupo');">📦 Placas de Más (${totalSobrantesCasos})</button>`);
+    }
+    if (totalFaltantesCasos > 0) {
+      actionBtns.push(`<button class="conciliacion-filter-btn" onclick="cerrarConciliacion(); filtrarPorSubKpi('faltantes_grupo');">🔻 Faltantes/Omitidas (${totalFaltantesCasos})</button>`);
+    }
+    quickActionsEl.innerHTML = `
+      <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+        <span style="font-size:12px; font-weight:600; color:var(--gray-6, #6b7280);">🔍 Filtrar en tabla:</span>
+        ${actionBtns.join('')}
+      </div>
+    `;
+  }
+
+  $('conciliacionModal').style.display = 'flex';
+}
+
+function cerrarConciliacion() {
+  $('conciliacionModal').style.display = 'none';
+}
+
+// =================== TABLA 1: IFs MAL SACADAS Y CANCELADAS ===================
+async function cargarMalSacadas() {
+  const tbody = $('tbodyMalSacadas');
+  tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state">Cargando…</div></td></tr>';
+  try {
+    const data = await apiFetch('/api/dashboard/ifs-mal-sacadas?' + buildParams());
+    tables.malSacadas.data = data.ifs || [];
+    tables.malSacadas.filtradas = [...tables.malSacadas.data];
+    $('badCount').textContent = tables.malSacadas.data.length;
+    tables.malSacadas.page = 1;
+    filtrarTablaMalSacadas();
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state">Error: ${escapeHTML(e.message)}</div></td></tr>`;
+  }
+}
+
+function filtrarTablaMalSacadas() {
+  const filtro = $('filtroTipoError').value;
+  syncSubKpiHighlight(filtro);
+  const t = tables.malSacadas;
+
+  if (!filtro) {
+    t.filtradas = [...t.data];
+  } else if (filtro === 'faltantes_grupo') {
+    t.filtradas = t.data.filter(i => (i.tipos_error || []).some(te => te === 'linea_faltante' || te === 'cantidad_faltante'));
+  } else if (filtro === 'sobrantes_grupo') {
+    t.filtradas = t.data.filter(i => (i.tipos_error || []).some(te => te === 'cantidad_sobrante' || te === 'sku_lote_no_esperado'));
+  } else {
+    t.filtradas = t.data.filter(i => (i.tipos_error || []).includes(filtro));
+  }
+  t.page = 1;
+  renderMalSacadas();
+}
+
+function renderMalSacadas() {
+  const tbody = $('tbodyMalSacadas');
+  const t = tables.malSacadas;
+  let filas = ordenarFilas(t.filtradas, t.sortKey, t.sortDir);
+  const paginadas = paginarFilas(filas, t.page);
+
+  if (t.filtradas.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state">✅ Sin incidencias ni alertas en este período</div></td></tr>';
+    renderPaginador('malSacadas');
+    return;
+  }
+
+  tbody.innerHTML = '';
+  paginadas.forEach(i => {
+    const isCancelada = (i.status === 'cancelada_erp') || (i.tipos_error || []).includes('if_no_encontrada');
+    const isOnlyCruzados = !isCancelada && (i.tipos_error || []).length === 1 && i.tipos_error[0] === 'lote_cruzado';
+
+    const semaforoBadge = isCancelada
+      ? '<span class="tipo-badge" style="background:#fee2e2; color:#b91c1c; font-weight:700;">🚨 Alerta ERP</span>'
+      : (isOnlyCruzados
+        ? '<span class="tipo-badge warn" style="font-weight:700;">🟡 Discrepancia Lote</span>'
+        : '<span class="tipo-badge error" style="font-weight:700;">🔴 Error Surtido</span>');
+
+    const cruzadasCount = (i.discrepancias || []).filter(d => d.es_cruzado && (d.tipo === 'linea_faltante' || d.tipo === 'cantidad_faltante')).length;
+    const noCruzadasCount = (i.discrepancias || []).filter(d => !d.es_cruzado).length;
+    const totalIncidencias = cruzadasCount + noCruzadasCount;
+
+    const tiposBadges = (i.tipos_error || []).map(t => badgeTipo(t)).join(' ');
+    const tr = el('tr');
+    tr.innerHTML = `
+      <td><strong>${escapeHTML(i.tranid)}</strong></td>
+      <td>${escapeHTML(i.trandate || '—')}</td>
+      <td>${escapeHTML(i.so || '—')}</td>
+      <td>${escapeHTML(i.location || '—')}</td>
+      <td style="text-align:center; font-weight:700; color:#dc2626;">${totalIncidencias}</td>
+      <td style="text-align:center;">${semaforoBadge}</td>
+      <td>${tiposBadges}</td>
+      <td style="text-align:center;"><button class="btn-detalle" onclick="verDetalle('${i.tranid}')">Ver detalle</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
+  renderPaginador('malSacadas');
+}
+
+// =================== TABLA 2: IFs OK ===================
+async function cargarIFsOK() {
+  const tbody = $('tbodyOK');
+  tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state">Cargando…</div></td></tr>';
+  try {
+    const data = await apiFetch('/api/dashboard/ifs-ok?' + buildParams());
+    tables.ifsOK.data = data.ifs || [];
+    $('okCount').textContent = tables.ifsOK.data.length;
+    tables.ifsOK.page = 1;
+    renderIFsOK();
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state">Error: ${escapeHTML(e.message)}</div></td></tr>`;
+  }
+}
+
+function renderIFsOK() {
+  const tbody = $('tbodyOK');
+  const t = tables.ifsOK;
+  let filas = ordenarFilas(t.data, t.sortKey, t.sortDir);
+  const paginadas = paginarFilas(filas, t.page);
+
+  if (t.data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state">Sin IFs OK en este período</div></td></tr>';
+    renderPaginador('ifsOK');
+    return;
+  }
+
+  tbody.innerHTML = '';
+  paginadas.forEach(i => {
+    const tr = el('tr');
+    tr.innerHTML = `
+      <td><strong>${escapeHTML(i.tranid)}</strong></td>
+      <td>${escapeHTML(i.trandate || '—')}</td>
+      <td>${escapeHTML(i.so || '—')}</td>
+      <td>${escapeHTML(i.location || '—')}</td>
+      <td>${escapeHTML(i.operador || '—')}</td>
+      <td style="text-align:center;">${i.total_lineas}</td>
+      <td style="text-align:center;"><button class="btn-detalle" onclick="verDetalle('${i.tranid}')">Ver detalle</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
+  renderPaginador('ifsOK');
+}
+
+// =================== MODAL 2: DETALLE CONSOLIDADO (SIN REPETICIÓN) ===================
+async function verDetalle(tranid) {
+  $('detalleTitle').textContent = 'Auditoría y Detalle de ' + tranid;
+  $('detalleBody').innerHTML = '<div class="empty-state">Cargando análisis partida por partida…</div>';
+  $('detalleModal').style.display = 'flex';
+  try {
+    const data = await apiFetch(`/api/dashboard/if/${encodeURIComponent(tranid)}/detalle?` + buildParams());
+    if (data.if) {
+      renderDetalle(data.if);
+    } else {
+      $('detalleBody').innerHTML = '<div class="empty-state">No se encontraron datos para esta IF.</div>';
+    }
+  } catch (e) {
+    $('detalleBody').innerHTML = `<div class="empty-state">Error cargando detalle: ${escapeHTML(e.message)}</div>`;
+  }
+}
+
+function renderDetalle(ifDoc) {
+  const isCancelada = ifDoc.status === 'cancelada_erp' || (ifDoc.discrepancias || []).some(d => d.tipo === 'if_no_encontrada');
+  const allCruzados = (ifDoc.discrepancias && ifDoc.discrepancias.length > 0) && ifDoc.discrepancias.every(d => d.es_cruzado);
+  const statusBadge = isCancelada
+    ? '<span class="tipo-badge" style="background:#fee2e2; color:#b91c1c; font-weight:700;">🚨 Cancelada en NetSuite</span>'
+    : (allCruzados
+      ? '<span class="tipo-badge warn" style="font-weight:700;">🟡 Discrepancia de Lote (Mercancía entregada)</span>'
+      : ((ifDoc.discrepancias && ifDoc.discrepancias.length > 0)
+        ? '<span class="tipo-badge error" style="font-weight:700;">🔴 Con Errores de Surtido</span>'
+        : '<span class="tipo-badge ok" style="font-weight:700;">🟢 100% Correcta</span>'));
+
+  const html = [];
+  html.push(`
+    <div class="detalle-modal-header">
+      <div class="detalle-header-grid">
+        <div><span class="label">Folio IF:</span> <strong class="val">${escapeHTML(ifDoc.tranid)}</strong></div>
+        <div><span class="label">SO Origen:</span> <span class="val">${escapeHTML(ifDoc.so || '—')}</span></div>
+        <div><span class="label">Fecha:</span> <span class="val">${escapeHTML(ifDoc.trandate || '—')}</span></div>
+        <div><span class="label">Sucursal:</span> <span class="val">${escapeHTML(ifDoc.location || '—')}</span></div>
+        <div><span class="label">Operador:</span> <span class="val">${escapeHTML(ifDoc.operador || '—')}</span></div>
+        <div><span class="label">Estatus General:</span> ${statusBadge}</div>
+      </div>
+    </div>
+  `);
+
+  html.push(`
+    <div class="detalle-table-wrap">
+      <table class="detalle-table">
+        <thead>
+          <tr>
+            <th style="width: 14%;">SKU</th>
+            <th style="width: 18%;">Lote / Medidas</th>
+            <th style="width: 12%; text-align:center;">Esperado</th>
+            <th style="width: 12%; text-align:center;">Escaneado</th>
+            <th style="width: 16%; text-align:center;">Diagnóstico</th>
+            <th style="width: 28%;">Plan de Acción Específico</th>
+          </tr>
+        </thead>
+        <tbody>
+  `);
+
+  // Agrupar discrepancias por clave SKU|LOTE
+  const discPorLinea = new Map();
+  (ifDoc.discrepancias || []).forEach(d => {
+    const key = `${d.sku || ''}|${d.lote || ''}`;
+    if (!discPorLinea.has(key)) discPorLinea.set(key, []);
+    discPorLinea.get(key).push(d);
+  });
+
+  // Renderizar cada línea esperada
+  (ifDoc.lineas || []).forEach(l => {
+    const key = `${l.sku || ''}|${l.lote || ''}`;
+    const discs = discPorLinea.get(key) || [];
+    discPorLinea.delete(key);
+
+    const parsedArea = l.evaluacion_cantidad?.area_placa_m2 || 0;
+    const m2Esp = l.quantity ? parseFloat(l.quantity).toFixed(2) + 'm²' : '—';
+    const m2Esc = parsedArea ? ((l.placas_escaneadas || 0) * parsedArea).toFixed(2) + 'm²' : '0.00m²';
+    const espPlacas = l.evaluacion_cantidad?.placas_esperadas ?? (l.placas_esperadas ?? '—');
+    const escPlacas = l.placas_escaneadas ?? 0;
+
+    let diagnosticoBadge = '<span class="tipo-badge ok">🟢 OK</span>';
+    let planAccionTexto = '<span style="color:var(--gray-5, #9ca3af);">—</span>';
+
+    if (discs.length > 0) {
+      diagnosticoBadge = discs.map(d => badgeTipo(d.es_cruzado ? 'lote_cruzado' : d.tipo)).join(' ');
+      planAccionTexto = discs.map(d => `<div style="margin-bottom:4px; font-weight:500;">${escapeHTML(d.plan_accion || d.mensaje)}</div>`).join('');
+    } else if (isCancelada) {
+      diagnosticoBadge = '<span class="tipo-badge" style="background:#fee2e2; color:#b91c1c; font-weight:600;">🚨 No en ERP</span>';
+      planAccionTexto = 'IF cancelada en NetSuite. Notificar a facturación / retorno.';
+    }
+
+    const medidasTexto = parsedArea > 0 ? `<div style="font-size:11px; color:var(--gray-5, #6b7280);">${parsedArea.toFixed(2)} m²/pza</div>` : '';
+
+    html.push(`
+      <tr>
+        <td><strong>${escapeHTML(l.sku || '—')}</strong></td>
+        <td>
+          <div>${escapeHTML(l.lote || '—')}</div>
+          ${medidasTexto}
+        </td>
+        <td style="text-align:center;">
+          <div style="font-weight:600;">${espPlacas} ${typeof espPlacas === 'number' ? (espPlacas === 1 ? 'pza' : 'pzs') : ''}</div>
+          <div style="font-size:11px; color:var(--gray-5, #6b7280);">${m2Esp}</div>
+        </td>
+        <td style="text-align:center;">
+          <div style="font-weight:700;">${escPlacas} ${escPlacas === 1 ? 'pza' : 'pzs'}</div>
+          <div style="font-size:11px; color:var(--gray-5, #6b7280);">${m2Esc}</div>
+        </td>
+        <td style="text-align:center;">${diagnosticoBadge}</td>
+        <td style="font-size:12px; color:var(--gray-8, #1f2937); line-height:1.4;">${planAccionTexto}</td>
+      </tr>
+    `);
+  });
+
+  // Renderizar discrepancias huérfanas
+  discPorLinea.forEach((discs, key) => {
+    const d = discs[0];
+    const skuStr = d.sku || '—';
+    const loteStr = d.lote || '—';
+    const diagBadge = discs.map(x => badgeTipo(x.es_cruzado ? 'lote_cruzado' : x.tipo)).join(' ');
+    const planText = discs.map(x => `<div style="margin-bottom:4px; font-weight:500;">${escapeHTML(x.plan_accion || x.mensaje)}</div>`).join('');
+    const parsedArea = d.area_placa_m2 || 0;
+    const m2Esc = parsedArea > 0 ? `+${parsedArea.toFixed(2)}m²` : '—';
+    const medidasTexto = parsedArea > 0 ? `<div style="font-size:11px; color:var(--gray-5, #6b7280);">${parsedArea.toFixed(2)} m²/pza</div>` : '';
+
+    html.push(`
+      <tr style="background:#fffbeb;">
+        <td><strong>${escapeHTML(skuStr)}</strong></td>
+        <td>
+          <div>${escapeHTML(loteStr)}</div>
+          ${medidasTexto}
+        </td>
+        <td style="text-align:center; color:var(--gray-5);">0 pzs</td>
+        <td style="text-align:center;">
+          <div style="font-weight:700; color:#dc2626;">+1 pza</div>
+          <div style="font-size:11px; color:#dc2626; font-weight:600;">${m2Esc}</div>
+        </td>
+        <td style="text-align:center;">${diagBadge}</td>
+        <td style="font-size:12px; color:var(--gray-8); line-height:1.4;">${planText}</td>
+      </tr>
+    `);
+  });
+
+  html.push(`
+        </tbody>
+      </table>
+    </div>
+  `);
+
+  $('detalleBody').innerHTML = html.join('');
+}
+
+function cerrarDetalle() {
+  $('detalleModal').style.display = 'none';
 }
 
 // =================== GRÁFICAS ===================
+async function cargarTopArticulos() {
+  try {
+    const params = buildParams();
+    const articulos = await apiFetch('/api/dashboard/articulos-mas-salidas?' + params);
+    renderChartTopArticulos(articulos.top || []);
+  } catch (e) {
+    renderChartTopArticulos([]);
+  }
+}
+
 function renderChartExactitud(ok, errores, tasa) {
   const ctx = $('chartExactitud');
   if (!ctx) return;
 
-  $('tasaExactitudTexto').textContent = tasa.toFixed(1) + '%';
+  $('tasaExactitudTexto').textContent = (tasa || 0).toFixed(1) + '%';
 
   if (chartExactitud) chartExactitud.destroy();
   chartExactitud = new Chart(ctx, {
@@ -389,17 +973,6 @@ function renderChartExactitud(ok, errores, tasa) {
   });
 }
 
-async function cargarTopArticulos() {
-  try {
-    const params = buildParams();
-    const articulos = await apiFetch('/api/dashboard/articulos-mas-salidas?' + params);
-    renderChartTopArticulos(articulos.top || []);
-  } catch (e) {
-    // fallback: si el endpoint no existe, dejamos el chart vacío
-    renderChartTopArticulos([]);
-  }
-}
-
 function renderChartTopArticulos(items) {
   const ctx = $('chartTopArticulos');
   if (!ctx) return;
@@ -411,7 +984,6 @@ function renderChartTopArticulos(items) {
   const data = top5.map(i => i.count);
   const total = data.reduce((a, b) => a + b, 0);
 
-  // Subtitle con el total
   const subtitleEl = $('topArticulosTotal');
   if (subtitleEl) subtitleEl.textContent = total > 0 ? `${total} placas` : '–';
 
@@ -451,267 +1023,6 @@ function renderChartTopArticulos(items) {
   });
 }
 
-// =================== IFs MAL SACADAS ===================
-async function cargarMalSacadas() {
-  const tbody = $('tbodyMalSacadas');
-  tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state">Cargando…</div></td></tr>';
-  try {
-    const data = await apiFetch('/api/dashboard/ifs-mal-sacadas?' + buildParams());
-    $('badCount').textContent = data.total;
-    tables.malSacadas.data = data.ifs || [];
-    tables.malSacadas.page = 1;
-    tables.malSacadas.sortKey = null;
-    tables.malSacadas.sortDir = 'asc';
-    document.querySelectorAll('th[data-table="malSacadas"]').forEach(h => h.classList.remove('sorted-asc', 'sorted-desc'));
-    renderMalSacadas();
-  } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state">Error: ${escapeHTML(e.message)}</div></td></tr>`;
-  }
-}
-
-function renderMalSacadas() {
-  const tbody = $('tbodyMalSacadas');
-  const t = tables.malSacadas;
-  let filas = ordenarFilas(t.data, t.sortKey, t.sortDir);
-  const paginadas = paginarFilas(filas, t.page);
-
-  if (t.data.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state">✅ Sin IFs mal sacadas en este período</div></td></tr>';
-    renderPaginador('malSacadas');
-    return;
-  }
-
-  tbody.innerHTML = '';
-  paginadas.forEach(i => {
-    const tr = el('tr');
-    tr.innerHTML = `
-      <td><strong>${escapeHTML(i.tranid)}</strong></td>
-      <td>${escapeHTML(i.trandate || '—')}</td>
-      <td>${escapeHTML(i.so || '—')}</td>
-      <td>${escapeHTML(i.location || '—')}</td>
-      <td>${escapeHTML(i.operador || '—')}</td>
-      <td>${i.discrepancias.length}</td>
-      <td>${(i.tipos_error || []).map(t => badgeTipo(t)).join(' ')}</td>
-      <td><button class="btn btn-ghost" onclick="verDetalle('${i.tranid}')">Ver detalle</button></td>
-    `;
-    tbody.appendChild(tr);
-  });
-  renderPaginador('malSacadas');
-}
-
-// =================== DETALLE ===================
-async function verDetalle(tranid) {
-  $('detalleTitle').textContent = 'Detalle de ' + tranid;
-  $('detalleBody').innerHTML = '<div class="empty-state">Cargando…</div>';
-  $('detalleModal').style.display = 'flex';
-  try {
-    const data = await apiFetch(`/api/dashboard/if/${encodeURIComponent(tranid)}/detalle?` + buildParams());
-    renderDetalle(data.if);
-  } catch (e) {
-    $('detalleBody').innerHTML = `<div class="empty-state">Error: ${escapeHTML(e.message)}</div>`;
-  }
-}
-
-function renderDetalle(ifDoc) {
-  const html = [];
-  html.push(`
-    <div class="detalle-section">
-      <h4>Cabecera</h4>
-      <div><strong>SO origen:</strong> ${escapeHTML(ifDoc.so || ifDoc.sourceDoc || '—')}</div>
-      <div><strong>Fecha:</strong> ${escapeHTML(ifDoc.trandate || '—')}</div>
-      <div><strong>Ubicación:</strong> ${escapeHTML(ifDoc.location || '—')}</div>
-      <div><strong>Operador:</strong> ${escapeHTML(ifDoc.operador || '—')}</div>
-    </div>
-  `);
-  html.push(`
-    <div class="detalle-section">
-      <h4>Esperado vs Escaneado</h4>
-      <div class="detalle-linea" style="font-weight: 600; background: var(--gray-2);">
-        <div>SKU</div><div>Lote</div><div>Esperado</div><div>Escaneado</div><div>Ubicación</div><div>Status</div>
-      </div>
-  `);
-  ifDoc.lineas.forEach(l => {
-    const status = l.status || 'ok';
-    const ubicacion = l.escaneos && l.escaneos.length > 0
-      ? l.escaneos.map(e => e.ubicacion_escaneada).filter((v, i, a) => a.indexOf(v) === i).join(', ')
-      : '—';
-    html.push(`
-      <div class="detalle-linea">
-        <div>${escapeHTML(l.sku || '—')}</div>
-        <div>${escapeHTML(l.lote || '—')}</div>
-        <div>${l.evaluacion_cantidad?.placas_esperadas ?? '—'}</div>
-        <div>${l.placas_escaneadas}</div>
-        <div>${escapeHTML(ubicacion)}</div>
-        <div class="status-${status}">${status}</div>
-      </div>
-    `);
-  });
-  html.push('</div>');
-
-  if (ifDoc.discrepancias && ifDoc.discrepancias.length > 0) {
-    html.push('<div class="detalle-section"><h4>Discrepancias (' + ifDoc.discrepancias.length + ')</h4>');
-    ifDoc.discrepancias.forEach(d => {
-      let detalle = '';
-      if (d.tipo === 'cantidad_faltante') {
-        detalle = `Esperaba ${d.placas_esperadas} placas, escaneadas ${d.placas_escaneadas} (diff -${d.diferencia}, área ${d.area_placa_m2} m²)`;
-      } else if (d.tipo === 'cantidad_sobrante') {
-        detalle = `Esperaba ${d.placas_esperadas} placas, escaneadas ${d.placas_escaneadas} (diff +${d.diferencia}, área ${d.area_placa_m2} m²)`;
-      } else if (d.tipo === 'ubicacion_incorrecta') {
-        detalle = `Esperaba "${d.ubicacion_esperada}", se escaneó "${d.ubicacion_escaneada}" (operador: ${d.escaneo_operador || '—'})`;
-      } else if (d.tipo === 'sku_lote_no_esperado') {
-        detalle = `SKU/lote no estaba en la IF (operador: ${d.escaneo_operador || '—'})`;
-      } else if (d.tipo === 'linea_faltante') {
-        detalle = 'No se escaneó ninguna placa de este item';
-      } else if (d.tipo === 'if_no_encontrada') {
-        detalle = d.mensaje || 'IF escaneada pero no localizada en NetSuite';
-      } else if (d.tipo === 'sin_medidas') {
-        detalle = d.mensaje;
-      }
-      html.push('<div style="margin: 4px 0;">' + badgeTipo(d.tipo) + ' ' + escapeHTML(detalle) + '</div>');
-    });
-    html.push('</div>');
-  }
-  $('detalleBody').innerHTML = html.join('');
-}
-
-function cerrarDetalle() {
-  $('detalleModal').style.display = 'none';
-}
-
-// =================== DISCREPANCIAS ===================
-async function cargarDiscrepancias() {
-  const tbody = $('tbodyDiscrepancias');
-  tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state">Cargando…</div></td></tr>';
-  try {
-    const p = buildParams();
-    const tipo = $('filtroTipoDisc').value;
-    if (tipo) p.append('tipo', tipo);
-    const data = await apiFetch('/api/dashboard/discrepancias?' + p);
-    $('discCount').textContent = data.total;
-    tables.discrepancias.data = data.discrepancias || [];
-    tables.discrepancias.page = 1;
-    tables.discrepancias.sortKey = null;
-    tables.discrepancias.sortDir = 'asc';
-    document.querySelectorAll('th[data-table="discrepancias"]').forEach(h => h.classList.remove('sorted-asc', 'sorted-desc'));
-    renderDiscrepancias();
-  } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state">Error: ${escapeHTML(e.message)}</div></td></tr>`;
-  }
-}
-
-function renderDiscrepancias() {
-  const tbody = $('tbodyDiscrepancias');
-  const t = tables.discrepancias;
-  let filas = ordenarFilas(t.data, t.sortKey, t.sortDir);
-  const paginadas = paginarFilas(filas, t.page);
-
-  if (t.data.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state">Sin discrepancias</div></td></tr>';
-    renderPaginador('discrepancias');
-    return;
-  }
-
-  tbody.innerHTML = '';
-  paginadas.forEach(d => {
-    let detalle = '';
-    if (d.placas_esperadas !== undefined) {
-      detalle = `Esp: ${d.placas_esperadas} / Esc: ${d.placas_escaneadas}`;
-    } else if (d.ubicacion_esperada) {
-      detalle = `${d.ubicacion_esperada} → ${d.ubicacion_escaneada}`;
-    } else {
-      detalle = d.mensaje || '—';
-    }
-    const tr = el('tr');
-    tr.innerHTML = `
-      <td><strong>${escapeHTML(d.if_tranid || '—')}</strong></td>
-      <td>${escapeHTML(d.if_fecha || '—')}</td>
-      <td>${escapeHTML(d.if_so || '—')}</td>
-      <td>${escapeHTML(d.if_location || '—')}</td>
-      <td>${escapeHTML(d.sku || '—')}</td>
-      <td>${escapeHTML(d.lote || '—')}</td>
-      <td>${badgeTipo(d.tipo)}</td>
-      <td>${escapeHTML(detalle)}</td>
-    `;
-    tbody.appendChild(tr);
-  });
-  renderPaginador('discrepancias');
-}
-
-// =================== TOP ERRORES ===================
-async function cargarTopErrores() {
-  try {
-    const p = buildParams();
-    const [skus, lotes, operadores] = await Promise.all([
-      apiFetch('/api/dashboard/top-errores?' + p + '&dimension=sku'),
-      apiFetch('/api/dashboard/top-errores?' + p + '&dimension=lote'),
-      apiFetch('/api/dashboard/top-errores?' + p + '&dimension=operador')
-    ]);
-    renderTopList('topSkus', skus.top);
-    renderTopList('topLotes', lotes.top);
-    renderTopList('topOperadores', operadores.top);
-  } catch (e) {
-    showToast('Error cargando top errores: ' + e.message, 'error');
-  }
-}
-
-function renderTopList(id, items) {
-  const ol = $(id);
-  if (!items || items.length === 0) {
-    ol.innerHTML = '<li style="color: var(--gray-5);">Sin datos</li>';
-    return;
-  }
-  ol.innerHTML = items.slice(0, 5).map(i =>
-    `<li>${escapeHTML(i.key || '—')} — <strong>${i.count}</strong> errores</li>`
-  ).join('');
-}
-
-// =================== IFs OK ===================
-async function cargarIFsOK() {
-  const tbody = $('tbodyOK');
-  tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state">Cargando…</div></td></tr>';
-  try {
-    const data = await apiFetch('/api/dashboard/ifs-ok?' + buildParams());
-    $('okCount').textContent = data.total;
-    tables.ifsOK.data = data.ifs || [];
-    tables.ifsOK.page = 1;
-    tables.ifsOK.sortKey = null;
-    tables.ifsOK.sortDir = 'asc';
-    document.querySelectorAll('th[data-table="ifsOK"]').forEach(h => h.classList.remove('sorted-asc', 'sorted-desc'));
-    renderIFsOK();
-  } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state">Error: ${escapeHTML(e.message)}</div></td></tr>`;
-  }
-}
-
-function renderIFsOK() {
-  const tbody = $('tbodyOK');
-  const t = tables.ifsOK;
-  let filas = ordenarFilas(t.data, t.sortKey, t.sortDir);
-  const paginadas = paginarFilas(filas, t.page);
-
-  if (t.data.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state">Sin IFs OK en este período</div></td></tr>';
-    renderPaginador('ifsOK');
-    return;
-  }
-
-  tbody.innerHTML = '';
-  paginadas.forEach(i => {
-    const tr = el('tr');
-    tr.innerHTML = `
-      <td><strong>${escapeHTML(i.tranid)}</strong></td>
-      <td>${escapeHTML(i.trandate || '—')}</td>
-      <td>${escapeHTML(i.so || '—')}</td>
-      <td>${escapeHTML(i.location || '—')}</td>
-      <td>${escapeHTML(i.operador || '—')}</td>
-      <td>${i.total_lineas}</td>
-      <td><button class="btn btn-ghost" onclick="verDetalle('${i.tranid}')">Ver detalle</button></td>
-    `;
-    tbody.appendChild(tr);
-  });
-  renderPaginador('ifsOK');
-}
-
 // =================== INIT ===================
 document.addEventListener('DOMContentLoaded', async () => {
   const token = getToken();
@@ -723,12 +1034,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   const user = getCurrentUser();
   if (user) {
     const rol = user.rol || user.cargo;
-    $('currentUserName').textContent = user.nombre || user.email || 'Usuario';
-    $('currentUserLocation').textContent = user.ubicacion?.nombre || 'N/A';
-    $('currentUserRole').textContent = getRoleLabel(rol);
+    const nameEl = $('currentUserName');
+    const locEl = $('currentUserLocation');
+    const roleEl = $('currentUserRole');
+    if (nameEl) nameEl.textContent = user.nombre || user.email || 'Usuario';
+    if (locEl) locEl.textContent = user.ubicacion?.nombre || 'N/A';
+    if (roleEl) roleEl.textContent = getRoleLabel(rol);
   }
 
-  // Preset buttons
   document.querySelectorAll('.preset-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       setPeriodo(btn.dataset.preset);
@@ -738,13 +1051,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   });
 
-  // Período default: hoy
   setPeriodo('hoy');
-
-  // Headers ordenables de las tablas
   initSortableHeaders();
-
-  // Cargar sucursales (necesario para el select)
   await cargarSucursales();
 
   $('mainApp').style.display = 'block';

@@ -46,10 +46,25 @@ function evaluarLinea(ifTranid, ifSo, ifLocation, ifFecha, lineaEsperada, escane
   const cantEscaneada = escaneosDeEstaLinea.length;
 
   if (cantEscaneada === 0) {
+    const parsed = parseLote(lineaEsperada.lote);
+    const areaPlaca = parsed ? parsed.area : 0;
+    const placasTeoricas = (areaPlaca > 0 && lineaEsperada.quantity)
+      ? parseFloat(lineaEsperada.quantity) / areaPlaca
+      : 1;
+    const fraccion = placasTeoricas - Math.floor(placasTeoricas);
+    const esFraccionEsperada = (fraccion > 0.08 && fraccion < 0.92);
+    const placasEsp = esFraccionEsperada ? (Math.floor(placasTeoricas) + 0.5) : Math.round(placasTeoricas);
+
     discrepancias.push({
       tipo: 'linea_faltante',
       sku: lineaEsperada.sku,
       lote: lineaEsperada.lote,
+      cantidad_m2_esperada: lineaEsperada.quantity,
+      area_placa_m2: areaPlaca,
+      placas_esperadas: placasEsp,
+      placas_escaneadas: 0,
+      diferencia: placasEsp,
+      diff_m2: parseFloat((lineaEsperada.quantity || 0).toString()),
       mensaje: 'No se escaneó ninguna placa de este item',
       if_tranid: ifTranid,
       if_so: ifSo,
@@ -59,6 +74,17 @@ function evaluarLinea(ifTranid, ifSo, ifLocation, ifFecha, lineaEsperada, escane
     return {
       ...lineaEsperada,
       placas_escaneadas: 0,
+      evaluacion_cantidad: {
+        status: 'faltante',
+        tipo_discrepancia: 'linea_faltante',
+        placas_esperadas: placasEsp,
+        placas_escaneadas: 0,
+        diferencia: placasEsp,
+        m2_esperados: parseFloat((lineaEsperada.quantity || 0).toString()),
+        m2_escaneados: 0,
+        diff_m2: parseFloat((lineaEsperada.quantity || 0).toString()),
+        area_placa_m2: areaPlaca
+      },
       escaneos: [],
       discrepancias,
       status: 'faltante'
@@ -83,7 +109,25 @@ function evaluarLinea(ifTranid, ifSo, ifLocation, ifFecha, lineaEsperada, escane
       if_location: ifLocation,
       if_fecha: ifFecha
     });
-  } else if (evalCantidad.status === 'faltante') {
+  } else if (evalCantidad.tipo_discrepancia === 'media_placa') {
+    discrepancias.push({
+      tipo: 'media_placa',
+      sku: lineaEsperada.sku,
+      lote: lineaEsperada.lote,
+      placas_esperadas: evalCantidad.placas_esperadas,
+      placas_escaneadas: evalCantidad.placas_escaneadas,
+      diferencia: evalCantidad.diferencia,
+      cantidad_m2_esperada: lineaEsperada.quantity,
+      area_placa_m2: evalCantidad.area_placa_m2,
+      id_lote: evalCantidad.id_lote,
+      es_media_placa: true,
+      diff_m2: evalCantidad.diff_m2,
+      if_tranid: ifTranid,
+      if_so: ifSo,
+      if_location: ifLocation,
+      if_fecha: ifFecha
+    });
+  } else if (evalCantidad.tipo_discrepancia === 'cantidad_faltante') {
     discrepancias.push({
       tipo: 'cantidad_faltante',
       sku: lineaEsperada.sku,
@@ -94,12 +138,13 @@ function evaluarLinea(ifTranid, ifSo, ifLocation, ifFecha, lineaEsperada, escane
       cantidad_m2_esperada: lineaEsperada.quantity,
       area_placa_m2: evalCantidad.area_placa_m2,
       id_lote: evalCantidad.id_lote,
+      diff_m2: evalCantidad.diff_m2,
       if_tranid: ifTranid,
       if_so: ifSo,
       if_location: ifLocation,
       if_fecha: ifFecha
     });
-  } else if (evalCantidad.status === 'sobrante') {
+  } else if (evalCantidad.tipo_discrepancia === 'cantidad_sobrante') {
     discrepancias.push({
       tipo: 'cantidad_sobrante',
       sku: lineaEsperada.sku,
@@ -110,6 +155,8 @@ function evaluarLinea(ifTranid, ifSo, ifLocation, ifFecha, lineaEsperada, escane
       cantidad_m2_esperada: lineaEsperada.quantity,
       area_placa_m2: evalCantidad.area_placa_m2,
       id_lote: evalCantidad.id_lote,
+      es_media_placa: false,
+      diff_m2: evalCantidad.diff_m2,
       if_tranid: ifTranid,
       if_so: ifSo,
       if_location: ifLocation,
@@ -163,10 +210,15 @@ function detectarHuerfanos(ifTranid, ifSo, ifLocation, ifFecha, lineasEsperadas,
   for (const esc of escaneosDeEstaIF) {
     const key = `${ifTranid}|${esc.sku}|${esc.lote}`;
     if (!esperadosKeys.has(key)) {
+      const parsed = parseLote(esc.lote);
+      const area = parsed ? parsed.area : 0;
       huerfanos.push({
         tipo: 'sku_lote_no_esperado',
         sku: esc.sku,
         lote: esc.lote,
+        area_placa_m2: area,
+        placas_escaneadas: 1,
+        diff_m2: area,
         ubicacion_escaneada: esc.ubicacion_escaneada,
         escaneo_timestamp: esc.timestamp,
         escaneo_operador: esc.operador,
@@ -285,6 +337,7 @@ function confrontar(ifsEsperadas, escaneos) {
     ifs: [],
     ifs_ok: [],
     ifs_con_errores: [],
+    ifs_canceladas_erp: [], // Nueva categoría para IFs huérfanas/canceladas
     ifs_pendientes: [],
     total_lineas: 0,
     lineas_con_error: 0,
@@ -298,12 +351,116 @@ function confrontar(ifsEsperadas, escaneos) {
     top_articulos_mas_salidas: { top_skus: [], top_lotes: [], top_operadores: [] }
   };
 
+  const formatM2 = (disc) => {
+    if (!disc.cantidad_m2_esperada) return '';
+    const expectedM2 = disc.m2_esperados ?? parseFloat(parseFloat(disc.cantidad_m2_esperada || 0).toFixed(2));
+    const scannedM2 = disc.m2_escaneados ?? ((disc.area_placa_m2 && disc.placas_escaneadas) 
+                      ? parseFloat((disc.placas_escaneadas * disc.area_placa_m2).toFixed(2)) 
+                      : 0);
+    const diffM2 = disc.diff_m2 ?? parseFloat(Math.abs(scannedM2 - expectedM2).toFixed(2));
+    return `[Esperado: ${expectedM2.toFixed(2)}m² | Escaneado: ${scannedM2.toFixed(2)}m² | Diferencia: ${diffM2.toFixed(2)}m²] `;
+  };
+
+  const asignarPlanAccion = (disc) => {
+    if (disc.es_cruzado) {
+      if (disc.tipo_cruzado === 'lote_cruzado') {
+        if (disc.tipo === 'sku_lote_no_esperado') {
+          disc.plan_accion = `Lote Cruzado (Mismo SKU): Se entregó este lote en lugar del pedido (${disc.lote_esperado}). Ajustar lote en NetSuite.`;
+        } else {
+          disc.plan_accion = `Lote Cruzado (Mismo SKU): Se entregó lote ${disc.lote_entregado} en lugar de ${disc.lote}. Ajustar lote entregado en NetSuite para no descuadrar inventario contable.`;
+        }
+      } else {
+        if (disc.tipo === 'sku_lote_no_esperado') {
+          disc.plan_accion = `Material / SKU Cruzado: Se entregó en sustitución de ${disc.sku_esperado} (${disc.lote_esperado}). Verificar con cliente / facturación para ajuste de orden.`;
+        } else {
+          disc.plan_accion = `Material / SKU Cruzado: Se entregó ${disc.sku_entregado} (${disc.lote_entregado}) en lugar de este artículo. Ajustar partida en NetSuite.`;
+        }
+      }
+      return disc;
+    }
+
+    switch (disc.tipo) {
+      case 'media_placa':
+        disc.plan_accion = `Error de etiquetado (Media Placa). ${formatM2(disc)}Se solicitó una fracción de placa (${disc.cantidad_m2_esperada}m²) pero se escaneó placa completa. Re-etiquetar física con lote y medidas reales.`;
+        break;
+      case 'cantidad_faltante':
+        disc.plan_accion = `Faltante físico. ${formatM2(disc)}Buscar material en andén/rack y completar tarima.`;
+        break;
+      case 'cantidad_sobrante':
+        disc.plan_accion = `Placas de más. ${formatM2(disc)}Se escanearon más placas físicas de las requeridas. Retirar placa(s) extra de la tarima.`;
+        break;
+      case 'ubicacion_incorrecta':
+        disc.plan_accion = `Error de ubicación física. Se escaneó en "${disc.ubicacion_escaneada}", se esperaba "${disc.ubicacion_esperada}". Mover material a ubicación correcta.`;
+        break;
+      case 'sku_lote_no_esperado': {
+        const areaHuerfanoStr = disc.area_placa_m2 ? ` (${disc.area_placa_m2.toFixed(2)}m²)` : '';
+        disc.plan_accion = `Artículo no esperado (Huérfano${areaHuerfanoStr}). No pertenece a esta IF. Retirar de tarima y reubicar en rack.`;
+        break;
+      }
+      case 'linea_faltante':
+        disc.plan_accion = `Línea omitida. ${formatM2(disc)}Surtir línea completa requerida.`;
+        break;
+      case 'if_no_encontrada':
+        disc.plan_accion = `IF Cancelada en ERP. Mercancía despachada físicamente por almacén pero no localizada/cancelada en NetSuite. Notificar a facturación / ventas para refacturación o retorno.`;
+        break;
+      default:
+        disc.plan_accion = 'Revisar manualmente.';
+    }
+    return disc;
+  };
+
+  function procesarCruzadosEnIF(discrepanciasDeEstaIF) {
+    const faltantes = discrepanciasDeEstaIF.filter(d => d.tipo === 'linea_faltante' || d.tipo === 'cantidad_faltante');
+    const huerfanos = discrepanciasDeEstaIF.filter(d => d.tipo === 'sku_lote_no_esperado');
+
+    if (faltantes.length === 0 || huerfanos.length === 0) return;
+
+    const huerfanosDisp = [...huerfanos];
+
+    // Match 1: Mismo SKU, diferente Lote
+    for (const f of faltantes) {
+      const matchIdx = huerfanosDisp.findIndex(h => h.sku === f.sku && !h._matched);
+      if (matchIdx >= 0) {
+        const h = huerfanosDisp[matchIdx];
+        h._matched = true;
+        f._matched = true;
+        f.es_cruzado = true;
+        f.tipo_cruzado = 'lote_cruzado';
+        f.lote_entregado = h.lote;
+        f.sku_entregado = h.sku;
+
+        h.es_cruzado = true;
+        h.tipo_cruzado = 'lote_cruzado';
+        h.lote_esperado = f.lote;
+        h.sku_esperado = f.sku;
+      }
+    }
+
+    // Match 2: Diferente SKU en la misma IF
+    for (const f of faltantes) {
+      if (f._matched) continue;
+      const matchIdx = huerfanosDisp.findIndex(h => !h._matched);
+      if (matchIdx >= 0) {
+        const h = huerfanosDisp[matchIdx];
+        h._matched = true;
+        f._matched = true;
+        f.es_cruzado = true;
+        f.tipo_cruzado = 'sku_cruzado';
+        f.lote_entregado = h.lote;
+        f.sku_entregado = h.sku;
+
+        h.es_cruzado = true;
+        h.tipo_cruzado = 'sku_cruzado';
+        h.lote_esperado = f.lote;
+        h.sku_esperado = f.sku;
+      }
+    }
+  }
+
   for (const ifDoc of ifsEsperadas) {
     const lineasEvaluadas = [];
     const discrepanciasDeEstaIF = [];
 
-    // SO resuelto: prioridad al de NetSuite (si algún día la saved search lo trae),
-    // fallback al SO de los escaneos (Sheets).
     const soResuelto = ifDoc.sourceDoc || soPorIF.get(ifDoc.tranid) || null;
     const ifFecha = ifDoc.trandate || null;
 
@@ -324,16 +481,13 @@ function confrontar(ifsEsperadas, escaneos) {
         discrepanciasDeEstaIF.push(...lineaEvaluada.discrepancias);
       }
 
-      // Acumular contadores
       resultado.total_lineas++;
       if (lineaEvaluada.status === 'con_errores') resultado.lineas_con_error++;
-      if (lineaEvaluada.evaluacion_cantidad?.placas_esperadas) {
+      if (lineaEvaluada.evaluacion_cantidad && typeof lineaEvaluada.evaluacion_cantidad.placas_esperadas === 'number') {
         resultado.total_placas_esperadas += lineaEvaluada.evaluacion_cantidad.placas_esperadas;
       }
     }
 
-    // Detectar huérfanos (sku/lote escaneado que no estaba en la IF).
-    // Solo los escaneos de ESTA IF (pre-agrupados) → O(escaneos de la IF).
     const escaneosDeLaIF = escaneosPorIF.get(ifDoc.tranid) || [];
     const huerfanos = detectarHuerfanos(
       ifDoc.tranid,
@@ -347,8 +501,8 @@ function confrontar(ifsEsperadas, escaneos) {
       discrepanciasDeEstaIF.push(...huerfanos);
     }
 
-    // Determinar operador: de TODOS los escaneos de la IF (incluidos huérfanos),
-    // no solo los que matchearon alguna línea esperada.
+    procesarCruzadosEnIF(discrepanciasDeEstaIF);
+
     const operador = escaneosDeLaIF
       .map(e => e.operador)
       .find(Boolean) || null;
@@ -363,7 +517,7 @@ function confrontar(ifsEsperadas, escaneos) {
       lineas: lineasEvaluadas,
       total_lineas: lineasEvaluadas.length,
       lineas_con_error: lineasEvaluadas.filter(l => l.status === 'con_errores').length,
-      discrepancias: discrepanciasDeEstaIF,
+      discrepancias: discrepanciasDeEstaIF.map(asignarPlanAccion),
       status: discrepanciasDeEstaIF.length > 0 ? 'con_errores' : 'ok'
     };
 
@@ -373,97 +527,254 @@ function confrontar(ifsEsperadas, escaneos) {
     } else {
       resultado.ifs_con_errores.push(ifResultado);
     }
-    resultado.todas_las_discrepancias.push(...discrepanciasDeEstaIF);
+    resultado.todas_las_discrepancias.push(...ifResultado.discrepancias);
   }
 
-  // ── IFs escaneadas en Sheets pero sin registro en NetSuite ─────────────────
-  // La clave de match es el tranid de la IF. Si un escaneo referencia una IF
-  // que no aparece en ifsEsperadas (su trandate quedó fuera de la ventana, el
-  // registro no existe, o la saved search no la devolvió), se reporta como
-  // error if_no_encontrada usando la información que sí existe: la del escaneo.
-  // (escaneosPorIF ya está agrupado arriba y se reutiliza aquí.)
   const tranidsProcesados = new Set(resultado.ifs.map(i => i.tranid));
+  let placas_en_ifs_canceladas = 0;
 
   for (const [tranid, escaneosDeLaIF] of escaneosPorIF) {
     if (tranidsProcesados.has(tranid)) continue;
 
-    // Agrupar los escaneos por (sku, lote) para armar "líneas" mínimas
     const lineasMap = new Map();
     for (const e of escaneosDeLaIF) {
       if (!e.sku || !e.lote) continue;
       const key = `${e.sku}|${e.lote}`;
       if (!lineasMap.has(key)) lineasMap.set(key, []);
       lineasMap.get(key).push(e);
+      placas_en_ifs_canceladas++;
     }
-    const lineas = Array.from(lineasMap.entries()).map(([key, escs]) => {
+
+    const lineas = [];
+    const discrepancias = [];
+    for (const [key, scans] of lineasMap) {
       const [sku, lote] = key.split('|');
-      return {
+      const primerEscaneo = scans[0] || {};
+      const parsed = parseLote(lote);
+      const area = parsed ? parsed.area : null;
+
+      lineas.push({
         sku,
         lote,
-        placas_escaneadas: escs.length,
-        escaneos: escs,
-        discrepancias: [],
-        status: 'ok'
-      };
-    });
+        quantity: null,
+        placas_escaneadas: scans.length,
+        evaluacion_cantidad: {
+          status: 'cancelada_erp',
+          tipo_discrepancia: 'if_no_encontrada',
+          placas_esperadas: null,
+          placas_escaneadas: scans.length,
+          diferencia: null,
+          m2_esperados: null,
+          m2_escaneados: area ? parseFloat((scans.length * area).toFixed(2)) : null,
+          diff_m2: null,
+          area_placa_m2: area
+        },
+        escaneos: scans,
+        discrepancias: [{
+          tipo: 'if_no_encontrada',
+          sku,
+          lote,
+          mensaje: `IF ${tranid} no fue encontrada en NetSuite pero fue escaneada en rampa`,
+          if_tranid: tranid,
+          if_so: primerEscaneo.so || null,
+          if_location: primerEscaneo.location || null,
+          if_fecha: primerEscaneo.fecha || null
+        }],
+        status: 'cancelada_erp'
+      });
 
-    const operador = escaneosDeLaIF.map(e => e.operador).find(Boolean) || null;
-    const primera = escaneosDeLaIF[0];
-    const ifSintetica = {
+      discrepancias.push({
+        tipo: 'if_no_encontrada',
+        sku,
+        lote,
+        mensaje: `IF ${tranid} no encontrada en NetSuite pero escaneada en rampa`,
+        if_tranid: tranid,
+        if_so: primerEscaneo.so || null,
+        if_location: primerEscaneo.location || null,
+        if_fecha: primerEscaneo.fecha || null,
+        plan_accion: `IF Cancelada en ERP. Mercancía despachada físicamente por almacén pero no localizada/cancelada en NetSuite. Notificar a facturación / ventas para refacturación o retorno.`
+      });
+    }
+
+    const primerScan = escaneosDeLaIF[0] || {};
+    const ifCancelada = {
       internalid: null,
       tranid,
-      so: primera.so || null,
-      trandate: primera.fecha || null,
-      location: primera.sucursal || null,
-      operador,
+      so: primerScan.so || null,
+      trandate: primerScan.fecha || null,
+      location: primerScan.location || null,
+      operador: escaneosDeLaIF.map(e => e.operador).find(Boolean) || null,
       lineas,
       total_lineas: lineas.length,
-      lineas_con_error: 0,
-      discrepancias: [{
-        tipo: 'if_no_encontrada',
-        mensaje: 'La IF fue escaneada en Google Sheets pero no se localizó en NetSuite (saved search de IFs enviadas)',
-        if_tranid: tranid,
-        if_so: primera.so || null,
-        if_location: primera.sucursal || null,
-        if_fecha: primera.fecha || null
-      }],
-      status: 'con_errores'
+      lineas_con_error: lineas.length,
+      discrepancias,
+      status: 'cancelada_erp'
     };
 
-    resultado.ifs.push(ifSintetica);
-    resultado.ifs_con_errores.push(ifSintetica);
-    resultado.todas_las_discrepancias.push(...ifSintetica.discrepancias);
+    resultado.ifs_canceladas_erp.push(ifCancelada);
+    resultado.todas_las_discrepancias.push(...discrepancias);
   }
 
-  // Top errores agregados
   const tops = agregarTopErrores(resultado.todas_las_discrepancias);
   resultado.top_skus = tops.top_skus;
   resultado.top_lotes = tops.top_lotes;
   resultado.top_ubicaciones = tops.top_ubicaciones;
   resultado.top_operadores = tops.top_operadores;
 
-  // Total de placas escaneadas: viene directo de Google Sheets
-  // (independiente del match con NetSuite, refleja lo que realmente se escaneó)
-  resultado.total_placas_escaneadas = escaneos.length;
+  resultado.total_placas_escaneadas = escaneos.length - placas_en_ifs_canceladas;
 
-  // Conteo adicional: cuántas matchearon con IFs vs cuántas son huérfanas
-  let placasMatcheadas = 0;
-  for (const l of resultado.ifs) {
-    for (const ln of l.lineas) {
-      placasMatcheadas += ln.placas_escaneadas || 0;
-    }
-  }
-  resultado.placas_escaneadas_matcheadas = placasMatcheadas;
-  resultado.placas_escaneadas_huerfanas = escaneos.length - placasMatcheadas;
+  const fracTotal = resultado.total_placas_esperadas - Math.floor(resultado.total_placas_esperadas);
+  resultado.total_placas_esperadas = (fracTotal > 0.08 && fracTotal < 0.92)
+    ? parseFloat(resultado.total_placas_esperadas.toFixed(1))
+    : Math.round(resultado.total_placas_esperadas);
 
-  // Top artículos con más salidas (volumen de escaneos)
   const masSalidas = agregarTopArticulosMasSalidas(escaneos);
   resultado.top_articulos_mas_salidas = masSalidas;
 
-  // Tasa de exactitud
-  resultado.tasa_exactitud = resultado.total_lineas > 0
-    ? ((resultado.total_lineas - resultado.lineas_con_error) / resultado.total_lineas) * 100
+  const totalIfsEvaluadas = resultado.ifs_ok.length + resultado.ifs_con_errores.length;
+  resultado.tasa_exactitud = totalIfsEvaluadas > 0
+    ? (resultado.ifs_ok.length / totalIfsEvaluadas) * 100
     : 100;
+
+  let m2Sobrante = 0;
+  let m2Faltante = 0;
+  let m2MediaPlaca = 0;
+  let m2Huerfanos = 0;
+  let m2Canceladas = 0;
+  let m2CruzadosEntregado = 0;
+  let m2CruzadosDiff = 0;
+
+  for (const d of resultado.todas_las_discrepancias) {
+    if (d.es_cruzado) {
+      if (d.tipo === 'linea_faltante' || d.tipo === 'cantidad_faltante') {
+        const parsedEntregado = parseLote(d.lote_entregado);
+        const areaEntregada = parsedEntregado ? parsedEntregado.area : (d.area_placa_m2 || 0);
+        const areaEsperada = d.area_placa_m2 || ((parseFloat(d.cantidad_m2_esperada) || 0) / (d.placas_esperadas || 1)) || 0;
+        const cant = (d.placas_esperadas || 1);
+        m2CruzadosEntregado += areaEntregada * cant;
+        const diffDim = (areaEntregada - areaEsperada) * cant;
+        m2CruzadosDiff += diffDim;
+      }
+    } else if (d.tipo === 'media_placa') {
+      m2MediaPlaca += Math.abs(d.diff_m2 || 0);
+    } else if (d.tipo === 'cantidad_sobrante') {
+      m2Sobrante += Math.abs(d.diff_m2 || ((d.diferencia || 0) * (d.area_placa_m2 || 0)));
+    } else if (d.tipo === 'sku_lote_no_esperado') {
+      const parsed = parseLote(d.lote);
+      const area = parsed ? parsed.area : (d.area_placa_m2 || 0);
+      m2Huerfanos += area;
+    } else if (d.tipo === 'cantidad_faltante') {
+      m2Faltante += Math.abs(d.diff_m2 || ((d.diferencia || 0) * (d.area_placa_m2 || 0)));
+    } else if (d.tipo === 'linea_faltante') {
+      m2Faltante += parseFloat(d.cantidad_m2_esperada || 0);
+    }
+  }
+
+  for (const ifCanc of resultado.ifs_canceladas_erp) {
+    for (const l of ifCanc.lineas) {
+      const parsed = parseLote(l.lote);
+      if (parsed) {
+        m2Canceladas += (l.placas_escaneadas * parsed.area);
+      }
+    }
+  }
+
+  let impactoPlacasMediaPlaca = 0;
+  let impactoPlacasSobrantes = 0;
+  let impactoPlacasCruzados = 0;
+  let impactoPlacasHuerfanosPuros = 0;
+  let impactoPlacasFaltantesReales = 0;
+  let impactoPlacasLineasOmitidas = 0;
+
+  let countMediaPlaca = 0;
+  let countSobrantes = 0;
+  let countCruzados = 0;
+  let countHuerfanosPuros = 0;
+  let countFaltantesReales = 0;
+  let countLineasOmitidas = 0;
+
+  for (const d of resultado.todas_las_discrepancias) {
+    if (d.tipo === 'media_placa') {
+      countMediaPlaca++;
+      const esc = d.placas_escaneadas || 0;
+      const esp = d.placas_esperadas || 0;
+      impactoPlacasMediaPlaca += (esc - esp);
+    } else if (d.tipo === 'cantidad_sobrante') {
+      countSobrantes++;
+      impactoPlacasSobrantes += (d.diferencia || 0);
+    } else if (d.es_cruzado) {
+      if (d.tipo === 'linea_faltante' || d.tipo === 'cantidad_faltante') {
+        countCruzados++;
+        impactoPlacasCruzados += (d.placas_esperadas || d.diferencia || 1);
+      }
+    } else if (d.tipo === 'sku_lote_no_esperado') {
+      countHuerfanosPuros++;
+      impactoPlacasHuerfanosPuros += (d.placas_escaneadas || 1);
+    } else if (d.tipo === 'cantidad_faltante') {
+      countFaltantesReales++;
+      impactoPlacasFaltantesReales += (d.diferencia || 0);
+    } else if (d.tipo === 'linea_faltante') {
+      countLineasOmitidas++;
+      impactoPlacasLineasOmitidas += (d.placas_esperadas || 0);
+    }
+  }
+
+  const conteoDiscrepancias = {
+    media_placa: countMediaPlaca,
+    lote_cruzado: countCruzados,
+    cantidad_sobrante: countSobrantes,
+    huerfanos_puros: countHuerfanosPuros,
+    sku_lote_no_esperado: countHuerfanosPuros + countCruzados,
+    cantidad_faltante: countFaltantesReales,
+    linea_faltante: countLineasOmitidas,
+    faltantes_reales: countFaltantesReales,
+    no_escaneadas: countLineasOmitidas,
+    ubicacion_incorrecta: resultado.todas_las_discrepancias.filter(d => d.tipo === 'ubicacion_incorrecta').length,
+    ifs_canceladas_erp: resultado.ifs_canceladas_erp.length
+  };
+
+  const m2SobrantePuro = m2Sobrante + m2Huerfanos;
+  const m2SobranteTotal = m2SobrantePuro + m2MediaPlaca;
+  const m2DesviacionTotal = m2SobranteTotal + m2Faltante + Math.abs(m2CruzadosDiff);
+  const m2BalanceNeto = (m2SobranteTotal + m2CruzadosDiff) - m2Faltante;
+
+  resultado.kpis = {
+    ifs_totales: resultado.ifs_ok.length + resultado.ifs_con_errores.length,
+    ifs_ok: resultado.ifs_ok.length,
+    ifs_con_errores: resultado.ifs_con_errores.length,
+    ifs_canceladas_erp: resultado.ifs_canceladas_erp.length,
+    tasa_exactitud: resultado.tasa_exactitud,
+    total_lineas: resultado.total_lineas,
+    lineas_con_error: resultado.lineas_con_error,
+    placas_esperadas: resultado.total_placas_esperadas,
+    placas_escaneadas: resultado.total_placas_escaneadas,
+    placas_canceladas: placas_en_ifs_canceladas,
+    total_discrepancias: resultado.todas_las_discrepancias.length,
+    desglose_errores: conteoDiscrepancias,
+    impacto_placas: {
+      media_placa: parseFloat(impactoPlacasMediaPlaca.toFixed(1)),
+      lote_cruzado: parseFloat(impactoPlacasCruzados.toFixed(1)),
+      sobrantes: impactoPlacasSobrantes,
+      huerfanos_puros: impactoPlacasHuerfanosPuros,
+      huerfanos: impactoPlacasHuerfanosPuros,
+      faltantes_reales: impactoPlacasFaltantesReales,
+      lineas_omitidas: impactoPlacasLineasOmitidas,
+      total_faltantes: impactoPlacasFaltantesReales + impactoPlacasLineasOmitidas + impactoPlacasCruzados
+    },
+    m2: {
+      desviacion_total: parseFloat(m2DesviacionTotal.toFixed(2)),
+      balance_neto: parseFloat(m2BalanceNeto.toFixed(2)),
+      media_placa: parseFloat(m2MediaPlaca.toFixed(2)),
+      sobrante: parseFloat(m2SobranteTotal.toFixed(2)),
+      sobrante_puro: parseFloat(m2SobrantePuro.toFixed(2)),
+      sobrante_partida: parseFloat(m2Sobrante.toFixed(2)),
+      huerfanos: parseFloat(m2Huerfanos.toFixed(2)),
+      cruzados_entregado: parseFloat(m2CruzadosEntregado.toFixed(2)),
+      cruzados_diff: parseFloat(m2CruzadosDiff.toFixed(2)),
+      faltante: parseFloat(m2Faltante.toFixed(2)),
+      canceladas_erp: parseFloat(m2Canceladas.toFixed(2))
+    }
+  };
 
   return resultado;
 }

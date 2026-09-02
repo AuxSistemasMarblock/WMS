@@ -15,13 +15,13 @@
     },
     {
       url: 'etiquetas.html',
-      roles: ['jefe_almacen', 'admin'],
+      roles: ['jefe_almacen', 'admin', 'gerente'],
       label: 'Etiquetas',
       icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>'
     },
     {
       url: 'dashboard.html',
-      roles: ['gerente', 'admin'],
+      roles: ['gerente', 'admin', 'jefe_almacen'],
       label: 'Dashboard',
       icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>'
     }
@@ -38,11 +38,14 @@
 
     let user = null;
     try { user = JSON.parse(sessionStorage.getItem('currentUser') || 'null'); } catch (e) { user = null; }
-    const rol = user && (user.rol || user.cargo);
-    if (!rol) { nav.innerHTML = ''; return; }
+    const rawRol = (user && (user.rol || user.cargo || '')) || '';
+    let rol = rawRol.toLowerCase().trim();
+    if (rol === 'administrador') rol = 'admin';
+    if (rol.includes('jefe')) rol = 'jefe_almacen';
+    if (rol.includes('aux')) rol = 'aux_almacen';
+    if (rol.includes('gerente')) rol = 'gerente';
 
-    // El switch de módulos aplica a jefes de almacén, gerentes y admin.
-    if (rol !== 'jefe_almacen' && rol !== 'admin' && rol !== 'gerente') { nav.innerHTML = ''; return; }
+    if (!rol) { nav.innerHTML = ''; return; }
 
     const allowed = ITEMS.filter(i => i.roles.includes(rol));
     const current = currentFile();
