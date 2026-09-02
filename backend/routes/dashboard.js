@@ -12,9 +12,11 @@ const { verifyToken } = require('../middleware/auth');
 router.get('/health', controller.health);
 
 // Endpoints protegidos (requieren JWT)
+router.get('/confronta', verifyToken, controller.getConfrontaFull);
 router.get('/resumen',         verifyToken, controller.getResumen);
 router.get('/sucursales',      verifyToken, controller.getSucursales);
 router.get('/ifs-mal-sacadas', verifyToken, controller.getIFsMalSacadas);
+router.get('/ifs-canceladas',  verifyToken, controller.getIFsCanceladas);
 router.get('/if/:tranid/detalle', verifyToken, controller.getIFDetalle);
 router.get('/discrepancias',   verifyToken, controller.getDiscrepancias);
 router.get('/top-errores',     verifyToken, controller.getTopErrores);

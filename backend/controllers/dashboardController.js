@@ -141,19 +141,7 @@ const getResumen = async (req, res) => {
 
     res.json({
       filtros,
-      kpis: {
-        ifs_totales: resultado.ifs.length,
-        ifs_ok: resultado.ifs_ok.length,
-        ifs_con_errores: resultado.ifs_con_errores.length,
-        lineas_totales: resultado.total_lineas,
-        lineas_con_error: resultado.lineas_con_error,
-        placas_esperadas: resultado.total_placas_esperadas,
-        placas_escaneadas: resultado.total_placas_escaneadas,
-        placas_escaneadas_matcheadas: resultado.placas_escaneadas_matcheadas || 0,
-        placas_escaneadas_huerfanas: resultado.placas_escaneadas_huerfanas || 0,
-        tasa_exactitud: resultado.tasa_exactitud,
-        total_discrepancias: resultado.todas_las_discrepancias.length
-      },
+      kpis: resultado.kpis,
       generado_en: new Date().toISOString()
     });
   } catch (e) {
@@ -167,13 +155,24 @@ const getResumen = async (req, res) => {
  * Lista las IFs que tienen discrepancias.
  * Query params opcionales: operador, tipo (de discrepancia)
  */
+const getConfrontaFull = async (req, res) => {
+  try {
+    const filtros = normalizarFiltros(req);
+    const resultado = await ejecutarConfronta(filtros);
+    res.json({ filtros, resultado, generado_en: new Date().toISOString() });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+};
+
 const getIFsMalSacadas = async (req, res) => {
   try {
     const filtros = normalizarFiltros(req);
     const { operador, tipo } = req.query;
     const resultado = await ejecutarConfronta(filtros);
 
-    let ifs = resultado.ifs_con_errores;
+    // Incluimos tanto errores de surtido como canceladas en ERP
+    let ifs = [...resultado.ifs_con_errores, ...resultado.ifs_canceladas_erp];
 
     // Filtrar por operador si se especifica
     if (operador) {
@@ -182,10 +181,16 @@ const getIFsMalSacadas = async (req, res) => {
 
     // Filtrar por tipo de discrepancia si se especifica
     if (tipo) {
-      ifs = ifs.filter(i => i.discrepancias.some(d => d.tipo === tipo));
+      if (tipo === 'sobrantes_grupo') {
+        ifs = ifs.filter(i => i.discrepancias.some(d => d.tipo === 'cantidad_sobrante' || (d.tipo === 'sku_lote_no_esperado' && !d.es_cruzado)));
+      } else if (tipo === 'faltantes_grupo') {
+        ifs = ifs.filter(i => i.discrepancias.some(d => d.tipo === 'linea_faltante' || (d.tipo === 'cantidad_faltante' && !d.es_cruzado)));
+      } else {
+        ifs = ifs.filter(i => i.discrepancias.some(d => d.tipo === tipo));
+      }
     }
 
-    // Compactar para la respuesta (sin escaneos completos)
+    // Compactar para la respuesta
     const compact = ifs.map(i => ({
       tranid: i.tranid,
       so: i.so,
@@ -195,7 +200,8 @@ const getIFsMalSacadas = async (req, res) => {
       total_lineas: i.total_lineas,
       lineas_con_error: i.lineas_con_error,
       discrepancias: i.discrepancias,
-      tipos_error: [...new Set(i.discrepancias.map(d => d.tipo))]
+      status: i.status,
+      tipos_error: [...new Set(i.discrepancias.map(d => d.es_cruzado ? 'lote_cruzado' : d.tipo))]
     }));
 
     res.json({
@@ -205,6 +211,38 @@ const getIFsMalSacadas = async (req, res) => {
     });
   } catch (e) {
     logError('getIFsMalSacadas', e);
+    res.status(500).json({ error: e.message });
+  }
+};
+
+/**
+ * GET /api/dashboard/ifs-canceladas
+ * Lista las IFs escaneadas en Sheets que no existen en NetSuite (canceladas/fugas)
+ */
+const getIFsCanceladas = async (req, res) => {
+  try {
+    const filtros = normalizarFiltros(req);
+    const resultado = await ejecutarConfronta(filtros);
+
+    const compact = resultado.ifs_canceladas_erp.map(i => ({
+      tranid: i.tranid,
+      so: i.so,
+      trandate: i.trandate,
+      location: i.location,
+      operador: i.operador,
+      total_lineas: i.total_lineas,
+      lineas: i.lineas,
+      discrepancias: i.discrepancias,
+      tipos_error: ['if_no_encontrada']
+    }));
+
+    res.json({
+      filtros,
+      total: compact.length,
+      ifs: compact
+    });
+  } catch (e) {
+    logError('getIFsCanceladas', e);
     res.status(500).json({ error: e.message });
   }
 };
@@ -244,7 +282,15 @@ const getDiscrepancias = async (req, res) => {
 
     let discrepancias = resultado.todas_las_discrepancias;
 
-    if (tipo) discrepancias = discrepancias.filter(d => d.tipo === tipo);
+    if (tipo) {
+      if (tipo === 'sobrantes_grupo') {
+        discrepancias = discrepancias.filter(d => d.tipo === 'cantidad_sobrante' || (d.tipo === 'sku_lote_no_esperado' && !d.es_cruzado));
+      } else if (tipo === 'faltantes_grupo') {
+        discrepancias = discrepancias.filter(d => d.tipo === 'linea_faltante' || (d.tipo === 'cantidad_faltante' && !d.es_cruzado));
+      } else {
+        discrepancias = discrepancias.filter(d => d.tipo === tipo);
+      }
+    }
     if (operador) discrepancias = discrepancias.filter(d => d.escaneo_operador === operador);
     if (sku) discrepancias = discrepancias.filter(d => d.sku === sku);
 
@@ -390,7 +436,9 @@ const getSucursales = async (req, res) => {
 
 module.exports = {
   getResumen,
+  getConfrontaFull,
   getIFsMalSacadas,
+  getIFsCanceladas,
   getIFDetalle,
   getDiscrepancias,
   getTopErrores,
