@@ -495,7 +495,7 @@ function abrirModalConciliacion(kpiTipo) {
                 ${linkHuerfanos ? `<div style="margin-top:3px;">${linkHuerfanos}</div>` : ''}
               </td>
               <td style="text-align:center; font-weight:700; color:#4b5563;">+${imp.huerfanos_puros || 0} pzs</td>
-              <td style="text-align:right; color:var(--gray-5);">—</td>
+              <td style="text-align:right; font-weight:600; color:#4b5563;">+${(m2.huerfanos || 0).toFixed(2)} m²</td>
             </tr>
             <tr>
               <td><strong>📦 Placas de Más (Sobrantes en partida)</strong><br><small style="color:var(--gray-6);">Partidas donde se escanearon placas completas adicionales</small></td>
@@ -504,7 +504,7 @@ function abrirModalConciliacion(kpiTipo) {
                 ${linkSobrantes ? `<div style="margin-top:3px;">${linkSobrantes}</div>` : ''}
               </td>
               <td style="text-align:center; font-weight:700; color:#2563eb;">+${imp.sobrantes || 0} pzs</td>
-              <td style="text-align:right; font-weight:600;">+${(m2.sobrante_puro || 0).toFixed(2)} m²</td>
+              <td style="text-align:right; font-weight:600;">+${(m2.sobrante_partida || 0).toFixed(2)} m²</td>
             </tr>
             <tr>
               <td><strong>🔻 Faltantes Físicos + Órdenes No Escaneadas</strong><br><small style="color:var(--gray-6);">${desglose.cantidad_faltante || 0} faltantes en rampa · ${desglose.linea_faltante || 0} líneas de ERP sin escaneo</small></td>
@@ -591,7 +591,7 @@ function abrirModalConciliacion(kpiTipo) {
             <tr>
               <td>
                 <strong>📦 Placas de Más (Sobrantes en partida + Huérfanas)</strong><br>
-                <small style="color:var(--gray-6);">${desglose.cantidad_sobrante || 0} en partidas esperadas (${(m2.sobrante_puro || 0).toFixed(2)} m²) · ${desglose.huerfanos_puros || 0} huérfanas sin orden</small>
+                <small style="color:var(--gray-6);">${desglose.cantidad_sobrante || 0} en partidas esperadas (${(m2.sobrante_partida || 0).toFixed(2)} m²) · ${desglose.huerfanos_puros || 0} huérfanas sin orden (${(m2.huerfanos || 0).toFixed(2)} m²)</small>
               </td>
               <td style="text-align:center;">
                 <div style="font-weight:600; font-size:13px;">${totalSobrantesCasos}</div>
@@ -886,13 +886,22 @@ function renderDetalle(ifDoc) {
     const loteStr = d.lote || '—';
     const diagBadge = discs.map(x => badgeTipo(x.es_cruzado ? 'lote_cruzado' : x.tipo)).join(' ');
     const planText = discs.map(x => `<div style="margin-bottom:4px; font-weight:500;">${escapeHTML(x.plan_accion || x.mensaje)}</div>`).join('');
+    const parsedArea = d.area_placa_m2 || 0;
+    const m2Esc = parsedArea > 0 ? `+${parsedArea.toFixed(2)}m²` : '—';
+    const medidasTexto = parsedArea > 0 ? `<div style="font-size:11px; color:var(--gray-5, #6b7280);">${parsedArea.toFixed(2)} m²/pza</div>` : '';
 
     html.push(`
       <tr style="background:#fffbeb;">
         <td><strong>${escapeHTML(skuStr)}</strong></td>
-        <td>${escapeHTML(loteStr)}</td>
+        <td>
+          <div>${escapeHTML(loteStr)}</div>
+          ${medidasTexto}
+        </td>
         <td style="text-align:center; color:var(--gray-5);">0 pzs</td>
-        <td style="text-align:center; font-weight:700; color:#dc2626;">+1 pza</td>
+        <td style="text-align:center;">
+          <div style="font-weight:700; color:#dc2626;">+1 pza</div>
+          <div style="font-size:11px; color:#dc2626; font-weight:600;">${m2Esc}</div>
+        </td>
         <td style="text-align:center;">${diagBadge}</td>
         <td style="font-size:12px; color:var(--gray-8); line-height:1.4;">${planText}</td>
       </tr>

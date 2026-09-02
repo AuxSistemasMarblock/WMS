@@ -210,10 +210,15 @@ function detectarHuerfanos(ifTranid, ifSo, ifLocation, ifFecha, lineasEsperadas,
   for (const esc of escaneosDeEstaIF) {
     const key = `${ifTranid}|${esc.sku}|${esc.lote}`;
     if (!esperadosKeys.has(key)) {
+      const parsed = parseLote(esc.lote);
+      const area = parsed ? parsed.area : 0;
       huerfanos.push({
         tipo: 'sku_lote_no_esperado',
         sku: esc.sku,
         lote: esc.lote,
+        area_placa_m2: area,
+        placas_escaneadas: 1,
+        diff_m2: area,
         ubicacion_escaneada: esc.ubicacion_escaneada,
         escaneo_timestamp: esc.timestamp,
         escaneo_operador: esc.operador,
@@ -387,9 +392,11 @@ function confrontar(ifsEsperadas, escaneos) {
       case 'ubicacion_incorrecta':
         disc.plan_accion = `Error de ubicación física. Se escaneó en "${disc.ubicacion_escaneada}", se esperaba "${disc.ubicacion_esperada}". Mover material a ubicación correcta.`;
         break;
-      case 'sku_lote_no_esperado':
-        disc.plan_accion = `Artículo no esperado (Huérfano). No pertenece a esta IF.`;
+      case 'sku_lote_no_esperado': {
+        const areaHuerfanoStr = disc.area_placa_m2 ? ` (${disc.area_placa_m2.toFixed(2)}m²)` : '';
+        disc.plan_accion = `Artículo no esperado (Huérfano${areaHuerfanoStr}). No pertenece a esta IF. Retirar de tarima y reubicar en rack.`;
         break;
+      }
       case 'linea_faltante':
         disc.plan_accion = `Línea omitida. ${formatM2(disc)}Surtir línea completa requerida.`;
         break;
@@ -632,6 +639,7 @@ function confrontar(ifsEsperadas, escaneos) {
   let m2Sobrante = 0;
   let m2Faltante = 0;
   let m2MediaPlaca = 0;
+  let m2Huerfanos = 0;
   let m2Canceladas = 0;
   let m2CruzadosEntregado = 0;
   let m2CruzadosDiff = 0;
@@ -651,6 +659,10 @@ function confrontar(ifsEsperadas, escaneos) {
       m2MediaPlaca += Math.abs(d.diff_m2 || 0);
     } else if (d.tipo === 'cantidad_sobrante') {
       m2Sobrante += Math.abs(d.diff_m2 || ((d.diferencia || 0) * (d.area_placa_m2 || 0)));
+    } else if (d.tipo === 'sku_lote_no_esperado') {
+      const parsed = parseLote(d.lote);
+      const area = parsed ? parsed.area : (d.area_placa_m2 || 0);
+      m2Huerfanos += area;
     } else if (d.tipo === 'cantidad_faltante') {
       m2Faltante += Math.abs(d.diff_m2 || ((d.diferencia || 0) * (d.area_placa_m2 || 0)));
     } else if (d.tipo === 'linea_faltante') {
@@ -721,7 +733,8 @@ function confrontar(ifsEsperadas, escaneos) {
     ifs_canceladas_erp: resultado.ifs_canceladas_erp.length
   };
 
-  const m2SobranteTotal = m2Sobrante + m2MediaPlaca;
+  const m2SobrantePuro = m2Sobrante + m2Huerfanos;
+  const m2SobranteTotal = m2SobrantePuro + m2MediaPlaca;
   const m2DesviacionTotal = m2SobranteTotal + m2Faltante + Math.abs(m2CruzadosDiff);
   const m2BalanceNeto = (m2SobranteTotal + m2CruzadosDiff) - m2Faltante;
 
@@ -753,7 +766,9 @@ function confrontar(ifsEsperadas, escaneos) {
       balance_neto: parseFloat(m2BalanceNeto.toFixed(2)),
       media_placa: parseFloat(m2MediaPlaca.toFixed(2)),
       sobrante: parseFloat(m2SobranteTotal.toFixed(2)),
-      sobrante_puro: parseFloat(m2Sobrante.toFixed(2)),
+      sobrante_puro: parseFloat(m2SobrantePuro.toFixed(2)),
+      sobrante_partida: parseFloat(m2Sobrante.toFixed(2)),
+      huerfanos: parseFloat(m2Huerfanos.toFixed(2)),
       cruzados_entregado: parseFloat(m2CruzadosEntregado.toFixed(2)),
       cruzados_diff: parseFloat(m2CruzadosDiff.toFixed(2)),
       faltante: parseFloat(m2Faltante.toFixed(2)),
