@@ -158,7 +158,7 @@
         <div class="kpi-sub" id="kpiCruzadosSub">0 pzs entregadas (Neto: 0)</div>
       </div>
 
-      <div class="kpi-card sub-kpi-card" id="subKpiSobrantes" onclick="filtrarPorSubKpi('cantidad_sobrante')" data-tooltip="Partidas donde se escanearon placas completas adicionales o huérfanas puras. Da clic para filtrar.">
+      <div class="kpi-card sub-kpi-card" id="subKpiSobrantes" onclick="filtrarPorSubKpi('sobrantes_grupo')" data-tooltip="Partidas donde se escanearon placas completas adicionales o huérfanas puras. Da clic para filtrar.">
         <div class="kpi-label"><span>📦 Placas de Más (Sobrantes)</span><span class="info-icon">⬎</span></div>
         <div class="kpi-value" style="color: #2563eb;" id="kpiSobrantes">0</div>
         <div class="kpi-sub" id="kpiSobrantesSub">0.00 m² exceso</div>
@@ -184,8 +184,10 @@
           <option value="">Todas las incidencias</option>
           <option value="lote_cruzado">🔀 Lotes / SKUs Cruzados</option>
           <option value="media_placa">🖨️ Error de Etiquetado (Media Placa)</option>
-          <option value="cantidad_sobrante">📦 Placas de más (Sobrante)</option>
-          <option value="sku_lote_no_esperado">🔄 Huérfanas Puras</option>
+          <option value="sobrantes_grupo">📦 Placas de más / Sobrantes (Todos)</option>
+          <option value="cantidad_sobrante">📦 Placas de más (En partida esperada)</option>
+          <option value="sku_lote_no_esperado">🔄 Huérfanas Puras (Sin orden)</option>
+          <option value="faltantes_grupo">🔻 Faltantes / Omitidas (Todos)</option>
           <option value="cantidad_faltante">🔻 Faltante físico en rampa</option>
           <option value="linea_faltante">📋 Líneas Omitidas / No escaneadas</option>
           <option value="if_no_encontrada">🚨 Canceladas en ERP (Fugas)</option>

@@ -388,7 +388,7 @@ function confrontar(ifsEsperadas, escaneos) {
         disc.plan_accion = `Error de ubicación física. Se escaneó en "${disc.ubicacion_escaneada}", se esperaba "${disc.ubicacion_esperada}". Mover material a ubicación correcta.`;
         break;
       case 'sku_lote_no_esperado':
-        disc.plan_accion = `Artículo no esperado (Huérfano). No pertenece a esta IF. Retirar de tarima y reubicar en rack.`;
+        disc.plan_accion = `Artículo no esperado (Huérfano). No pertenece a esta IF.`;
         break;
       case 'linea_faltante':
         disc.plan_accion = `Línea omitida. ${formatM2(disc)}Surtir línea completa requerida.`;

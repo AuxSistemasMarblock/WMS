@@ -181,7 +181,13 @@ const getIFsMalSacadas = async (req, res) => {
 
     // Filtrar por tipo de discrepancia si se especifica
     if (tipo) {
-      ifs = ifs.filter(i => i.discrepancias.some(d => d.tipo === tipo));
+      if (tipo === 'sobrantes_grupo') {
+        ifs = ifs.filter(i => i.discrepancias.some(d => d.tipo === 'cantidad_sobrante' || (d.tipo === 'sku_lote_no_esperado' && !d.es_cruzado)));
+      } else if (tipo === 'faltantes_grupo') {
+        ifs = ifs.filter(i => i.discrepancias.some(d => d.tipo === 'linea_faltante' || (d.tipo === 'cantidad_faltante' && !d.es_cruzado)));
+      } else {
+        ifs = ifs.filter(i => i.discrepancias.some(d => d.tipo === tipo));
+      }
     }
 
     // Compactar para la respuesta
@@ -276,7 +282,15 @@ const getDiscrepancias = async (req, res) => {
 
     let discrepancias = resultado.todas_las_discrepancias;
 
-    if (tipo) discrepancias = discrepancias.filter(d => d.tipo === tipo);
+    if (tipo) {
+      if (tipo === 'sobrantes_grupo') {
+        discrepancias = discrepancias.filter(d => d.tipo === 'cantidad_sobrante' || (d.tipo === 'sku_lote_no_esperado' && !d.es_cruzado));
+      } else if (tipo === 'faltantes_grupo') {
+        discrepancias = discrepancias.filter(d => d.tipo === 'linea_faltante' || (d.tipo === 'cantidad_faltante' && !d.es_cruzado));
+      } else {
+        discrepancias = discrepancias.filter(d => d.tipo === tipo);
+      }
+    }
     if (operador) discrepancias = discrepancias.filter(d => d.escaneo_operador === operador);
     if (sku) discrepancias = discrepancias.filter(d => d.sku === sku);
 

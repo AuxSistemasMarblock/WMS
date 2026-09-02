@@ -365,14 +365,16 @@ function syncSubKpiHighlight(filtro) {
   document.querySelectorAll('.sub-kpi-card').forEach(c => c.classList.remove('active-filter'));
   if (filtro === 'media_placa' && $('subKpiMediaPlaca')) $('subKpiMediaPlaca').classList.add('active-filter');
   else if (filtro === 'lote_cruzado' && $('subKpiCruzados')) $('subKpiCruzados').classList.add('active-filter');
-  else if ((filtro === 'cantidad_sobrante' || filtro === 'sku_lote_no_esperado') && $('subKpiSobrantes')) $('subKpiSobrantes').classList.add('active-filter');
-  else if ((filtro === 'linea_faltante' || filtro === 'cantidad_faltante' || filtro === 'faltantes_grupo') && $('subKpiFaltantes')) $('subKpiFaltantes').classList.add('active-filter');
+  else if ((filtro === 'sobrantes_grupo' || filtro === 'cantidad_sobrante' || filtro === 'sku_lote_no_esperado') && $('subKpiSobrantes')) $('subKpiSobrantes').classList.add('active-filter');
+  else if ((filtro === 'faltantes_grupo' || filtro === 'linea_faltante' || filtro === 'cantidad_faltante') && $('subKpiFaltantes')) $('subKpiFaltantes').classList.add('active-filter');
 }
 
 function filtrarPorSubKpi(tipo) {
   const sel = $('filtroTipoError');
   if (tipo === 'faltantes_grupo') {
-    sel.value = 'linea_faltante';
+    sel.value = 'faltantes_grupo';
+  } else if (tipo === 'sobrantes_grupo') {
+    sel.value = 'sobrantes_grupo';
   } else {
     sel.value = tipo;
   }
@@ -388,9 +390,11 @@ function filtrarPorSubKpi(tipo) {
   const nombres = {
     'media_placa': 'Medias Placas (Etiquetado)',
     'lote_cruzado': 'Lotes / SKUs Cruzados',
-    'cantidad_sobrante': 'Placas de Más (Sobrantes)',
-    'faltantes_grupo': 'Líneas Faltantes / Omitidas',
-    'linea_faltante': 'Líneas Faltantes / Omitidas',
+    'sobrantes_grupo': 'Placas de Más / Sobrantes (Todos)',
+    'cantidad_sobrante': 'Placas de Más (En partida)',
+    'faltantes_grupo': 'Faltantes / Omitidas (Todos)',
+    'linea_faltante': 'Líneas Omitidas',
+    'cantidad_faltante': 'Faltante físico',
     'sku_lote_no_esperado': 'Huérfanas Puras'
   };
   showToast(`Filtrando tabla por: ${nombres[tipo] || tipo}`, 'info');
@@ -416,6 +420,8 @@ function abrirModalConciliacion(kpiTipo) {
   const m2 = k.m2 || {};
   const desglose = k.desglose_errores || {};
   const imp = k.impacto_placas || {};
+  const totalSobrantesCasos = (desglose.cantidad_sobrante || 0) + (desglose.huerfanos_puros || 0);
+  const totalSobrantesPzs = (imp.sobrantes || 0) + (imp.huerfanos_puros || 0);
   const totalFaltantesCasos = (desglose.cantidad_faltante || 0) + (desglose.linea_faltante || 0);
   const totalFaltantesPzs = (imp.faltantes_reales || 0) + (imp.lineas_omitidas || 0);
 
@@ -492,7 +498,7 @@ function abrirModalConciliacion(kpiTipo) {
               <td style="text-align:right; color:var(--gray-5);">—</td>
             </tr>
             <tr>
-              <td><strong>📦 Placas de Más (Sobrantes puros)</strong><br><small style="color:var(--gray-6);">Partidas donde se escanearon placas completas adicionales</small></td>
+              <td><strong>📦 Placas de Más (Sobrantes en partida)</strong><br><small style="color:var(--gray-6);">Partidas donde se escanearon placas completas adicionales</small></td>
               <td style="text-align:center;">
                 <div style="font-weight:600; font-size:13px;">${desglose.cantidad_sobrante || 0} partidas</div>
                 ${linkSobrantes ? `<div style="margin-top:3px;">${linkSobrantes}</div>` : ''}
@@ -528,11 +534,8 @@ function abrirModalConciliacion(kpiTipo) {
     if ((desglose.lote_cruzado || 0) > 0) {
       actionBtns.push(`<button class="conciliacion-filter-btn" onclick="cerrarConciliacion(); filtrarPorSubKpi('lote_cruzado');">🔀 Lotes Cruzados (${desglose.lote_cruzado})</button>`);
     }
-    if ((desglose.huerfanos_puros || 0) > 0) {
-      actionBtns.push(`<button class="conciliacion-filter-btn" onclick="cerrarConciliacion(); filtrarPorSubKpi('sku_lote_no_esperado');">🔄 Huérfanos Puros (${desglose.huerfanos_puros})</button>`);
-    }
-    if ((desglose.cantidad_sobrante || 0) > 0) {
-      actionBtns.push(`<button class="conciliacion-filter-btn" onclick="cerrarConciliacion(); filtrarPorSubKpi('cantidad_sobrante');">📦 Sobrantes (${desglose.cantidad_sobrante})</button>`);
+    if (totalSobrantesCasos > 0) {
+      actionBtns.push(`<button class="conciliacion-filter-btn" onclick="cerrarConciliacion(); filtrarPorSubKpi('sobrantes_grupo');">📦 Sobrantes (${totalSobrantesCasos})</button>`);
     }
     if (totalFaltantesCasos > 0) {
       actionBtns.push(`<button class="conciliacion-filter-btn" onclick="cerrarConciliacion(); filtrarPorSubKpi('faltantes_grupo');">🔻 Faltantes/Omitidas (${totalFaltantesCasos})</button>`);
@@ -586,10 +589,13 @@ function abrirModalConciliacion(kpiTipo) {
               </td>
             </tr>
             <tr>
-              <td>📦 Placas de Más (Sobrantes físicos completos)</td>
+              <td>
+                <strong>📦 Placas de Más (Sobrantes en partida + Huérfanas)</strong><br>
+                <small style="color:var(--gray-6);">${desglose.cantidad_sobrante || 0} en partidas esperadas (${(m2.sobrante_puro || 0).toFixed(2)} m²) · ${desglose.huerfanos_puros || 0} huérfanas sin orden</small>
+              </td>
               <td style="text-align:center;">
-                <div style="font-weight:600; font-size:13px;">${desglose.cantidad_sobrante || 0}</div>
-                ${(desglose.cantidad_sobrante || 0) > 0 ? `<div style="margin-top:3px;"><button class="tabla-filtro-link" onclick="cerrarConciliacion(); filtrarPorSubKpi('cantidad_sobrante');">Ver ↗</button></div>` : ''}
+                <div style="font-weight:600; font-size:13px;">${totalSobrantesCasos}</div>
+                ${totalSobrantesCasos > 0 ? `<div style="margin-top:3px;"><button class="tabla-filtro-link" onclick="cerrarConciliacion(); filtrarPorSubKpi('sobrantes_grupo');">Ver ↗</button></div>` : ''}
               </td>
               <td style="text-align:right; font-weight:600; color:#2563eb;">+${(m2.sobrante_puro || 0).toFixed(2)} m²</td>
             </tr>
@@ -617,6 +623,9 @@ function abrirModalConciliacion(kpiTipo) {
     }
     if ((desglose.lote_cruzado || 0) > 0) {
       actionBtns.push(`<button class="conciliacion-filter-btn" onclick="cerrarConciliacion(); filtrarPorSubKpi('lote_cruzado');">🔀 Lotes Cruzados (${desglose.lote_cruzado})</button>`);
+    }
+    if (totalSobrantesCasos > 0) {
+      actionBtns.push(`<button class="conciliacion-filter-btn" onclick="cerrarConciliacion(); filtrarPorSubKpi('sobrantes_grupo');">📦 Placas de Más (${totalSobrantesCasos})</button>`);
     }
     if (totalFaltantesCasos > 0) {
       actionBtns.push(`<button class="conciliacion-filter-btn" onclick="cerrarConciliacion(); filtrarPorSubKpi('faltantes_grupo');">🔻 Faltantes/Omitidas (${totalFaltantesCasos})</button>`);
@@ -659,8 +668,10 @@ function filtrarTablaMalSacadas() {
 
   if (!filtro) {
     t.filtradas = [...t.data];
-  } else if (filtro === 'linea_faltante' || filtro === 'cantidad_faltante') {
+  } else if (filtro === 'faltantes_grupo') {
     t.filtradas = t.data.filter(i => (i.tipos_error || []).some(te => te === 'linea_faltante' || te === 'cantidad_faltante'));
+  } else if (filtro === 'sobrantes_grupo') {
+    t.filtradas = t.data.filter(i => (i.tipos_error || []).some(te => te === 'cantidad_sobrante' || te === 'sku_lote_no_esperado'));
   } else {
     t.filtradas = t.data.filter(i => (i.tipos_error || []).includes(filtro));
   }
