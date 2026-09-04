@@ -482,6 +482,22 @@ Las etiquetas térmicas están diseñadas para material de **101 mm de ancho $\t
 - **Conexión Directa**: `navigator.usb.requestDevice({ filters: [{ vendorId: 0x0a5f }] })` solicita acceso al puerto USB de la impresora Zebra, reclama la interfaz 0 y envía el buffer de bytes codificado en UTF-8 mediante `transferOut()`.
 - **Fallback Automático**: Si el navegador no soporta WebUSB (ej. Firefox) o se ejecuta en un contexto no seguro (HTTP no localhost), el sistema descarga un archivo `etiquetas.zpl` para envío por utilería o spooler local.
 
+#### 5.4.1 Driver WinUSB (obligatorio en Windows)
+
+WebUSB de Chrome/Edge en **Windows** solo expone dispositivos cuyo driver sea **WinUSB**. La impresora Zebra (vendor `0x0A5F`) trae por defecto su driver propio de Windows, por lo que es necesario reemplazarlo con **Zadig** en la PC del operador:
+
+1. Descargar **Zadig** desde https://zadig.akeo.ie/
+2. Abrir Zadig y activar `Options → List All Devices`.
+3. Seleccionar la impresora **Zebra** (aparece identificada con vendor `0A5F`).
+4. En el recuadro del driver objetivo elegir **WinUSB** y pulsar *Replace Driver*.
+5. Probar la impresión desde Chrome/Edge en `etiquetas.html`; al pulsar **Imprimir a Zebra** el navegador solicitará seleccionar el dispositivo USB.
+
+**Consideraciones:**
+
+- Al reemplazar el driver, la Zebra deja de aparecer como impresora normal de Windows; esto es esperado, ya que el sistema envía ZPL crudo por WebUSB y no usa el driver de impresión.
+- En **Linux** (entorno de desarrollo) no se requiere WinUSB: WebUSB funciona de forma nativa sin cambio de driver.
+- El fallback de descarga de `etiquetas.zpl` sigue disponible si el driver aún no se ha configurado.
+
 ---
 
 ## 6. Referencia Completa de la API REST del Backend
