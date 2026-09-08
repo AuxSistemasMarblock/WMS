@@ -174,7 +174,7 @@ La autenticación se realiza mediante tokens JWT firmados (`HS256`, 24h de expir
 |---|---|:---:|:---:|:---:|:---:|
 | `aux_almacen` | `index.html` | ✅ Lectura / Despacho | ❌ Sin acceso | ❌ Sin acceso | ❌ Sin acceso |
 | `jefe_almacen` | `index.html` | ✅ Lectura / Despacho | ✅ Consulta / Impresión | ❌ Sin acceso | ❌ Sin acceso |
-| `gerente` | `dashboard.html` | ✅ Lectura / Firma | ❌ Sin acceso | ✅ Auditoría Global (Todas las sucursales) | ❌ Sin acceso |
+| `gerente` | `dashboard.html` | ❌ Sin acceso | ❌ Sin acceso | ✅ Auditoría Global (Todas las sucursales) | ❌ Sin acceso |
 | `admin` | `dashboard.html` | ✅ Control Total | ✅ Control Total | ✅ Auditoría Global (Todas las sucursales) | ✅ Exclusivo Admin |
 | `cliente` | `index.html` | ✅ Solo Firma | ❌ Sin acceso | ❌ Sin acceso | ❌ Sin acceso |
 
@@ -184,10 +184,10 @@ La autenticación se realiza mediante tokens JWT firmados (`HS256`, 24h de expir
 
 El componente `js/nav.js` se ejecuta en `DOMContentLoaded` en todas las páginas e inyecta la barra de navegación `#appNav` evaluando el rol del usuario en `sessionStorage`:
 
-- **Usuarios `aux_almacen` y `cliente`**: No se muestra barra de navegación (quedan confinados al escáner de despacho).
-- **Usuarios `jefe_almacen`**: Se renderizan accesos a **Escáner** y **Etiquetas**.
-- **Usuarios `gerente`**: Se renderizan accesos a **Escáner** y **Dashboard** (con selector global de todas las sucursales habilitado).
-- **Usuarios `admin`**: Se renderizan accesos a **Escáner**, **Etiquetas** y **Dashboard** (con selector global de todas las sucursales habilitado).
+- **Usuarios `aux_almacen` y `cliente`**: Se renderiza únicamente el botón activo a **Escáner**.
+- **Usuarios `jefe_almacen`**: Se renderizan accesos conmutables a **Escáner** y **Etiquetas**.
+- **Usuarios `gerente`**: Se renderiza únicamente el botón activo a **Dashboard** (con selector global de sucursales, confinados al dashboard).
+- **Usuarios `admin`**: Se renderizan accesos a **Escáner**, **Etiquetas** y **Dashboard** (control total de la plataforma).
 
 ### 2.3 Modelo de Datos Relacional (PostgreSQL / Supabase)
 

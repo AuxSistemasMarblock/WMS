@@ -1034,14 +1034,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   const user = getCurrentUser();
+  const rawRol = (user?.rol || user?.cargo || '').toLowerCase().trim();
+  const rol = rawRol === 'administrador' ? 'admin' : (rawRol.includes('gerente') ? 'gerente' : rawRol);
+  if (rol !== 'admin' && rol !== 'gerente') {
+    window.location.href = 'index.html';
+    return;
+  }
+
   if (user) {
-    const rol = user.rol || user.cargo;
     const nameEl = $('currentUserName');
     const locEl = $('currentUserLocation');
     const roleEl = $('currentUserRole');
     if (nameEl) nameEl.textContent = user.nombre || user.email || 'Usuario';
     if (locEl) locEl.textContent = user.ubicacion?.nombre || 'N/A';
-    if (roleEl) roleEl.textContent = getRoleLabel(rol);
+    if (roleEl) roleEl.textContent = getRoleLabel(rawRol);
   }
 
   document.querySelectorAll('.preset-btn').forEach(btn => {
