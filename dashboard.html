@@ -152,8 +152,8 @@
         <div class="kpi-sub" id="kpiMediaPlacaSub">0.00 m² sin re-etiquetar</div>
       </div>
 
-      <div class="kpi-card sub-kpi-card" id="subKpiCruzados" onclick="filtrarPorSubKpi('lote_cruzado')" data-tooltip="Partidas donde la placa física sí se entregó pero con Lote o SKU cambiado. Da clic para filtrar.">
-        <div class="kpi-label"><span>🔀 Lotes / SKUs Cruzados</span><span class="info-icon">⬎</span></div>
+      <div class="kpi-card sub-kpi-card" id="subKpiCruzados" onclick="filtrarPorSubKpi('lote_cruzado')" data-tooltip="Partidas donde la placa física sí se entregó pero con Lote diferente al pedido (mismo SKU). Da clic para filtrar.">
+        <div class="kpi-label"><span>🔀 Lotes Cruzados</span><span class="info-icon">⬎</span></div>
         <div class="kpi-value" style="color: #d97706;" id="kpiCruzados">0</div>
         <div class="kpi-sub" id="kpiCruzadosSub">0 pzs entregadas (Neto: 0)</div>
       </div>
@@ -182,7 +182,7 @@
       <div class="table-actions">
         <select id="filtroTipoError" onchange="filtrarTablaMalSacadas()" class="filter-select" aria-label="Filtrar por causa raíz">
           <option value="">Todas las incidencias</option>
-          <option value="lote_cruzado">🔀 Lotes / SKUs Cruzados</option>
+          <option value="lote_cruzado">🔀 Lotes Cruzados</option>
           <option value="media_placa">🖨️ Error de Etiquetado (Media Placa)</option>
           <option value="sobrantes_grupo">📦 Placas de más / Sobrantes (Todos)</option>
           <option value="cantidad_sobrante">📦 Placas de más (En partida esperada)</option>
@@ -282,6 +282,6 @@
 <script src="js/config.js?v=145"></script>
 <script src="js/nav.js?v=145"></script>
 <script src="js/footer.js?v=145"></script>
-<script src="js/dashboard/app.js?v=145"></script>
+<script src="js/dashboard/app.js?v=147"></script>
 </body>
 </html>

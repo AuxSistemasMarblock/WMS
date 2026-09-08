@@ -363,18 +363,10 @@ function confrontar(ifsEsperadas, escaneos) {
 
   const asignarPlanAccion = (disc) => {
     if (disc.es_cruzado) {
-      if (disc.tipo_cruzado === 'lote_cruzado') {
-        if (disc.tipo === 'sku_lote_no_esperado') {
-          disc.plan_accion = `Lote Cruzado (Mismo SKU): Se entregó este lote en lugar del pedido (${disc.lote_esperado}). Ajustar lote en NetSuite.`;
-        } else {
-          disc.plan_accion = `Lote Cruzado (Mismo SKU): Se entregó lote ${disc.lote_entregado} en lugar de ${disc.lote}. Ajustar lote entregado en NetSuite para no descuadrar inventario contable.`;
-        }
+      if (disc.tipo === 'sku_lote_no_esperado') {
+        disc.plan_accion = `Lote Cruzado (Mismo SKU): Se entregó este lote en lugar del pedido (${disc.lote_esperado}). Ajustar lote en NetSuite.`;
       } else {
-        if (disc.tipo === 'sku_lote_no_esperado') {
-          disc.plan_accion = `Material / SKU Cruzado: Se entregó en sustitución de ${disc.sku_esperado} (${disc.lote_esperado}). Verificar con cliente / facturación para ajuste de orden.`;
-        } else {
-          disc.plan_accion = `Material / SKU Cruzado: Se entregó ${disc.sku_entregado} (${disc.lote_entregado}) en lugar de este artículo. Ajustar partida en NetSuite.`;
-        }
+        disc.plan_accion = `Lote Cruzado (Mismo SKU): Se entregó lote ${disc.lote_entregado} en lugar de ${disc.lote}. Ajustar lote entregado en NetSuite para no descuadrar inventario contable.`;
       }
       return disc;
     }
@@ -417,7 +409,8 @@ function confrontar(ifsEsperadas, escaneos) {
 
     const huerfanosDisp = [...huerfanos];
 
-    // Match 1: Mismo SKU, diferente Lote
+    // Único cruce válido: Mismo SKU, diferente Lote.
+    // SKUs distintos NO se cruzan: quedan como faltante + huérfana por separado.
     for (const f of faltantes) {
       const matchIdx = huerfanosDisp.findIndex(h => h.sku === f.sku && !h._matched);
       if (matchIdx >= 0) {
@@ -431,26 +424,6 @@ function confrontar(ifsEsperadas, escaneos) {
 
         h.es_cruzado = true;
         h.tipo_cruzado = 'lote_cruzado';
-        h.lote_esperado = f.lote;
-        h.sku_esperado = f.sku;
-      }
-    }
-
-    // Match 2: Diferente SKU en la misma IF
-    for (const f of faltantes) {
-      if (f._matched) continue;
-      const matchIdx = huerfanosDisp.findIndex(h => !h._matched);
-      if (matchIdx >= 0) {
-        const h = huerfanosDisp[matchIdx];
-        h._matched = true;
-        f._matched = true;
-        f.es_cruzado = true;
-        f.tipo_cruzado = 'sku_cruzado';
-        f.lote_entregado = h.lote;
-        f.sku_entregado = h.sku;
-
-        h.es_cruzado = true;
-        h.tipo_cruzado = 'sku_cruzado';
         h.lote_esperado = f.lote;
         h.sku_esperado = f.sku;
       }

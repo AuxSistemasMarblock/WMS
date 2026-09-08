@@ -65,8 +65,7 @@ function escapeHTML(s) {
 function badgeTipo(tipo) {
   switch (tipo) {
     case 'lote_cruzado':
-    case 'sku_cruzado':
-      return '<span class="tipo-badge cruzado">🔀 Lote / SKU Cruzado</span>';
+      return '<span class="tipo-badge cruzado">🔀 Lote Cruzado</span>';
     case 'media_placa':
       return '<span class="tipo-badge media">🖨️ Media Placa (Etiquetado)</span>';
     case 'cantidad_sobrante':
@@ -255,7 +254,10 @@ async function cargarSucursales() {
     const sel = $('filtroSucursal');
     sel.innerHTML = '';
 
-    if (user?.cargo === 'admin' || user?.rol === 'admin') {
+    const rawRol = (user?.rol || user?.cargo || '').toLowerCase().trim();
+    const isGlobal = rawRol === 'admin' || rawRol === 'administrador' || rawRol.includes('gerente');
+
+    if (isGlobal) {
       const optTodas = el('option', { value: '' }, 'Todas las sucursales');
       sel.appendChild(optTodas);
     }
@@ -389,7 +391,7 @@ function filtrarPorSubKpi(tipo) {
 
   const nombres = {
     'media_placa': 'Medias Placas (Etiquetado)',
-    'lote_cruzado': 'Lotes / SKUs Cruzados',
+    'lote_cruzado': 'Lotes Cruzados',
     'sobrantes_grupo': 'Placas de Más / Sobrantes (Todos)',
     'cantidad_sobrante': 'Placas de Más (En partida)',
     'faltantes_grupo': 'Faltantes / Omitidas (Todos)',
@@ -476,7 +478,7 @@ function abrirModalConciliacion(kpiTipo) {
               <td style="text-align:right; font-weight:600;">+${(m2.media_placa || 0).toFixed(2)} m²</td>
             </tr>
             <tr>
-              <td><strong>🔀 Lotes / SKUs Cruzados (Swap en patio)</strong><br><small style="color:var(--gray-6);">Placa física sí se entregó pero con lote/código cambiado (mismo pedido)</small></td>
+              <td><strong>🔀 Lotes Cruzados (Swap en patio)</strong><br><small style="color:var(--gray-6);">Placa física sí se entregó pero con lote diferente al pedido (mismo SKU)</small></td>
               <td style="text-align:center;">
                 <div style="font-weight:600; font-size:13px;">${desglose.lote_cruzado || 0} casos (${imp.lote_cruzado || 0} pzs)</div>
                 ${linkCruzados ? `<div style="margin-top:3px;">${linkCruzados}</div>` : ''}
