@@ -820,9 +820,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (!token) { window.location.href = 'index.html'; return; }
 
   const user = getCurrentUser();
-  const rol = user?.rol || user?.cargo;
+  const rawRol = (user?.rol || user?.cargo || '').toLowerCase().trim();
+  const rol = rawRol === 'administrador' ? 'admin' : (rawRol.includes('jefe') ? 'jefe_almacen' : (rawRol.includes('gerente') ? 'gerente' : rawRol));
   if (rol !== 'jefe_almacen' && rol !== 'admin') {
-    window.location.href = 'index.html';
+    window.location.href = rol === 'gerente' ? 'dashboard.html' : 'index.html';
     return;
   }
 

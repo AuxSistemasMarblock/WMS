@@ -116,6 +116,14 @@ function restoreSession() {
     try {
       authToken = token;
       currentUser = JSON.parse(userStr);
+
+      const rawRol = (currentUser.rol || currentUser.cargo || '').toLowerCase().trim();
+      const isGerente = rawRol === 'gerente' || rawRol.includes('gerente');
+      if (isGerente) {
+        window.location.href = 'dashboard.html';
+        return;
+      }
+
       if (typeof window.renderAppNav === 'function') window.renderAppNav();
       showMainView();
       loadIFs(); // Cargar IFs al restaurar sesión
@@ -138,6 +146,12 @@ function showLoginView() {
  * Mostrar vista principal
  */
 function showMainView() {
+  const rawRol = (currentUser?.rol || currentUser?.cargo || '').toLowerCase().trim();
+  if (rawRol === 'gerente' || rawRol.includes('gerente')) {
+    window.location.href = 'dashboard.html';
+    return;
+  }
+
   document.getElementById('loginContainer').style.display = 'none';
   document.getElementById('mainApp').style.display = 'flex';
   document.getElementById('currentUserName').textContent = currentUser.nombre;
