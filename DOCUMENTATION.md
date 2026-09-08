@@ -395,6 +395,8 @@ El motor de confronta evalúa cada partida y genera discrepancias tipificadas:
 | `if_no_encontrada` | IF presente en escaneos de Sheets pero inexistente en NetSuite | 🔴 Crítico |
 | `sin_medidas` | El lote no cuenta con dimensiones para calcular placas teóricas | ℹ️ Informativo |
 
+> **Flag derivado `lote_cruzado`**: Cuando una partida comprometida no se escaneó (`linea_faltante`/`cantidad_faltante`) y en la misma IF existe una lectura huérfana (`sku_lote_no_esperado`) **del mismo SKU con lote distinto**, ambas discrepancias se emparejan y se marcan con `es_cruzado: true` (tipo `lote_cruzado`). **Un SKU distinto nunca se considera cruzado**: en ese caso cada lectura se reporta de forma independiente como línea faltante + placa huérfana.
+
 $$\text{Tasa de Exactitud} = \left( \frac{\text{Total Líneas} - \text{Líneas con Error}}{\text{Total Líneas}} \right) \times 100$$
 
 ### 4.4 Rendimiento: Caché en Memoria y Patrón Single-Flight
@@ -654,6 +656,7 @@ backend/services/
 ### 7.1 `confrontaService.js`
 - **Función `confrontar(ifsEsperadas, escaneos)`**: Cruza ambos arreglos agrupando por clave `if_tranid|sku|lote`.
 - **Detección de Huérfanos**: Identifica lecturas en Sheets que no formaban parte de la orden original.
+- **Cruce de Lotes (`lote_cruzado`)**: Empareja un faltante con un huérfano de la misma IF únicamente cuando comparten **el mismo SKU** (lote distinto). SKUs diferentes no se cruzan y se reportan por separado como `linea_faltante` + `sku_lote_no_esperado`.
 - **IFs Sintéticas**: Si una IF fue escaneada pero no existe en la búsqueda de NetSuite, genera un registro sintético clasificado como `if_no_encontrada`.
 
 ### 7.2 `googleSheetsService.js`
