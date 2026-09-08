@@ -255,7 +255,10 @@ async function cargarSucursales() {
     const sel = $('filtroSucursal');
     sel.innerHTML = '';
 
-    if (user?.cargo === 'admin' || user?.rol === 'admin') {
+    const rawRol = (user?.rol || user?.cargo || '').toLowerCase().trim();
+    const isGlobal = rawRol === 'admin' || rawRol === 'administrador' || rawRol.includes('gerente');
+
+    if (isGlobal) {
       const optTodas = el('option', { value: '' }, 'Todas las sucursales');
       sel.appendChild(optTodas);
     }
