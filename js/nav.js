@@ -9,13 +9,13 @@
   const ITEMS = [
     {
       url: 'index.html',
-      roles: ['aux_almacen', 'cliente', 'gerente', 'jefe_almacen', 'admin'],
+      roles: ['aux_almacen', 'cliente', 'jefe_almacen', 'admin'],
       label: 'Escáner',
       icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/></svg>'
     },
     {
       url: 'etiquetas.html',
-      roles: ['jefe_almacen', 'admin', 'gerente'],
+      roles: ['jefe_almacen', 'admin'],
       label: 'Etiquetas',
       icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>'
     },

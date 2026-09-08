@@ -27,7 +27,13 @@ const requireRole = (...roles) => (req, res, next) => {
   if (!req.user) {
     return res.status(401).json({ error: 'No token provided' });
   }
-  const rol = req.user.rol ?? req.user.cargo;
+  const rawRol = (req.user.rol ?? req.user.cargo ?? '').toLowerCase().trim();
+  let rol = rawRol;
+  if (rawRol === 'administrador') rol = 'admin';
+  else if (rawRol.includes('gerente')) rol = 'gerente';
+  else if (rawRol.includes('jefe')) rol = 'jefe_almacen';
+  else if (rawRol.includes('aux')) rol = 'aux_almacen';
+
   if (!roles.includes(rol)) {
     return res.status(403).json({ error: 'Forbidden' });
   }
