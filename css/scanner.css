@@ -96,7 +96,7 @@
   flex-shrink: 0;
   text-align: left;
   font-weight: 600;
-  color: var(--text, #222);
+  color: var(--text);
   font-size: 15px;
   padding: 0 4px 12px;
 }

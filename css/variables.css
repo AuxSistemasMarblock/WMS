@@ -1,34 +1,152 @@
 /**
  * WMS · Variables de Paleta y Tema
- * Colores corporativos Marblock
+ * Colores corporativos Marblock y soporte para modo oscuro automático
  */
 
 :root {
-    /* Colores base */
+    color-scheme: light;
+
+    /* Colores base (claro) */
     --bg: #fff;
-    /* Fondo principal blanco */
     --surface: #f5f5f5;
-    /* Tarjetas y paneles gris muy claro */
+    --surface-2: #ffffff;
     --border: #e0e0e0;
-    /* Bordes gris claro */
-    --accent: #ffb800;
-    /* Amarillo Marblock */
-    --accent2: #004a99;
-    /* Azul fuerte Marblock */
-    --warn: #ffb800;
-    /* Amarillo */
-    --danger: #ff4d6a;
-    /* Rojo para alertas */
+
+    /* Colores de marca Marblock */
+    --accent: #ffb800;   /* Amarillo Marblock */
+    --accent2: #004a99;  /* Azul fuerte Marblock */
+    --warn: #ffb800;     /* Amarillo de advertencia */
+    --danger: #ff4d6a;   /* Rojo para alertas */
+    --error: #ef4444;    /* Rojo error semántico */
+    --success: #10b981;  /* Verde éxito */
+    --info: #3b82f6;     /* Azul información */
 
     /* Texto */
     --text: #222;
-    /* Texto principal gris oscuro */
     --muted: #666;
-    /* Texto secundario gris medio */
 
     /* Tabla */
-    --row-even: #e6f0ff;
-    /* Filas alternas azul muy claro */
-    --row-hover: #fffbf0;
-    /* Hover suave amarillo muy claro */
+    --row-even: #e6f0ff; /* Filas alternas azul muy claro */
+    --row-hover: #fffbf0; /* Hover suave amarillo muy claro */
+
+    /* Sombras */
+    --shadow-1: 0 1px 3px rgba(0, 0, 0, 0.08);
+    --shadow-2: 0 4px 16px rgba(0, 0, 0, 0.12);
+    --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+
+    /* Grises con fallbacks estándar de UI */
+    --gray-1: #f9fafb;
+    --gray-2: #f3f4f6;
+    --gray-3: #e5e7eb;
+    --gray-4: #d1d5db;
+    --gray-5: #9ca3af;
+    --gray-6: #6b7280;
+    --gray-7: #374151;
+    --gray-8: #1f2937;
+    --gray-9: #111827;
+
+    /* Badges y chips de estado */
+    --badge-ok-bg: #d1fae5;
+    --badge-ok-text: #065f46;
+    --badge-warn-bg: #fef3c7;
+    --badge-warn-text: #92400e;
+    --badge-error-bg: #fee2e2;
+    --badge-error-text: #b91c1c;
+    --badge-cruzado-bg: #fef3c7;
+    --badge-cruzado-text: #b45309;
+    --badge-cruzado-border: #fde68a;
+    --badge-media-bg: #f5f3ff;
+    --badge-media-text: #6d28d9;
+    --badge-media-border: #ddd6fe;
+    --badge-sobrante-bg: #eff6ff;
+    --badge-sobrante-text: #1d4ed8;
+    --badge-sobrante-border: #bfdbfe;
+    --badge-info-bg: #e0f2fe;
+    --badge-info-text: #0369a1;
+
+    --danger-bg: #fee2e2;
+    --danger-text: #dc2626;
+    --success-bg: #d1fae5;
+    --success-text: #059669;
+
+    /* Toggle switch tema (claro) */
+    --toggle-track: rgba(255, 255, 255, 0.25);
+    --toggle-thumb: #ffffff;
+    --toggle-icon-active: #92400e;
+    --toggle-icon-inactive: rgba(255, 255, 255, 0.70);
+    --toggle-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
+[data-theme="dark"] {
+    color-scheme: dark;
+
+    /* Colores base oscuros */
+    --bg: #0f1218;
+    --surface: #1a1f26;
+    --surface-2: #232a33;
+    --border: #2a313c;
+
+    /* Colores de marca Marblock (conservados, ajustando contraste donde aplica) */
+    --accent: #ffb800;   /* Amarillo Marblock */
+    --accent2: #1e70d8;  /* Azul Marblock aclarado para visibilidad óptima en fondo oscuro */
+    --warn: #ffb800;
+    --danger: #ff4d6a;
+    --error: #f87171;
+    --success: #34d399;
+    --info: #60a5fa;
+
+    /* Texto */
+    --text: #e5e7eb;
+    --muted: #9ca3af;
+
+    /* Tabla */
+    --row-even: #182232;
+    --row-hover: #262e3d;
+
+    /* Sombras más pronunciadas para tema oscuro */
+    --shadow-1: 0 1px 3px rgba(0, 0, 0, 0.4);
+    --shadow-2: 0 4px 16px rgba(0, 0, 0, 0.5);
+    --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.6), 0 10px 10px -5px rgba(0, 0, 0, 0.4);
+
+    /* Grises en modo oscuro invertidos semánticamente para fondos/bordes/textos */
+    --gray-1: #161b22;
+    --gray-2: #21262d;
+    --gray-3: #2a313c;
+    --gray-4: #374151;
+    --gray-5: #6b7280;
+    --gray-6: #9ca3af;
+    --gray-7: #d1d5db;
+    --gray-8: #e5e7eb;
+    --gray-9: #f9fafb;
+
+    /* Badges y chips de estado legibles con contraste AA en oscuro */
+    --badge-ok-bg: rgba(16, 185, 129, 0.2);
+    --badge-ok-text: #6ee7b7;
+    --badge-warn-bg: rgba(245, 158, 11, 0.2);
+    --badge-warn-text: #fcd34d;
+    --badge-error-bg: rgba(239, 68, 68, 0.2);
+    --badge-error-text: #fca5a5;
+    --badge-cruzado-bg: rgba(245, 158, 11, 0.2);
+    --badge-cruzado-text: #fcd34d;
+    --badge-cruzado-border: rgba(245, 158, 11, 0.4);
+    --badge-media-bg: rgba(139, 92, 246, 0.2);
+    --badge-media-text: #c4b5fd;
+    --badge-media-border: rgba(139, 92, 246, 0.4);
+    --badge-sobrante-bg: rgba(59, 130, 246, 0.2);
+    --badge-sobrante-text: #93c5fd;
+    --badge-sobrante-border: rgba(59, 130, 246, 0.4);
+    --badge-info-bg: rgba(56, 189, 248, 0.2);
+    --badge-info-text: #7dd3fc;
+
+    --danger-bg: rgba(239, 68, 68, 0.2);
+    --danger-text: #fca5a5;
+    --success-bg: rgba(16, 185, 129, 0.2);
+    --success-text: #6ee7b7;
+
+    /* Toggle switch tema (oscuro) */
+    --toggle-track: #14181f;
+    --toggle-thumb: #ffb800;
+    --toggle-icon-active: #1a1f26;
+    --toggle-icon-inactive: rgba(255, 255, 255, 0.65);
+    --toggle-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
 }
