@@ -77,7 +77,7 @@ function badgeTipo(tipo) {
     case 'sku_lote_no_esperado':
       return '<span class="tipo-badge warn">🔄 Huérfana pura</span>';
     case 'if_no_encontrada':
-      return '<span class="tipo-badge" style="background:#fee2e2; color:#b91c1c; font-weight:700;">🚨 Cancelada en ERP</span>';
+      return '<span class="tipo-badge error" style="font-weight:700;">🚨 Cancelada en ERP</span>';
     case 'ubicacion_incorrecta':
       return '<span class="tipo-badge warn">📍 Ubicación</span>';
     default:
@@ -449,10 +449,10 @@ function abrirModalConciliacion(kpiTipo) {
 
     bodyEl.innerHTML = `
       <div class="balance-card-summary">
-        <div style="font-size:15px; font-weight:700; color:#004a99; margin-bottom:6px;">
+        <div style="font-size:15px; font-weight:700; color:var(--accent2); margin-bottom:6px;">
           ${escPlacas} placas físicas escaneadas vs ${espPlacas} placas requeridas en ERP
         </div>
-        <div style="color:var(--gray-7, #374151); font-size:13px; line-height:1.4;">
+        <div style="color:var(--text); font-size:13px; line-height:1.4;">
           Variación neta de <strong>${diffSign}${diffPlacas} placas físicas</strong> en este período. A continuación se desglosa el balance exacto por causa raíz:
         </div>
       </div>
@@ -469,59 +469,59 @@ function abrirModalConciliacion(kpiTipo) {
           </thead>
           <tbody>
             <tr>
-              <td><strong>🖨️ Medias Placas (Error de etiquetado)</strong><br><small style="color:var(--gray-6);">Se pidió fracción (ej. 0.5 o 1.5) y se escaneó placa completa</small></td>
+              <td><strong>🖨️ Medias Placas (Error de etiquetado)</strong><br><small style="color:var(--muted);">Se pidió fracción (ej. 0.5 o 1.5) y se escaneó placa completa</small></td>
               <td style="text-align:center;">
                 <div style="font-weight:600; font-size:13px;">${desglose.media_placa || 0} órdenes</div>
                 ${linkMediaPlaca ? `<div style="margin-top:3px;">${linkMediaPlaca}</div>` : ''}
               </td>
-              <td style="text-align:center; font-weight:700; color:#8b5cf6;">+${imp.media_placa || 0} pzs</td>
+              <td style="text-align:center; font-weight:700; color:var(--badge-media-text);">+${imp.media_placa || 0} pzs</td>
               <td style="text-align:right; font-weight:600;">+${(m2.media_placa || 0).toFixed(2)} m²</td>
             </tr>
             <tr>
-              <td><strong>🔀 Lotes Cruzados (Swap en patio)</strong><br><small style="color:var(--gray-6);">Placa física sí se entregó pero con lote diferente al pedido (mismo SKU)</small></td>
+              <td><strong>🔀 Lotes Cruzados (Swap en patio)</strong><br><small style="color:var(--muted);">Placa física sí se entregó pero con lote diferente al pedido (mismo SKU)</small></td>
               <td style="text-align:center;">
                 <div style="font-weight:600; font-size:13px;">${desglose.lote_cruzado || 0} casos (${imp.lote_cruzado || 0} pzs)</div>
                 ${linkCruzados ? `<div style="margin-top:3px;">${linkCruzados}</div>` : ''}
               </td>
-              <td style="text-align:center; font-weight:700; color:#d97706;">0 pzs <small style="color:var(--gray-6); font-weight:400;">(Entregado 1 a 1)</small></td>
-              <td style="text-align:right; font-weight:600; color:#d97706;">
+              <td style="text-align:center; font-weight:700; color:var(--badge-cruzado-text);">0 pzs <small style="color:var(--muted); font-weight:400;">(Entregado 1 a 1)</small></td>
+              <td style="text-align:right; font-weight:600; color:var(--badge-cruzado-text);">
                 ${Math.abs(m2.cruzados_diff || 0) > 0.001 
-                  ? `${(m2.cruzados_diff > 0 ? '+' : '') + m2.cruzados_diff.toFixed(2)} m² <small style="color:var(--gray-6);">(${(m2.cruzados_entregado || 0).toFixed(2)} m² entregados)</small>` 
-                  : '0.00 m² <small style="color:var(--gray-6);">(Mismo tamaño)</small>'}
+                  ? `${(m2.cruzados_diff > 0 ? '+' : '') + m2.cruzados_diff.toFixed(2)} m² <small style="color:var(--muted);">(${(m2.cruzados_entregado || 0).toFixed(2)} m² entregados)</small>` 
+                  : '0.00 m² <small style="color:var(--muted);">(Mismo tamaño)</small>'}
               </td>
             </tr>
             <tr>
-              <td><strong>🔄 Huérfanos Puros (Placas extra sin orden)</strong><br><small style="color:var(--gray-6);">Placas físicas escaneadas que no sustituyeron a ninguna faltante</small></td>
+              <td><strong>🔄 Huérfanos Puros (Placas extra sin orden)</strong><br><small style="color:var(--muted);">Placas físicas escaneadas que no sustituyeron a ninguna faltante</small></td>
               <td style="text-align:center;">
                 <div style="font-weight:600; font-size:13px;">${desglose.huerfanos_puros || 0} piezas</div>
                 ${linkHuerfanos ? `<div style="margin-top:3px;">${linkHuerfanos}</div>` : ''}
               </td>
-              <td style="text-align:center; font-weight:700; color:#4b5563;">+${imp.huerfanos_puros || 0} pzs</td>
-              <td style="text-align:right; font-weight:600; color:#4b5563;">+${(m2.huerfanos || 0).toFixed(2)} m²</td>
+              <td style="text-align:center; font-weight:700; color:var(--muted);">+${imp.huerfanos_puros || 0} pzs</td>
+              <td style="text-align:right; font-weight:600; color:var(--muted);">+${(m2.huerfanos || 0).toFixed(2)} m²</td>
             </tr>
             <tr>
-              <td><strong>📦 Placas de Más (Sobrantes en partida)</strong><br><small style="color:var(--gray-6);">Partidas donde se escanearon placas completas adicionales</small></td>
+              <td><strong>📦 Placas de Más (Sobrantes en partida)</strong><br><small style="color:var(--muted);">Partidas donde se escanearon placas completas adicionales</small></td>
               <td style="text-align:center;">
                 <div style="font-weight:600; font-size:13px;">${desglose.cantidad_sobrante || 0} partidas</div>
                 ${linkSobrantes ? `<div style="margin-top:3px;">${linkSobrantes}</div>` : ''}
               </td>
-              <td style="text-align:center; font-weight:700; color:#2563eb;">+${imp.sobrantes || 0} pzs</td>
+              <td style="text-align:center; font-weight:700; color:var(--badge-sobrante-text);">+${imp.sobrantes || 0} pzs</td>
               <td style="text-align:right; font-weight:600;">+${(m2.sobrante_partida || 0).toFixed(2)} m²</td>
             </tr>
             <tr>
-              <td><strong>🔻 Faltantes Físicos + Órdenes No Escaneadas</strong><br><small style="color:var(--gray-6);">${desglose.cantidad_faltante || 0} faltantes en rampa · ${desglose.linea_faltante || 0} líneas de ERP sin escaneo</small></td>
+              <td><strong>🔻 Faltantes Físicos + Órdenes No Escaneadas</strong><br><small style="color:var(--muted);">${desglose.cantidad_faltante || 0} faltantes en rampa · ${desglose.linea_faltante || 0} líneas de ERP sin escaneo</small></td>
               <td style="text-align:center;">
                 <div style="font-weight:600; font-size:13px;">${totalFaltantesCasos} partidas</div>
                 ${linkFaltantes ? `<div style="margin-top:3px;">${linkFaltantes}</div>` : ''}
               </td>
-              <td style="text-align:center; font-weight:700; color:#dc2626;">-${totalFaltantesPzs} pzs</td>
-              <td style="text-align:right; font-weight:600; color:#dc2626;">${(m2.faltante || 0) > 0 ? `-${(m2.faltante || 0).toFixed(2)} m²` : '0.00 m²'}</td>
+              <td style="text-align:center; font-weight:700; color:var(--danger);">-${totalFaltantesPzs} pzs</td>
+              <td style="text-align:right; font-weight:600; color:var(--danger);">${(m2.faltante || 0) > 0 ? `-${(m2.faltante || 0).toFixed(2)} m²` : '0.00 m²'}</td>
             </tr>
-            <tr style="background:#f8fafc; font-weight:700;">
+            <tr style="background:var(--row-even); font-weight:700;">
               <td>VARIACIÓN FÍSICA NETA TOTAL</td>
               <td style="text-align:center;">${k.total_discrepancias} incidencias</td>
-              <td style="text-align:center; color:#004a99; font-size:14px;">${diffSign}${diffPlacas} placas</td>
-              <td style="text-align:right; color:#004a99; font-size:14px;">${(m2.balance_neto ?? (m2.sobrante - m2.faltante)) >= 0 ? '+' : ''}${(m2.balance_neto ?? (m2.sobrante - m2.faltante)).toFixed(2)} m²</td>
+              <td style="text-align:center; color:var(--accent2); font-size:14px;">${diffSign}${diffPlacas} placas</td>
+              <td style="text-align:right; color:var(--accent2); font-size:14px;">${(m2.balance_neto ?? (m2.sobrante - m2.faltante)) >= 0 ? '+' : ''}${(m2.balance_neto ?? (m2.sobrante - m2.faltante)).toFixed(2)} m²</td>
             </tr>
           </tbody>
         </table>
@@ -544,7 +544,7 @@ function abrirModalConciliacion(kpiTipo) {
     }
     quickActionsEl.innerHTML = `
       <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-        <span style="font-size:12px; font-weight:600; color:var(--gray-6, #6b7280);">🔍 Filtrar en tabla:</span>
+        <span style="font-size:12px; font-weight:600; color:var(--muted);">🔍 Filtrar en tabla:</span>
         ${actionBtns.join('')}
       </div>
     `;
@@ -553,10 +553,10 @@ function abrirModalConciliacion(kpiTipo) {
     titleEl.textContent = '📐 Conciliación Matemática: Desviación Total de Área (m²)';
     bodyEl.innerHTML = `
       <div class="balance-card-summary">
-        <div style="font-size:15px; font-weight:700; color:#dc2626; margin-bottom:6px;">
+        <div style="font-size:15px; font-weight:700; color:var(--danger); margin-bottom:6px;">
           ${(m2.desviacion_total || 0).toFixed(2)} m² de Desviación Absoluta Total
         </div>
-        <div style="color:var(--gray-7, #374151); font-size:13px; line-height:1.4;">
+        <div style="color:var(--text); font-size:13px; line-height:1.4;">
           El impacto físico se compone de <strong>+${(m2.sobrante || 0).toFixed(2)} m²</strong> despachados de más (por no re-etiquetar fracciones o surtir placas extra), <strong>${Math.abs(m2.cruzados_diff || 0) > 0.001 ? ((m2.cruzados_diff > 0 ? '+' : '') + m2.cruzados_diff.toFixed(2) + ' m²') : '0.00 m²'}</strong> de variación por cortes en lotes cruzados y <strong>-${(m2.faltante || 0).toFixed(2)} m²</strong> de material pendiente/omitido.
         </div>
       </div>
@@ -576,7 +576,7 @@ function abrirModalConciliacion(kpiTipo) {
                 <div style="font-weight:600; font-size:13px;">${desglose.media_placa || 0}</div>
                 ${(desglose.media_placa || 0) > 0 ? `<div style="margin-top:3px;"><button class="tabla-filtro-link" onclick="cerrarConciliacion(); filtrarPorSubKpi('media_placa');">Ver ↗</button></div>` : ''}
               </td>
-              <td style="text-align:right; font-weight:600; color:#8b5cf6;">+${(m2.media_placa || 0).toFixed(2)} m²</td>
+              <td style="text-align:right; font-weight:600; color:var(--badge-media-text);">+${(m2.media_placa || 0).toFixed(2)} m²</td>
             </tr>
             <tr>
               <td>🔀 Lotes Cruzados (Variación dimensional por corte)</td>
@@ -584,22 +584,22 @@ function abrirModalConciliacion(kpiTipo) {
                 <div style="font-weight:600; font-size:13px;">${desglose.lote_cruzado || 0}</div>
                 ${(desglose.lote_cruzado || 0) > 0 ? `<div style="margin-top:3px;"><button class="tabla-filtro-link" onclick="cerrarConciliacion(); filtrarPorSubKpi('lote_cruzado');">Ver ↗</button></div>` : ''}
               </td>
-              <td style="text-align:right; font-weight:600; color:#d97706;">
+              <td style="text-align:right; font-weight:600; color:var(--badge-cruzado-text);">
                 ${Math.abs(m2.cruzados_diff || 0) > 0.001 
-                  ? `${(m2.cruzados_diff > 0 ? '+' : '') + m2.cruzados_diff.toFixed(2)} m² <small style="color:var(--gray-6);">(${(m2.cruzados_entregado || 0).toFixed(2)} m² entregados)</small>` 
+                  ? `${(m2.cruzados_diff > 0 ? '+' : '') + m2.cruzados_diff.toFixed(2)} m² <small style="color:var(--muted);">(${(m2.cruzados_entregado || 0).toFixed(2)} m² entregados)</small>` 
                   : '0.00 m² (Mismo tamaño)'}
               </td>
             </tr>
             <tr>
               <td>
                 <strong>📦 Placas de Más (Sobrantes en partida + Huérfanas)</strong><br>
-                <small style="color:var(--gray-6);">${desglose.cantidad_sobrante || 0} en partidas esperadas (${(m2.sobrante_partida || 0).toFixed(2)} m²) · ${desglose.huerfanos_puros || 0} huérfanas sin orden (${(m2.huerfanos || 0).toFixed(2)} m²)</small>
+                <small style="color:var(--muted);">${desglose.cantidad_sobrante || 0} en partidas esperadas (${(m2.sobrante_partida || 0).toFixed(2)} m²) · ${desglose.huerfanos_puros || 0} huérfanas sin orden (${(m2.huerfanos || 0).toFixed(2)} m²)</small>
               </td>
               <td style="text-align:center;">
                 <div style="font-weight:600; font-size:13px;">${totalSobrantesCasos}</div>
                 ${totalSobrantesCasos > 0 ? `<div style="margin-top:3px;"><button class="tabla-filtro-link" onclick="cerrarConciliacion(); filtrarPorSubKpi('sobrantes_grupo');">Ver ↗</button></div>` : ''}
               </td>
-              <td style="text-align:right; font-weight:600; color:#2563eb;">+${(m2.sobrante_puro || 0).toFixed(2)} m²</td>
+              <td style="text-align:right; font-weight:600; color:var(--badge-sobrante-text);">+${(m2.sobrante_puro || 0).toFixed(2)} m²</td>
             </tr>
             <tr>
               <td>🔻 Faltantes Físicos + Líneas Omitidas en NetSuite</td>
@@ -607,12 +607,12 @@ function abrirModalConciliacion(kpiTipo) {
                 <div style="font-weight:600; font-size:13px;">${totalFaltantesCasos}</div>
                 ${totalFaltantesCasos > 0 ? `<div style="margin-top:3px;"><button class="tabla-filtro-link" onclick="cerrarConciliacion(); filtrarPorSubKpi('faltantes_grupo');">Ver ↗</button></div>` : ''}
               </td>
-              <td style="text-align:right; font-weight:600; color:#dc2626;">${(m2.faltante || 0) > 0 ? `-${(m2.faltante || 0).toFixed(2)} m²` : '0.00 m²'}</td>
+              <td style="text-align:right; font-weight:600; color:var(--danger);">${(m2.faltante || 0) > 0 ? `-${(m2.faltante || 0).toFixed(2)} m²` : '0.00 m²'}</td>
             </tr>
-            <tr style="background:#f8fafc; font-weight:700;">
+            <tr style="background:var(--row-even); font-weight:700;">
               <td>DESVIACIÓN TOTAL ACUMULADA</td>
               <td style="text-align:center;">—</td>
-              <td style="text-align:right; color:#dc2626; font-size:14px;">${(m2.desviacion_total || 0).toFixed(2)} m²</td>
+              <td style="text-align:right; color:var(--danger); font-size:14px;">${(m2.desviacion_total || 0).toFixed(2)} m²</td>
             </tr>
           </tbody>
         </table>
@@ -634,7 +634,7 @@ function abrirModalConciliacion(kpiTipo) {
     }
     quickActionsEl.innerHTML = `
       <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-        <span style="font-size:12px; font-weight:600; color:var(--gray-6, #6b7280);">🔍 Filtrar en tabla:</span>
+        <span style="font-size:12px; font-weight:600; color:var(--muted);">🔍 Filtrar en tabla:</span>
         ${actionBtns.join('')}
       </div>
     `;
@@ -699,7 +699,7 @@ function renderMalSacadas() {
     const isOnlyCruzados = !isCancelada && (i.tipos_error || []).length === 1 && i.tipos_error[0] === 'lote_cruzado';
 
     const semaforoBadge = isCancelada
-      ? '<span class="tipo-badge" style="background:#fee2e2; color:#b91c1c; font-weight:700;">🚨 Alerta ERP</span>'
+      ? '<span class="tipo-badge error" style="font-weight:700;">🚨 Alerta ERP</span>'
       : (isOnlyCruzados
         ? '<span class="tipo-badge warn" style="font-weight:700;">🟡 Discrepancia Lote</span>'
         : '<span class="tipo-badge error" style="font-weight:700;">🔴 Error Surtido</span>');
@@ -715,7 +715,7 @@ function renderMalSacadas() {
       <td>${escapeHTML(i.trandate || '—')}</td>
       <td>${escapeHTML(i.so || '—')}</td>
       <td>${escapeHTML(i.location || '—')}</td>
-      <td style="text-align:center; font-weight:700; color:#dc2626;">${totalIncidencias}</td>
+      <td style="text-align:center; font-weight:700; color:var(--danger);">${totalIncidencias}</td>
       <td style="text-align:center;">${semaforoBadge}</td>
       <td>${tiposBadges}</td>
       <td style="text-align:center;"><button class="btn-detalle" onclick="verDetalle('${i.tranid}')">Ver detalle</button></td>
@@ -790,7 +790,7 @@ function renderDetalle(ifDoc) {
   const isCancelada = ifDoc.status === 'cancelada_erp' || (ifDoc.discrepancias || []).some(d => d.tipo === 'if_no_encontrada');
   const allCruzados = (ifDoc.discrepancias && ifDoc.discrepancias.length > 0) && ifDoc.discrepancias.every(d => d.es_cruzado);
   const statusBadge = isCancelada
-    ? '<span class="tipo-badge" style="background:#fee2e2; color:#b91c1c; font-weight:700;">🚨 Cancelada en NetSuite</span>'
+    ? '<span class="tipo-badge error" style="font-weight:700;">🚨 Cancelada en NetSuite</span>'
     : (allCruzados
       ? '<span class="tipo-badge warn" style="font-weight:700;">🟡 Discrepancia de Lote (Mercancía entregada)</span>'
       : ((ifDoc.discrepancias && ifDoc.discrepancias.length > 0)
@@ -848,17 +848,17 @@ function renderDetalle(ifDoc) {
     const escPlacas = l.placas_escaneadas ?? 0;
 
     let diagnosticoBadge = '<span class="tipo-badge ok">🟢 OK</span>';
-    let planAccionTexto = '<span style="color:var(--gray-5, #9ca3af);">—</span>';
+    let planAccionTexto = '<span style="color:var(--muted);">—</span>';
 
     if (discs.length > 0) {
       diagnosticoBadge = discs.map(d => badgeTipo(d.es_cruzado ? 'lote_cruzado' : d.tipo)).join(' ');
       planAccionTexto = discs.map(d => `<div style="margin-bottom:4px; font-weight:500;">${escapeHTML(d.plan_accion || d.mensaje)}</div>`).join('');
     } else if (isCancelada) {
-      diagnosticoBadge = '<span class="tipo-badge" style="background:#fee2e2; color:#b91c1c; font-weight:600;">🚨 No en ERP</span>';
+      diagnosticoBadge = '<span class="tipo-badge error" style="font-weight:600;">🚨 No en ERP</span>';
       planAccionTexto = 'IF cancelada en NetSuite. Notificar a facturación / retorno.';
     }
 
-    const medidasTexto = parsedArea > 0 ? `<div style="font-size:11px; color:var(--gray-5, #6b7280);">${parsedArea.toFixed(2)} m²/pza</div>` : '';
+    const medidasTexto = parsedArea > 0 ? `<div style="font-size:11px; color:var(--muted);">${parsedArea.toFixed(2)} m²/pza</div>` : '';
 
     html.push(`
       <tr>
@@ -869,14 +869,14 @@ function renderDetalle(ifDoc) {
         </td>
         <td style="text-align:center;">
           <div style="font-weight:600;">${espPlacas} ${typeof espPlacas === 'number' ? (espPlacas === 1 ? 'pza' : 'pzs') : ''}</div>
-          <div style="font-size:11px; color:var(--gray-5, #6b7280);">${m2Esp}</div>
+          <div style="font-size:11px; color:var(--muted);">${m2Esp}</div>
         </td>
         <td style="text-align:center;">
           <div style="font-weight:700;">${escPlacas} ${escPlacas === 1 ? 'pza' : 'pzs'}</div>
-          <div style="font-size:11px; color:var(--gray-5, #6b7280);">${m2Esc}</div>
+          <div style="font-size:11px; color:var(--muted);">${m2Esc}</div>
         </td>
         <td style="text-align:center;">${diagnosticoBadge}</td>
-        <td style="font-size:12px; color:var(--gray-8, #1f2937); line-height:1.4;">${planAccionTexto}</td>
+        <td style="font-size:12px; color:var(--text); line-height:1.4;">${planAccionTexto}</td>
       </tr>
     `);
   });
@@ -890,22 +890,22 @@ function renderDetalle(ifDoc) {
     const planText = discs.map(x => `<div style="margin-bottom:4px; font-weight:500;">${escapeHTML(x.plan_accion || x.mensaje)}</div>`).join('');
     const parsedArea = d.area_placa_m2 || 0;
     const m2Esc = parsedArea > 0 ? `+${parsedArea.toFixed(2)}m²` : '—';
-    const medidasTexto = parsedArea > 0 ? `<div style="font-size:11px; color:var(--gray-5, #6b7280);">${parsedArea.toFixed(2)} m²/pza</div>` : '';
+    const medidasTexto = parsedArea > 0 ? `<div style="font-size:11px; color:var(--muted);">${parsedArea.toFixed(2)} m²/pza</div>` : '';
 
     html.push(`
-      <tr style="background:#fffbeb;">
+      <tr style="background:var(--badge-warn-bg);">
         <td><strong>${escapeHTML(skuStr)}</strong></td>
         <td>
           <div>${escapeHTML(loteStr)}</div>
           ${medidasTexto}
         </td>
-        <td style="text-align:center; color:var(--gray-5);">0 pzs</td>
+        <td style="text-align:center; color:var(--muted);">0 pzs</td>
         <td style="text-align:center;">
-          <div style="font-weight:700; color:#dc2626;">+1 pza</div>
-          <div style="font-size:11px; color:#dc2626; font-weight:600;">${m2Esc}</div>
+          <div style="font-weight:700; color:var(--danger);">+1 pza</div>
+          <div style="font-size:11px; color:var(--danger); font-weight:600;">${m2Esc}</div>
         </td>
         <td style="text-align:center;">${diagBadge}</td>
-        <td style="font-size:12px; color:var(--gray-8); line-height:1.4;">${planText}</td>
+        <td style="font-size:12px; color:var(--text); line-height:1.4;">${planText}</td>
       </tr>
     `);
   });
@@ -934,12 +934,28 @@ async function cargarTopArticulos() {
   }
 }
 
+let lastChartExactitudArgs = null;
+let lastChartTopArticulosArgs = null;
+
+function getChartThemeColors() {
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  return {
+    isDark,
+    surface: isDark ? '#1a1f26' : '#ffffff',
+    text: isDark ? '#e5e7eb' : '#222222',
+    muted: isDark ? '#9ca3af' : '#6b7280',
+    grid: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)'
+  };
+}
+
 function renderChartExactitud(ok, errores, tasa) {
+  lastChartExactitudArgs = [ok, errores, tasa];
   const ctx = $('chartExactitud');
   if (!ctx) return;
 
   $('tasaExactitudTexto').textContent = (tasa || 0).toFixed(1) + '%';
 
+  const theme = getChartThemeColors();
   if (chartExactitud) chartExactitud.destroy();
   chartExactitud = new Chart(ctx, {
     type: 'doughnut',
@@ -949,7 +965,7 @@ function renderChartExactitud(ok, errores, tasa) {
         data: [ok, errores],
         backgroundColor: ['#10b981', '#dc2626'],
         borderWidth: 2,
-        borderColor: '#fff'
+        borderColor: theme.surface
       }]
     },
     options: {
@@ -959,7 +975,7 @@ function renderChartExactitud(ok, errores, tasa) {
       plugins: {
         legend: {
           position: 'bottom',
-          labels: { font: { size: 11 }, padding: 6, boxWidth: 12 }
+          labels: { font: { size: 11 }, padding: 6, boxWidth: 12, color: theme.text }
         },
         tooltip: {
           callbacks: {
@@ -976,6 +992,7 @@ function renderChartExactitud(ok, errores, tasa) {
 }
 
 function renderChartTopArticulos(items) {
+  lastChartTopArticulosArgs = [items];
   const ctx = $('chartTopArticulos');
   if (!ctx) return;
 
@@ -989,6 +1006,7 @@ function renderChartTopArticulos(items) {
   const subtitleEl = $('topArticulosTotal');
   if (subtitleEl) subtitleEl.textContent = total > 0 ? `${total} placas` : '–';
 
+  const theme = getChartThemeColors();
   chartTopArticulos = new Chart(ctx, {
     type: 'bar',
     data: {
@@ -1014,16 +1032,28 @@ function renderChartTopArticulos(items) {
       scales: {
         y: {
           beginAtZero: true,
-          ticks: { precision: 0, font: { size: 11 } },
-          title: { display: true, text: 'Placas', font: { size: 10 } }
+          ticks: { precision: 0, font: { size: 11 }, color: theme.muted },
+          grid: { color: theme.grid },
+          title: { display: true, text: 'Placas', font: { size: 10 }, color: theme.muted }
         },
         x: {
-          ticks: { font: { size: 10 }, maxRotation: 30, minRotation: 0 }
+          ticks: { font: { size: 10 }, maxRotation: 30, minRotation: 0, color: theme.muted },
+          grid: { color: theme.grid }
         }
       }
     }
   });
 }
+
+// Reaccionar a cambios en vivo de tema sin recargar
+window.addEventListener('wms-theme-change', () => {
+  if (lastChartExactitudArgs && chartExactitud) {
+    renderChartExactitud(...lastChartExactitudArgs);
+  }
+  if (lastChartTopArticulosArgs && chartTopArticulos) {
+    renderChartTopArticulos(...lastChartTopArticulosArgs);
+  }
+});
 
 // =================== INIT ===================
 document.addEventListener('DOMContentLoaded', async () => {
