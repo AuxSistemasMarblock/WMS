@@ -569,6 +569,129 @@
 .tipo-badge.media   { background: var(--badge-media-bg); color: var(--badge-media-text); border: 1px solid var(--badge-media-border); font-weight: 700; }
 .tipo-badge.sobrante{ background: var(--badge-sobrante-bg); color: var(--badge-sobrante-text); border: 1px solid var(--badge-sobrante-border); font-weight: 700; }
 
+/* ─────────────────────────────────────────────
+   JUSTIFICACIÓN: badges de estado de caso
+   ───────────────────────────────────────────── */
+
+.just-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 11.5px;
+  font-weight: 700;
+  margin-right: 4px;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+button.just-badge {
+  cursor: pointer;
+  font-family: inherit;
+  line-height: inherit;
+  transition: filter 0.15s ease, box-shadow 0.15s ease;
+}
+
+button.just-badge:hover {
+  filter: brightness(0.95);
+  box-shadow: var(--shadow-1);
+}
+
+.just-badge.justificado {
+  background: var(--badge-info-bg);
+  color: var(--badge-info-text);
+  border-color: color-mix(in srgb, var(--badge-info-text) 35%, transparent);
+}
+
+.just-badge.en-revision {
+  background: var(--badge-warn-bg);
+  color: var(--badge-warn-text);
+  border-color: color-mix(in srgb, var(--badge-warn-text) 35%, transparent);
+}
+
+.btn-case-link {
+  display: inline-block;
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffffff;
+  background: var(--accent2);
+  text-decoration: none;
+  transition: filter 0.15s ease;
+}
+
+.btn-case-link:hover {
+  filter: brightness(0.92);
+}
+
+/* Sub-bloque "Errores por estado" del modal de conciliación */
+.estado-desglose-block {
+  margin-top: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: var(--gray-1);
+}
+
+.estado-desglose-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+.estado-desglose-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.estado-desglose-item {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  text-align: center;
+  background: var(--surface-2);
+  font-family: inherit;
+}
+
+button.estado-desglose-item {
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+button.estado-desglose-item:hover {
+  border-color: var(--accent2);
+  box-shadow: var(--shadow-1);
+  transform: translateY(-1px);
+}
+
+.estado-desglose-item.active-filter {
+  border-color: var(--accent2) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent2) 25%, transparent);
+}
+
+.estado-desglose-num {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.1;
+}
+
+.estado-desglose-lbl {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.estado-desglose-item.en-revision .estado-desglose-num { color: var(--badge-warn-text); }
+.estado-desglose-item.justificado .estado-desglose-num { color: var(--badge-info-text); }
+
 /* Modal detalle consolidado */
 .detalle-modal-header {
   background: var(--gray-1);
