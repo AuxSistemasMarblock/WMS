@@ -85,6 +85,91 @@ function badgeTipo(tipo) {
   }
 }
 
+// =================== JUSTIFICACIONES (ESTADO DE CASO) ===================
+const JUSTIFICACIONES_CACHE = {};
+
+function estadoJustMeta(estado) {
+  if (estado === 'justificada') return { clase: 'justificado', label: 'Justificado', icon: '🔵' };
+  if (estado === 'en_revision') return { clase: 'en-revision', label: 'En revisión', icon: '🟡' };
+  return null;
+}
+
+function registrarJustificacion(j) {
+  const key = j.caso_id != null ? 'caso_' + j.caso_id : 'estado_' + j.estado;
+  JUSTIFICACIONES_CACHE[key] = j;
+  return key;
+}
+
+function badgeJustificacion(j) {
+  const meta = estadoJustMeta(j && j.estado);
+  if (!meta) return '';
+  const key = registrarJustificacion(j);
+  const folioTxt = j.folio ? ` · ${escapeHTML(j.folio)}` : '';
+  if (j.caso_id != null) {
+    return `<button type="button" class="just-badge ${meta.clase}" onclick="verCasoJustificado('${key}')" title="Ver caso de justificación">${meta.icon} ${meta.label}${folioTxt} ↗</button>`;
+  }
+  return `<span class="just-badge ${meta.clase}">${meta.icon} ${meta.label}${folioTxt}</span>`;
+}
+
+function badgesEstadoDeLista(discs) {
+  const vistos = new Set();
+  const parts = [];
+  (discs || []).forEach(d => {
+    const j = d && d.justificacion;
+    const meta = estadoJustMeta(j && j.estado);
+    if (!meta) return;
+    const dedupe = j.caso_id != null ? 'c:' + j.caso_id : 'e:' + j.estado;
+    if (vistos.has(dedupe)) return;
+    vistos.add(dedupe);
+    parts.push(badgeJustificacion(j));
+  });
+  return parts.join(' ');
+}
+
+const TIPOS_JUSTIFICACION_NOMBRE = {
+  1: 'Error de captura en Sheets/escaneo',
+  2: 'IF cancelada o reabierta en NetSuite',
+  3: 'Material no localizado físicamente',
+  4: 'Cambio de ubicación autorizado',
+  5: 'Falla de escáner/red/sistema',
+  6: 'Ajuste de inventario en curso',
+  7: 'Otro (requiere detalle)'
+};
+
+function nombreTipoJustificacion(tipo) {
+  if (tipo == null || tipo === '') return '—';
+  const s = String(tipo);
+  if (/^\d+$/.test(s)) return TIPOS_JUSTIFICACION_NOMBRE[Number(s)] || ('Tipo #' + s);
+  return s.replace(/_/g, ' ');
+}
+
+function verCasoJustificado(key) {
+  const j = JUSTIFICACIONES_CACHE[key];
+  if (!j) return;
+  const meta = estadoJustMeta(j.estado) || { clase: '', label: j.estado || '—' };
+  const texto = j.justificacion || j.texto || j.descripcion || null;
+  const fecha = j.fecha_revision || j.revisado_at || j.fecha_revisado || null;
+  const enlace = j.caso_id != null
+    ? `<a class="btn-case-link" href="casos.html?caso=${encodeURIComponent(j.caso_id)}">📂 Abrir en Gestor de Casos ↗</a>`
+    : '';
+
+  $('casoBody').innerHTML = `
+    <div class="detalle-header-grid" style="grid-template-columns:1fr; gap:10px;">
+      <div><span class="label">Folio:</span> <strong class="val">${escapeHTML(j.folio || '—')}</strong></div>
+      <div><span class="label">Tipo de justificación:</span> <span class="val">${escapeHTML(nombreTipoJustificacion(j.tipo))}</span></div>
+      <div><span class="label">Justificación:</span> <span class="val">${texto ? escapeHTML(texto) : '<span style="color:var(--muted); font-weight:400;">No disponible en el payload actual</span>'}</span></div>
+      <div><span class="label">Estado:</span> <span class="just-badge ${meta.clase}">${escapeHTML(meta.label)}</span></div>
+      ${fecha ? `<div><span class="label">Fecha de revisión:</span> <span class="val">${escapeHTML(String(fecha))}</span></div>` : ''}
+    </div>
+    ${enlace ? `<div style="margin-top:16px;">${enlace}</div>` : ''}
+  `;
+  $('casoModal').style.display = 'flex';
+}
+
+function cerrarCaso() {
+  $('casoModal').style.display = 'none';
+}
+
 // =================== TABLAS: ORDENAMIENTO Y PAGINACIÓN ===================
 function valorOrdenable(row, key) {
   if (key === 'errores') return row.discrepancias ? row.discrepancias.length : 0;
@@ -365,6 +450,9 @@ async function cargarKPIs() {
 // =================== INTERACTIVIDAD: SINCRONIZACIÓN Y FILTRO SUB-KPIS ===================
 function syncSubKpiHighlight(filtro) {
   document.querySelectorAll('.sub-kpi-card').forEach(c => c.classList.remove('active-filter'));
+  document.querySelectorAll('.estado-filter-btn').forEach(b => {
+    b.classList.toggle('active-filter', b.dataset.estado === filtro);
+  });
   if (filtro === 'media_placa' && $('subKpiMediaPlaca')) $('subKpiMediaPlaca').classList.add('active-filter');
   else if (filtro === 'lote_cruzado' && $('subKpiCruzados')) $('subKpiCruzados').classList.add('active-filter');
   else if ((filtro === 'sobrantes_grupo' || filtro === 'cantidad_sobrante' || filtro === 'sku_lote_no_esperado') && $('subKpiSobrantes')) $('subKpiSobrantes').classList.add('active-filter');
@@ -397,7 +485,9 @@ function filtrarPorSubKpi(tipo) {
     'faltantes_grupo': 'Faltantes / Omitidas (Todos)',
     'linea_faltante': 'Líneas Omitidas',
     'cantidad_faltante': 'Faltante físico',
-    'sku_lote_no_esperado': 'Huérfanas Puras'
+    'sku_lote_no_esperado': 'Huérfanas Puras',
+    'justificadas_grupo': 'Errores Justificados',
+    'en_revision_grupo': 'Errores En Revisión'
   };
   showToast(`Filtrando tabla por: ${nombres[tipo] || tipo}`, 'info');
 }
@@ -640,7 +730,34 @@ function abrirModalConciliacion(kpiTipo) {
     `;
   }
 
+  bodyEl.insertAdjacentHTML('beforeend', htmlErroresPorEstado());
   $('conciliacionModal').style.display = 'flex';
+}
+
+function htmlErroresPorEstado() {
+  const dj = (state.currentKPIs && state.currentKPIs.desglose_justificacion) || {};
+  const abiertas = dj.abiertas || 0;
+  const enRevision = dj.en_revision || 0;
+  const justificadas = dj.justificadas || 0;
+  return `
+    <div class="estado-desglose-block">
+      <div class="estado-desglose-title">🗂️ Errores por estado</div>
+      <div class="estado-desglose-grid">
+        <div class="estado-desglose-item abierta">
+          <div class="estado-desglose-num">${abiertas}</div>
+          <div class="estado-desglose-lbl">Abiertos</div>
+        </div>
+        <button type="button" class="estado-desglose-item en-revision estado-filter-btn" data-estado="en_revision_grupo" onclick="cerrarConciliacion(); filtrarPorSubKpi('en_revision_grupo')">
+          <div class="estado-desglose-num">${enRevision}</div>
+          <div class="estado-desglose-lbl">En revisión ⬎</div>
+        </button>
+        <button type="button" class="estado-desglose-item justificado estado-filter-btn" data-estado="justificadas_grupo" onclick="cerrarConciliacion(); filtrarPorSubKpi('justificadas_grupo')">
+          <div class="estado-desglose-num">${justificadas}</div>
+          <div class="estado-desglose-lbl">Justificados ⬎</div>
+        </button>
+      </div>
+    </div>
+  `;
 }
 
 function cerrarConciliacion() {
@@ -674,6 +791,9 @@ function filtrarTablaMalSacadas() {
     t.filtradas = t.data.filter(i => (i.tipos_error || []).some(te => te === 'linea_faltante' || te === 'cantidad_faltante'));
   } else if (filtro === 'sobrantes_grupo') {
     t.filtradas = t.data.filter(i => (i.tipos_error || []).some(te => te === 'cantidad_sobrante' || te === 'sku_lote_no_esperado'));
+  } else if (filtro === 'justificadas_grupo' || filtro === 'en_revision_grupo') {
+    const estado = filtro === 'justificadas_grupo' ? 'justificada' : 'en_revision';
+    t.filtradas = t.data.filter(i => (i.discrepancias || []).some(d => d && d.justificacion && d.justificacion.estado === estado));
   } else {
     t.filtradas = t.data.filter(i => (i.tipos_error || []).includes(filtro));
   }
@@ -709,6 +829,7 @@ function renderMalSacadas() {
     const totalIncidencias = cruzadasCount + noCruzadasCount;
 
     const tiposBadges = (i.tipos_error || []).map(t => badgeTipo(t)).join(' ');
+    const justBadges = badgesEstadoDeLista(i.discrepancias);
     const tr = el('tr');
     tr.innerHTML = `
       <td><strong>${escapeHTML(i.tranid)}</strong></td>
@@ -717,7 +838,7 @@ function renderMalSacadas() {
       <td>${escapeHTML(i.location || '—')}</td>
       <td style="text-align:center; font-weight:700; color:var(--danger);">${totalIncidencias}</td>
       <td style="text-align:center;">${semaforoBadge}</td>
-      <td>${tiposBadges}</td>
+      <td>${tiposBadges}${justBadges ? ' ' + justBadges : ''}</td>
       <td style="text-align:center;"><button class="btn-detalle" onclick="verDetalle('${i.tranid}')">Ver detalle</button></td>
     `;
     tbody.appendChild(tr);
@@ -851,7 +972,8 @@ function renderDetalle(ifDoc) {
     let planAccionTexto = '<span style="color:var(--muted);">—</span>';
 
     if (discs.length > 0) {
-      diagnosticoBadge = discs.map(d => badgeTipo(d.es_cruzado ? 'lote_cruzado' : d.tipo)).join(' ');
+      const justBadge = badgesEstadoDeLista(discs);
+      diagnosticoBadge = discs.map(d => badgeTipo(d.es_cruzado ? 'lote_cruzado' : d.tipo)).join(' ') + (justBadge ? ' ' + justBadge : '');
       planAccionTexto = discs.map(d => `<div style="margin-bottom:4px; font-weight:500;">${escapeHTML(d.plan_accion || d.mensaje)}</div>`).join('');
     } else if (isCancelada) {
       diagnosticoBadge = '<span class="tipo-badge error" style="font-weight:600;">🚨 No en ERP</span>';
@@ -887,6 +1009,7 @@ function renderDetalle(ifDoc) {
     const skuStr = d.sku || '—';
     const loteStr = d.lote || '—';
     const diagBadge = discs.map(x => badgeTipo(x.es_cruzado ? 'lote_cruzado' : x.tipo)).join(' ');
+    const justBadgeOrf = badgesEstadoDeLista(discs);
     const planText = discs.map(x => `<div style="margin-bottom:4px; font-weight:500;">${escapeHTML(x.plan_accion || x.mensaje)}</div>`).join('');
     const parsedArea = d.area_placa_m2 || 0;
     const m2Esc = parsedArea > 0 ? `+${parsedArea.toFixed(2)}m²` : '—';
@@ -904,7 +1027,7 @@ function renderDetalle(ifDoc) {
           <div style="font-weight:700; color:var(--danger);">+1 pza</div>
           <div style="font-size:11px; color:var(--danger); font-weight:600;">${m2Esc}</div>
         </td>
-        <td style="text-align:center;">${diagBadge}</td>
+        <td style="text-align:center;">${diagBadge}${justBadgeOrf ? ' ' + justBadgeOrf : ''}</td>
         <td style="font-size:12px; color:var(--text); line-height:1.4;">${planText}</td>
       </tr>
     `);

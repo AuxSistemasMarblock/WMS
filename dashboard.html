@@ -16,7 +16,7 @@
 
   <link rel="stylesheet" href="css/variables.css?v=150" />
   <link rel="stylesheet" href="css/styles.css?v=150" />
-  <link rel="stylesheet" href="css/dashboard.css?v=150" />
+  <link rel="stylesheet" href="css/dashboard.css?v=151" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
 </head>
 <body>
@@ -208,6 +208,8 @@
           <option value="linea_faltante">📋 Líneas Omitidas / No escaneadas</option>
           <option value="if_no_encontrada">🚨 Canceladas en ERP (Fugas)</option>
           <option value="ubicacion_incorrecta">📍 Ubicación incorrecta</option>
+          <option value="justificadas_grupo">🔵 Justificados</option>
+          <option value="en_revision_grupo">🟡 En revisión</option>
         </select>
       </div>
     </div>
@@ -289,6 +291,19 @@
     </div>
   </div>
 
+  <!-- MODAL 3: DETALLE DE CASO DE JUSTIFICACIÓN (SOLO LECTURA) -->
+  <div id="casoModal" class="confirm-modal" style="display: none;">
+    <div class="confirm-card" style="max-width: 560px; text-align: left; width: 95%;">
+      <div style="border-bottom:1px solid var(--border); padding-bottom:12px; margin-bottom:16px;">
+        <h3 class="confirm-title" style="margin:0;">📄 Caso de Justificación</h3>
+      </div>
+      <div id="casoBody"></div>
+      <div class="confirm-actions" style="margin-top: 16px; display:flex; justify-content:flex-end;">
+        <button class="btn btn-ghost" onclick="cerrarCaso()">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
 </main>
 
 <div class="toast" id="toast"></div>
@@ -298,6 +313,6 @@
 <script src="js/config.js?v=150"></script>
 <script src="js/nav.js?v=150"></script>
 <script src="js/footer.js?v=150"></script>
-<script src="js/dashboard/app.js?v=150"></script>
+<script src="js/dashboard/app.js?v=151"></script>
 </body>
 </html>
