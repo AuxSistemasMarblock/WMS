@@ -38,6 +38,7 @@ app.use('/validate', require('./routes/validation'));
 app.use('/webhook', require('./routes/webhook'));
 app.use('/api/dashboard', require('./routes/dashboard'));
 app.use('/api/etiquetas', require('./routes/etiquetas'));
+app.use('/api/casos', require('./routes/casos'));
 
 // Error handling
 app.use((err, req, res, next) => {
