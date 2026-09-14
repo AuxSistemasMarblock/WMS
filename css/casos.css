@@ -1,0 +1,569 @@
+/* ================================
+   WMS · Gestor de Casos — Estilos propios
+   Reutiliza variables.css, styles.css y dashboard.css.
+   ================================ */
+
+.casos-main {
+  padding-bottom: 32px;
+}
+
+/* ─────────────────────────────────────────────
+   PESTAÑAS (tabs por rol)
+   ───────────────────────────────────────────── */
+
+.casos-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 16px 20px 0 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.casos-tab {
+  appearance: none;
+  border: 1px solid transparent;
+  border-bottom: none;
+  background: transparent;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 10px 18px;
+  border-radius: 8px 8px 0 0;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+  position: relative;
+  bottom: -1px;
+}
+
+.casos-tab:hover {
+  background: var(--gray-1);
+  color: var(--text);
+}
+
+.casos-tab.active {
+  background: var(--surface);
+  border-color: var(--border);
+  border-bottom: 1px solid var(--surface);
+  color: var(--accent2);
+}
+
+.casos-tab .tab-count {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: var(--gray-2);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* ─────────────────────────────────────────────
+   BARRA DE ACCIONES SOBRE TABLAS
+   ───────────────────────────────────────────── */
+
+.table-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.table-actions .filter-select {
+  min-width: 140px;
+}
+
+/* ─────────────────────────────────────────────
+   TABLAS: checkboxes y celdas
+   ───────────────────────────────────────────── */
+
+.casos-table input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--accent2);
+}
+
+.casos-table input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.table-wrap table.casos-table {
+  table-layout: auto;
+}
+
+.casos-table tbody td {
+  vertical-align: middle;
+}
+
+.cell-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.cell-center {
+  text-align: center;
+}
+
+.cell-muted {
+  color: var(--muted);
+}
+
+.cell-tranid {
+  font-family: 'IBM Plex Mono', monospace;
+  font-weight: 600;
+  color: var(--accent2);
+}
+
+/* ─────────────────────────────────────────────
+   BADGES DE ESTADO DE CASO / DISCREPANCIA
+   ───────────────────────────────────────────── */
+
+.caso-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 11.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.caso-badge.pendiente {
+  background: var(--badge-warn-bg);
+  color: var(--badge-warn-text);
+  border-color: color-mix(in srgb, var(--badge-warn-text) 35%, transparent);
+}
+
+.caso-badge.aprobado {
+  background: var(--badge-ok-bg);
+  color: var(--badge-ok-text);
+  border-color: color-mix(in srgb, var(--badge-ok-text) 35%, transparent);
+}
+
+.caso-badge.rechazado {
+  background: var(--badge-error-bg);
+  color: var(--badge-error-text);
+  border-color: color-mix(in srgb, var(--badge-error-text) 35%, transparent);
+}
+
+.estado-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--gray-2);
+  color: var(--text);
+}
+
+.estado-pill.abierta {
+  background: var(--badge-error-bg);
+  color: var(--badge-error-text);
+}
+
+.estado-pill.en_revision {
+  background: var(--badge-warn-bg);
+  color: var(--badge-warn-text);
+}
+
+.estado-pill.justificada {
+  background: var(--badge-ok-bg);
+  color: var(--badge-ok-text);
+}
+
+/* ─────────────────────────────────────────────
+   MODALES AUXILIARES (anchos)
+   ───────────────────────────────────────────── */
+
+.confirm-card.casos-modal-lg {
+  max-width: 640px;
+  text-align: left;
+  width: 95%;
+}
+
+.confirm-card.casos-modal-xl {
+  max-width: 980px;
+  text-align: left;
+  width: 96%;
+}
+
+.modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+}
+
+.modal-head .confirm-title {
+  margin: 0;
+}
+
+.modal-scroll {
+  max-height: 68vh;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+/* ─────────────────────────────────────────────
+   FORMULARIOS DE CASO
+   ───────────────────────────────────────────── */
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.form-field > label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.form-field .req {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.form-field select,
+.form-field textarea,
+.form-field input[type="text"] {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+}
+
+.form-field textarea {
+  min-height: 96px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.form-field select:focus,
+.form-field textarea:focus,
+.form-field input[type="text"]:focus {
+  outline: 2px solid color-mix(in srgb, var(--accent2) 25%, transparent);
+  border-color: var(--accent2);
+}
+
+.form-hint {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.form-error {
+  font-size: 12.5px;
+  color: var(--danger);
+  font-weight: 600;
+  min-height: 16px;
+}
+
+/* ─────────────────────────────────────────────
+   RESUMEN DE SELECCIÓN (modal justificar)
+   ───────────────────────────────────────────── */
+
+.resumen-seleccion {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--gray-1);
+  padding: 10px 12px;
+  max-height: 180px;
+  overflow-y: auto;
+  margin-bottom: 14px;
+}
+
+.resumen-seleccion .resumen-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.resumen-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px dashed var(--border);
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.resumen-item:last-child {
+  border-bottom: none;
+}
+
+.resumen-item .resumen-if {
+  font-family: 'IBM Plex Mono', monospace;
+  font-weight: 600;
+  color: var(--accent2);
+  min-width: 84px;
+}
+
+/* ─────────────────────────────────────────────
+   DETALLE DE CASO
+   ───────────────────────────────────────────── */
+
+.caso-resumen {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px 18px;
+  margin-bottom: 16px;
+}
+
+.caso-resumen .label {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.caso-resumen .val {
+  font-size: 13.5px;
+  color: var(--text);
+  word-break: break-word;
+}
+
+.caso-subtitle {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+  margin: 18px 0 8px;
+}
+
+.disc-group {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  margin-bottom: 10px;
+  overflow: hidden;
+}
+
+.disc-group-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  background: var(--gray-1);
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.disc-group-head .disc-if {
+  font-family: 'IBM Plex Mono', monospace;
+  font-weight: 700;
+  color: var(--accent2);
+}
+
+.disc-group-body {
+  padding: 4px 12px 10px;
+}
+
+.disc-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 12.5px;
+}
+
+.disc-row:last-child {
+  border-bottom: none;
+}
+
+.disc-row .disc-sku {
+  font-weight: 600;
+  color: var(--text);
+  min-width: 110px;
+}
+
+.disc-row .disc-meta {
+  color: var(--muted);
+}
+
+/* ─────────────────────────────────────────────
+   TIMELINE / FEED DE ACTIVIDAD
+   ───────────────────────────────────────────── */
+
+.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 6px;
+}
+
+.timeline-item {
+  position: relative;
+  padding: 0 0 16px 22px;
+  border-left: 2px solid var(--border);
+}
+
+.timeline-item:last-child {
+  padding-bottom: 0;
+  border-left-color: transparent;
+}
+
+.timeline-item::before {
+  content: '';
+  position: absolute;
+  left: -7px;
+  top: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent2);
+  border: 2px solid var(--surface-2);
+}
+
+.timeline-item.evento-aprobado::before { background: var(--success); }
+.timeline-item.evento-rechazado::before { background: var(--danger); }
+.timeline-item.evento-comentario::before { background: var(--info); }
+.timeline-item.evento-discrepancia_retirada::before { background: var(--gray-5); }
+
+.timeline-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.timeline-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.timeline-date {
+  font-size: 11.5px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.timeline-actor {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.timeline-comment {
+  margin-top: 5px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--gray-1);
+  border: 1px solid var(--border);
+  font-size: 12.5px;
+  color: var(--text);
+  white-space: pre-wrap;
+}
+
+/* ─────────────────────────────────────────────
+   ACCIONES DEL DETALLE
+   ───────────────────────────────────────────── */
+
+.detalle-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.detalle-actions .spacer {
+  flex: 1;
+}
+
+.btn-danger {
+  background: var(--danger);
+  color: #fff;
+}
+
+.btn-danger:hover,
+.btn-danger:focus {
+  filter: brightness(0.93);
+}
+
+/* ─────────────────────────────────────────────
+   COMENTARIO
+   ───────────────────────────────────────────── */
+
+.comentario-box {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin-top: 10px;
+}
+
+.comentario-box textarea {
+  flex: 1;
+  min-height: 44px;
+  max-height: 120px;
+  resize: vertical;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+}
+
+/* ─────────────────────────────────────────────
+   MISC
+   ───────────────────────────────────────────── */
+
+.loading-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.loading-inline::before {
+  content: '';
+  width: 13px;
+  height: 13px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent2);
+  border-radius: 50%;
+  animation: casos-spin 0.7s linear infinite;
+}
+
+@keyframes casos-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 760px) {
+  .casos-tabs {
+    margin-left: 12px;
+    margin-right: 12px;
+  }
+
+  .confirm-card.casos-modal-xl {
+    width: 100%;
+  }
+}
