@@ -125,6 +125,21 @@
   </div>
 </div>
 
+<!-- MODAL: DETALLE DEL ERROR (DISCREPANCIA) -->
+<div id="discDetalleModal" class="confirm-modal">
+  <div class="confirm-card casos-modal-lg">
+    <div class="modal-head">
+      <h3 class="confirm-title" id="discDetalleTitle">Detalle del error</h3>
+      <button class="btn btn-ghost" type="button" onclick="cerrarModal('discDetalleModal')">✕</button>
+    </div>
+    <div class="modal-scroll" id="discDetalleBody"></div>
+    <div class="confirm-actions" style="justify-content:flex-end;">
+      <button class="btn btn-ghost" type="button" onclick="cerrarModal('discDetalleModal')">Cerrar</button>
+      <button class="btn btn-primary" type="button" id="btnSelDesdeDetalle" onclick="seleccionarDesdeDetalle()">Seleccionar para justificar</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: EDITAR Y REENVIAR -->
 <div id="reenviarModal" class="confirm-modal">
   <div class="confirm-card casos-modal-lg">

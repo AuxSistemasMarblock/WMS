@@ -128,8 +128,9 @@ const state = {
   sucursales: [],
   detalleActual: null,
   revisionMode: null,
+  discDetalleId: null,
   filtros: {
-    disc: { periodo: 'hoy', desde: HOY_YMD, hasta: HOY_YMD, tipo: '', estado: '', if_tranid: '' },
+    disc: { periodo: 'hoy', desde: HOY_YMD, hasta: HOY_YMD, tipo: '', if_tranid: '' },
     caso: { periodo: 'hoy', estado: '', desde: HOY_YMD, hasta: HOY_YMD },
     rev: { periodo: 'hoy', estado: '', sucursal: '', desde: HOY_YMD, hasta: HOY_YMD }
   }
@@ -207,6 +208,14 @@ function fmtFechaHora(v) {
   });
 }
 function fmtNum(v) { return v === null || v === undefined || v === '' ? '—' : String(v); }
+
+// Placas: numeric de BD llega como "1.00"/"0.50"; se muestra sin ceros de sobra.
+function fmtPlacas(v) {
+  if (v === null || v === undefined || v === '') return '—';
+  const n = Number(v);
+  if (Number.isNaN(n)) return String(v);
+  return String(n);
+}
 
 function nombreTipoJustificacion(caso) {
   const t = caso && caso.tipo_justificacion;
@@ -425,8 +434,6 @@ function renderErroresView() {
   const f = state.filtros.disc;
   const tipoOpts = TIPOS_DISCREPANCIA.map(t =>
     `<option value="${t.value}"${f.tipo === t.value ? ' selected' : ''}>${escapeHTML(t.label)}</option>`).join('');
-  const estadoOpts = ESTADOS_DISCREPANCIA.map(e =>
-    `<option value="${e.value}"${f.estado === e.value ? ' selected' : ''}>${escapeHTML(e.label)}</option>`).join('');
 
   $('viewContent').innerHTML = `
     <section class="filters-card">
@@ -440,17 +447,12 @@ function renderErroresView() {
           </select>
         </div>
         <div class="filter-group">
-          <label for="fDiscEstado">Estado</label>
-          <select id="fDiscEstado" class="filter-select">
-            <option value="">Todos los estados</option>
-            ${estadoOpts}
-          </select>
-        </div>
-        <div class="filter-group">
           <label for="fDiscIf">IF</label>
           <input type="text" id="fDiscIf" class="filter-select" placeholder="IF-1234" value="${escapeHTML(f.if_tranid)}" />
         </div>
-        <button class="btn btn-primary" type="button" onclick="cargarDiscrepancias()">Aplicar</button>
+        <div class="filter-group filters-actions">
+          <button class="btn btn-primary" type="button" onclick="cargarDiscrepancias()">Aplicar</button>
+        </div>
       </div>
       ${periodoCustomRangeHTML('fDisc', f.periodo, f.desde, f.hasta)}
     </section>
@@ -458,11 +460,10 @@ function renderErroresView() {
     <section class="table-card">
       <div class="table-header">
         <div class="table-title">
-          🔴 Errores de mi almacén
+          🔴 Errores sin caso
           <span class="count-badge text-error" id="countDisc">0</span>
         </div>
         <div class="table-actions">
-          <span class="cell-muted" id="syncInfo"></span>
           <button class="btn btn-primary" type="button" id="btnJustificar" onclick="abrirJustificar()" disabled>
             Justificar selección (<span id="selCount">0</span>)
           </button>
@@ -473,22 +474,20 @@ function renderErroresView() {
           <thead>
             <tr>
               <th style="width:34px;" class="cell-center">
-                <input type="checkbox" title="Seleccionar todas las abiertas" onchange="toggleTodasDisc(this.checked)" />
+                <input type="checkbox" title="Seleccionar todas" onchange="toggleTodasDisc(this.checked)" />
               </th>
               <th>IF</th>
               <th>Fecha</th>
               <th>Sucursal</th>
               <th>SKU</th>
-              <th>Lote</th>
+              <th class="col-lote">Lote</th>
               <th>Tipo</th>
-              <th class="cell-num">Esperadas</th>
-              <th class="cell-num">Escaneadas</th>
-              <th class="cell-num">Dif.</th>
-              <th class="cell-center">Estado</th>
+              <th class="cell-center">Placas (esp / esc)</th>
+              <th class="cell-center">Acción</th>
             </tr>
           </thead>
           <tbody id="tbodyDisc">
-            <tr><td colspan="11"><div class="empty-state">Cargando errores…</div></td></tr>
+            <tr><td colspan="9"><div class="empty-state">Cargando errores…</div></td></tr>
           </tbody>
         </table>
       </div>
@@ -501,7 +500,6 @@ function leerFiltrosDisc() {
   const val = id => { const e = $(id); return e ? e.value.trim() : ''; };
   const f = leerPeriodo('fDisc');
   f.tipo = val('fDiscTipo');
-  f.estado = val('fDiscEstado');
   f.if_tranid = val('fDiscIf');
   return f;
 }
@@ -510,19 +508,15 @@ async function cargarDiscrepancias() {
   const tbody = $('tbodyDisc');
   if (!tbody) return;
   const f = leerFiltrosDisc();
-  const info = $('syncInfo');
-  if (info) info.textContent = 'Sincronizando…';
-  tbody.innerHTML = '<tr><td colspan="11"><div class="empty-state">Sincronizando y cargando errores…</div></td></tr>';
+  tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state">Sincronizando y cargando errores…</div></td></tr>';
 
   try {
     const syncBody = {};
     if (f.desde) syncBody.desde = f.desde;
     if (f.hasta) syncBody.hasta = f.hasta;
     try {
-      const sync = await apiFetch('/api/casos/sync', { method: 'POST', body: JSON.stringify(syncBody) });
-      if (info) info.textContent = `Sync: ${sync.sincronizadas ?? 0} huellas · ${fmtFechaHora(sync.generado_en)}`;
+      await apiFetch('/api/casos/sync', { method: 'POST', body: JSON.stringify(syncBody) });
     } catch (eSync) {
-      if (info) info.textContent = 'Sync no disponible';
       showToast('Aviso: no se pudo sincronizar (' + eSync.message + ')', 'error');
     }
 
@@ -530,7 +524,7 @@ async function cargarDiscrepancias() {
     if (f.desde) p.set('desde', f.desde);
     if (f.hasta) p.set('hasta', f.hasta);
     if (f.tipo) p.set('tipo', f.tipo);
-    if (f.estado) p.set('estado', f.estado);
+    p.set('estado', 'abierta');
     if (f.if_tranid) p.set('if_tranid', f.if_tranid);
 
     const data = await apiFetch('/api/casos/discrepancias?' + p.toString());
@@ -538,8 +532,45 @@ async function cargarDiscrepancias() {
     state.discSeleccion.clear();
     renderDiscTable();
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="11"><div class="empty-state">Error: ${escapeHTML(e.message)}</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state">Error: ${escapeHTML(e.message)}</div></td></tr>`;
   }
+}
+
+// Dirección del desvío según el tipo (para el signo de la diferencia).
+function tipoDireccion(tipo) {
+  switch (tipo) {
+    case 'cantidad_faltante':
+    case 'linea_faltante':
+    case 'if_no_encontrada':
+      return 'faltante';
+    case 'cantidad_sobrante':
+    case 'sku_lote_no_esperado':
+      return 'sobrante';
+    case 'media_placa':
+      return 'media';
+    default:
+      return null;
+  }
+}
+
+function placasCelda(d) {
+  const esp = escapeHTML(fmtPlacas(d.placas_esperadas));
+  const esc = escapeHTML(fmtPlacas(d.placas_escaneadas));
+  const dir = tipoDireccion(d.tipo);
+  let dif = '—';
+  let difCls = 'cell-muted';
+  if (d.diferencia !== null && d.diferencia !== undefined && !Number.isNaN(Number(d.diferencia))) {
+    const pref = dir === 'faltante' ? '-' : (dir === 'sobrante' ? '+' : '');
+    dif = pref + fmtPlacas(Math.abs(Number(d.diferencia)));
+    difCls = dir === 'faltante' ? 'text-error' : (dir === 'sobrante' ? 'text-warn' : 'text-media');
+  }
+  return `
+    <div class="placas-main">
+      <span class="placas-esp" title="Esperadas">${esp}</span>
+      <span class="placas-sep">/</span>
+      <span class="placas-esc" title="Escaneadas">${esc}</span>
+    </div>
+    <div class="placas-diff ${difCls}">Dif. ${escapeHTML(dif)}</div>`;
 }
 
 function renderDiscTable() {
@@ -550,29 +581,28 @@ function renderDiscTable() {
   if (count) count.textContent = String(rows.length);
 
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="11"><div class="empty-state">No hay errores para los filtros seleccionados.</div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state">No hay errores sin caso para los filtros seleccionados.</div></td></tr>';
     actualizarBotonJustificar();
     return;
   }
 
   tbody.innerHTML = rows.map(d => {
-    const abierta = d.estado === 'abierta';
     const checked = state.discSeleccion.has(Number(d.id)) ? ' checked' : '';
     return `<tr>
       <td class="cell-center">
-        <input type="checkbox" data-disc-id="${d.id}" ${abierta ? '' : 'disabled'}${checked}
-          onchange="onDiscCheck(this)" title="${abierta ? 'Seleccionar' : 'Solo errores abiertos'}">
+        <input type="checkbox" data-disc-id="${d.id}"${checked}
+          onchange="onDiscCheck(this)" title="Seleccionar para justificar">
       </td>
       <td class="cell-tranid">${escapeHTML(d.if_tranid || '—')}</td>
       <td>${escapeHTML(fmtFecha(d.if_fecha))}</td>
       <td>${escapeHTML(d.sucursal || '—')}</td>
       <td>${escapeHTML(d.sku || '—')}</td>
-      <td>${escapeHTML(d.lote || d.id_lote || '—')}</td>
+      <td class="col-lote">${escapeHTML(d.lote || d.id_lote || '—')}</td>
       <td>${badgeTipo(d.tipo)}</td>
-      <td class="cell-num">${escapeHTML(fmtNum(d.placas_esperadas))}</td>
-      <td class="cell-num">${escapeHTML(fmtNum(d.placas_escaneadas))}</td>
-      <td class="cell-num">${escapeHTML(fmtNum(d.diferencia))}</td>
-      <td class="cell-center">${estadoDiscPill(d.estado)}</td>
+      <td class="cell-center">${placasCelda(d)}</td>
+      <td class="cell-center">
+        <button class="btn-detalle" type="button" onclick="abrirDetalleDisc(${Number(d.id)})">Ver detalle</button>
+      </td>
     </tr>`;
   }).join('');
 
@@ -604,6 +634,78 @@ function actualizarBotonJustificar() {
   const sel = $('selCount');
   if (sel) sel.textContent = String(n);
   if (btn) btn.disabled = n < 1;
+}
+
+// =================== DETALLE DEL ERROR ===================
+function textoDiagnostico(d) {
+  const datos = d.datos || {};
+  if (datos.plan_accion) return datos.plan_accion;
+  if (datos.mensaje) return datos.mensaje;
+  const dir = tipoDireccion(d.tipo);
+  if (dir === 'faltante') {
+    return `Se esperaban ${fmtPlacas(d.placas_esperadas)} placa(s) y se escanearon ${fmtPlacas(d.placas_escaneadas)}.`;
+  }
+  if (dir === 'sobrante') {
+    return `Se escanearon ${fmtPlacas(d.placas_escaneadas)} placa(s) sin respaldo en la IF (material sobrante/huérfano).`;
+  }
+  if (d.tipo === 'ubicacion_incorrecta') return 'El material se escaneó en una ubicación distinta a la esperada.';
+  if (d.tipo === 'if_no_encontrada') return 'La IF no existe o está cancelada en NetSuite.';
+  return 'Revisa los datos del error para definir la justificación.';
+}
+
+function abrirDetalleDisc(id) {
+  const d = state.discrepancias.find(x => Number(x.id) === Number(id));
+  if (!d) return;
+  state.discDetalleId = Number(id);
+  renderDetalleDisc(d);
+  abrirModal('discDetalleModal');
+}
+
+function renderDetalleDisc(d) {
+  const datos = d.datos || {};
+  const m2 = v => (v === null || v === undefined || v === '' ? '—' : Number(v).toFixed(2) + ' m²');
+  const seleccionado = state.discSeleccion.has(Number(d.id));
+  $('discDetalleTitle').textContent = 'Error · ' + (d.if_tranid || '—');
+
+  $('discDetalleBody').innerHTML = `
+    <div class="caso-resumen">
+      <div><span class="label">IF</span><span class="val cell-tranid">${escapeHTML(d.if_tranid || '—')}</span></div>
+      <div><span class="label">SO origen</span><span class="val">${escapeHTML(d.if_so || datos.if_so || '—')}</span></div>
+      <div><span class="label">Fecha</span><span class="val">${escapeHTML(fmtFecha(d.if_fecha))}</span></div>
+      <div><span class="label">Sucursal</span><span class="val">${escapeHTML(d.sucursal || '—')}</span></div>
+      <div><span class="label">SKU</span><span class="val">${escapeHTML(d.sku || '—')}</span></div>
+      <div><span class="label">Lote</span><span class="val">${escapeHTML(d.lote || d.id_lote || '—')}</span></div>
+      <div><span class="label">Tipo</span><span class="val">${badgeTipo(d.tipo)}</span></div>
+      <div><span class="label">Operador</span><span class="val">${escapeHTML(datos.escaneo_operador || '—')}</span></div>
+      <div><span class="label">Ubicación escaneada</span><span class="val">${escapeHTML(datos.ubicacion_escaneada || '—')}</span></div>
+      <div><span class="label">Ubicación esperada</span><span class="val">${escapeHTML(datos.ubicacion_esperada || '—')}</span></div>
+      <div><span class="label">Placas (esp / esc / dif)</span><span class="val">${escapeHTML(fmtPlacas(d.placas_esperadas))} / ${escapeHTML(fmtPlacas(d.placas_escaneadas))} / ${escapeHTML(fmtPlacas(d.diferencia))}</span></div>
+      <div><span class="label">Metros (esp / esc)</span><span class="val">${m2(d.m2_esperados)} / ${m2(d.m2_escaneados)}</span></div>
+    </div>
+
+    <div class="form-field">
+      <label>¿Qué pasó?</label>
+      <div class="timeline-comment" style="margin-top:0;">${escapeHTML(textoDiagnostico(d))}</div>
+    </div>
+    <div class="form-hint">${seleccionado
+      ? '✅ Este error ya está seleccionado para justificar.'
+      : 'Usa "Seleccionar para justificar" para incluirlo en un caso.'}</div>
+  `;
+
+  const btn = $('btnSelDesdeDetalle');
+  if (btn) btn.textContent = seleccionado ? 'Quitar de la selección' : 'Seleccionar para justificar';
+}
+
+function seleccionarDesdeDetalle() {
+  const id = state.discDetalleId;
+  if (id == null) return;
+  if (state.discSeleccion.has(id)) state.discSeleccion.delete(id);
+  else state.discSeleccion.add(id);
+  const cb = document.querySelector(`#tbodyDisc input[data-disc-id="${id}"]`);
+  if (cb) cb.checked = state.discSeleccion.has(id);
+  actualizarBotonJustificar();
+  const d = state.discrepancias.find(x => Number(x.id) === id);
+  if (d) renderDetalleDisc(d);
 }
 
 async function abrirJustificar() {
@@ -686,7 +788,9 @@ function renderMisCasosView() {
             <option value="rechazado"${f.estado === 'rechazado' ? ' selected' : ''}>Rechazado</option>
           </select>
         </div>
-        <button class="btn btn-primary" type="button" onclick="cargarCasosJefe()">Aplicar</button>
+        <div class="filter-group filters-actions">
+          <button class="btn btn-primary" type="button" onclick="cargarCasosJefe()">Aplicar</button>
+        </div>
       </div>
       ${periodoCustomRangeHTML('fCaso', f.periodo, f.desde, f.hasta)}
     </section>
@@ -720,26 +824,28 @@ function renderMisCasosView() {
   `;
 }
 
+function paramsCasos(f) {
+  const p = new URLSearchParams();
+  if (f.estado) p.set('estado', f.estado);
+  if (f.if_tranid) p.set('if_tranid', f.if_tranid);
+  if (f.desde) p.set('desde', f.desde);
+  if (f.hasta) p.set('hasta', f.hasta);
+  return p;
+}
+
 async function cargarCasosJefe() {
   const tbody = $('tbodyCasos');
   if (!tbody) return;
   const f = leerPeriodo('fCaso');
   f.estado = ($('fCasoEstado') || {}).value || '';
-  const p = new URLSearchParams();
-  if (f.estado) p.set('estado', f.estado);
-  if (f.desde) p.set('desde', f.desde);
-  if (f.hasta) p.set('hasta', f.hasta);
+  tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state">Cargando casos…</div></td></tr>';
 
   try {
-    const data = await apiFetch('/api/casos?' + p.toString());
+    const data = await apiFetch('/api/casos?' + paramsCasos(f).toString());
     state.casos = data.casos || [];
     renderCasosTable('tbodyCasos', state.casos);
     const count = $('countCasos'); if (count) count.textContent = String(state.casos.length);
     actualizarTabCount('tabCountCasos', state.casos.length);
-    if (!f.estado) {
-      const pend = state.casos.filter(c => c.estado === 'pendiente_aprobacion').length;
-      actualizarTabCount('tabCountCasos', pend);
-    }
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state">Error: ${escapeHTML(e.message)}</div></td></tr>`;
   }
@@ -802,7 +908,9 @@ function renderRevisionView() {
             <option value="rechazado"${f.estado === 'rechazado' ? ' selected' : ''}>Rechazado</option>
           </select>
         </div>`}
-        <button class="btn btn-primary" type="button" onclick="cargarCasosRevision()">Aplicar</button>
+        <div class="filter-group filters-actions">
+          <button class="btn btn-primary" type="button" onclick="cargarCasosRevision()">Aplicar</button>
+        </div>
       </div>
       ${periodoCustomRangeHTML('fRev', f.periodo, f.desde, f.hasta)}
     </section>
