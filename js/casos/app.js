@@ -129,6 +129,7 @@ const state = {
   detalleActual: null,
   revisionMode: null,
   discDetalleId: null,
+  pagina: { disc: 1, caso: 1, rev: 1 },
   filtros: {
     disc: { periodo: 'hoy', desde: HOY_YMD, hasta: HOY_YMD, tipo: '', if_tranid: '' },
     caso: { periodo: 'hoy', estado: '', if_tranid: '', desde: HOY_YMD, hasta: HOY_YMD },
@@ -139,6 +140,7 @@ const state = {
 // =================== CONSTANTES ===================
 const ROLES_PERMITIDOS = ['jefe_almacen', 'gerente', 'admin'];
 const MIN_OTRO = 15;
+const PAGE_SIZE = 10;
 
 const TIPOS_DISCREPANCIA = [
   { value: 'lote_cruzado', label: 'Lotes Cruzados' },
@@ -389,6 +391,42 @@ function switchTab(tab) {
   renderMain();
 }
 
+// =================== PAGINACIÓN ===================
+function totalPaginas(total) { return Math.max(1, Math.ceil(total / PAGE_SIZE)); }
+
+function paginar(lista, pagina) {
+  const start = (pagina - 1) * PAGE_SIZE;
+  return lista.slice(start, start + PAGE_SIZE);
+}
+
+function renderPaginacion(containerId, pagina, total, handler) {
+  const c = $(containerId);
+  if (!c) return;
+  const tp = totalPaginas(total);
+  const start = total === 0 ? 0 : (pagina - 1) * PAGE_SIZE + 1;
+  const end = Math.min(total, pagina * PAGE_SIZE);
+  c.innerHTML = `
+    <button class="btn btn-ghost" type="button" ${pagina <= 1 ? 'disabled' : ''} onclick="${handler}(-1)">‹ Anterior</button>
+    <span class="pagination-info">Página ${pagina} de ${tp} · Mostrando ${start}-${end} de ${total} (${PAGE_SIZE} por pág.)</span>
+    <button class="btn btn-ghost" type="button" ${pagina >= tp ? 'disabled' : ''} onclick="${handler}(1)">Siguiente ›</button>
+  `;
+}
+
+function cambiarPaginaDisc(delta) {
+  state.pagina.disc = Math.min(Math.max(1, state.pagina.disc + delta), totalPaginas(state.discrepancias.length));
+  renderDiscTable();
+}
+
+function cambiarPaginaCaso(delta) {
+  state.pagina.caso = Math.min(Math.max(1, state.pagina.caso + delta), totalPaginas(state.casos.length));
+  renderCasosTable('tbodyCasos', state.casos);
+}
+
+function cambiarPaginaRev(delta) {
+  state.pagina.rev = Math.min(Math.max(1, state.pagina.rev + delta), totalPaginas(state.casos.length));
+  renderRevisionTable(state.casos);
+}
+
 // =================== RENDER PRINCIPAL ===================
 function renderMain() {
   if (state.tab === 'errores') {
@@ -491,6 +529,7 @@ function renderErroresView() {
           </tbody>
         </table>
       </div>
+      <div class="pagination" id="pagDisc"></div>
     </section>
   `;
   actualizarBotonJustificar();
@@ -528,6 +567,7 @@ async function cargarDiscrepancias() {
     const data = await apiFetch('/api/casos/discrepancias?' + p.toString());
     state.discrepancias = data.discrepancias || [];
     state.discSeleccion.clear();
+    state.pagina.disc = 1;
     renderDiscTable();
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state">Error: ${escapeHTML(e.message)}</div></td></tr>`;
@@ -580,11 +620,15 @@ function renderDiscTable() {
 
   if (!rows.length) {
     tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state">No hay errores sin caso para los filtros seleccionados.</div></td></tr>';
+    renderPaginacion('pagDisc', 1, 0, 'cambiarPaginaDisc');
     actualizarBotonJustificar();
     return;
   }
 
-  tbody.innerHTML = rows.map(d => {
+  state.pagina.disc = Math.min(state.pagina.disc, totalPaginas(rows.length));
+  const visibles = paginar(rows, state.pagina.disc);
+
+  tbody.innerHTML = visibles.map(d => {
     const checked = state.discSeleccion.has(Number(d.id)) ? ' checked' : '';
     return `<tr>
       <td class="cell-center">
@@ -604,6 +648,7 @@ function renderDiscTable() {
     </tr>`;
   }).join('');
 
+  renderPaginacion('pagDisc', state.pagina.disc, rows.length, 'cambiarPaginaDisc');
   actualizarBotonJustificar();
 }
 
@@ -827,6 +872,7 @@ function renderMisCasosView() {
           </tbody>
         </table>
       </div>
+      <div class="pagination" id="pagCaso"></div>
     </section>
   `;
 }
@@ -851,6 +897,7 @@ async function cargarCasosJefe() {
   try {
     const data = await apiFetch('/api/casos?' + paramsCasos(f).toString());
     state.casos = data.casos || [];
+    state.pagina.caso = 1;
     renderCasosTable('tbodyCasos', state.casos);
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state">Error: ${escapeHTML(e.message)}</div></td></tr>`;
@@ -877,9 +924,12 @@ function renderCasosTable(tbodyId, casos) {
   if (!tbody) return;
   if (!casos.length) {
     tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state">No hay casos.</div></td></tr>';
+    renderPaginacion('pagCaso', 1, 0, 'cambiarPaginaCaso');
     return;
   }
-  tbody.innerHTML = casos.map(c => `
+  state.pagina.caso = Math.min(state.pagina.caso, totalPaginas(casos.length));
+  const visibles = paginar(casos, state.pagina.caso);
+  tbody.innerHTML = visibles.map(c => `
     <tr>
       <td class="cell-tranid">${escapeHTML(c.folio || '—')}</td>
       <td>${estadoCasoBadge(c.estado)}</td>
@@ -890,6 +940,7 @@ function renderCasosTable(tbodyId, casos) {
       <td class="cell-center"><button class="btn-detalle" type="button" onclick="abrirDetalleCaso(${Number(c.id)})">Ver detalle</button></td>
     </tr>
   `).join('');
+  renderPaginacion('pagCaso', state.pagina.caso, casos.length, 'cambiarPaginaCaso');
 }
 
 // =================== SUCURSALES (filtro gerente/admin) ===================
@@ -966,6 +1017,7 @@ function renderRevisionView() {
           </tbody>
         </table>
       </div>
+      <div class="pagination" id="pagRev"></div>
     </section>
   `;
 
@@ -998,6 +1050,7 @@ async function cargarCasosRevision() {
   try {
     const data = await apiFetch('/api/casos?' + p.toString());
     state.casos = data.casos || [];
+    state.pagina.rev = 1;
     renderRevisionTable(state.casos);
     const count = $('countRev'); if (count) count.textContent = String(state.casos.length);
     if (state.tab === 'por-aprobar') actualizarTabCount('tabCountPend', state.casos.length);
@@ -1012,9 +1065,12 @@ function renderRevisionTable(casos) {
   if (!tbody) return;
   if (!casos.length) {
     tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state">No hay casos con estos filtros.</div></td></tr>';
+    renderPaginacion('pagRev', 1, 0, 'cambiarPaginaRev');
     return;
   }
-  tbody.innerHTML = casos.map(c => `
+  state.pagina.rev = Math.min(state.pagina.rev, totalPaginas(casos.length));
+  const visibles = paginar(casos, state.pagina.rev);
+  tbody.innerHTML = visibles.map(c => `
     <tr>
       <td class="cell-tranid">${escapeHTML(c.folio || '—')}</td>
       <td>${estadoCasoBadge(c.estado)}</td>
@@ -1026,6 +1082,7 @@ function renderRevisionTable(casos) {
       <td class="cell-center"><button class="btn-detalle" type="button" onclick="abrirDetalleCaso(${Number(c.id)})">${c.estado === 'pendiente_aprobacion' ? 'Revisar' : 'Ver detalle'}</button></td>
     </tr>
   `).join('');
+  renderPaginacion('pagRev', state.pagina.rev, casos.length, 'cambiarPaginaRev');
 }
 
 // =================== DETALLE DE CASO ===================
