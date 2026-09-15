@@ -38,6 +38,8 @@ if (!process.env.CASOS_TZ_OFFSET) process.env.CASOS_TZ_OFFSET = '-06:00';
 const casosService = require('../services/casosService');
 const casosController = require('../controllers/casosController');
 const dashboardController = require('../controllers/dashboardController');
+const netsuiteController = require('../controllers/netsuiteController');
+const locationScope = require('../services/locationScope');
 const supabase = require('../config/supabase');
 
 // ============================================================
@@ -439,11 +441,46 @@ function pruebasKPIsJustificadas() {
 }
 
 // ============================================================
-// 8) Prueba en vivo (opcional)
+// 8) Scope de ubicación del escáner (helper compartido)
+// ============================================================
+
+function pruebasScopeEscaner() {
+  header('8. scope de ubicación (escáner)');
+
+  check('branchOf OUTLET MEX -> MEX', locationScope.branchOf('OUTLET MEX') === 'MEX');
+  check('branchOf "MEX : OUTLET MEX" -> MEX', locationScope.branchOf('MEX : OUTLET MEX') === 'MEX');
+  check('branchOf "GDL:B-01" -> GDL', locationScope.branchOf('GDL:B-01') === 'GDL');
+  check('branchOf MATERIAL -> null', locationScope.branchOf('MATERIAL') === null);
+
+  const filter = netsuiteController._filterIFsByUserLocation;
+  const ifs = [
+    { tranid: 'IF-GDL', location: { text: 'GDL' } },
+    { tranid: 'IF-OGDL', location: { text: 'OUTLET GDL' } },
+    { tranid: 'IF-OMEX', location: { text: 'OUTLET MEX' } },
+    { tranid: 'IF-MEX', location: { text: 'MEX' } },
+    { tranid: 'IF-PROY', location: { text: 'PROYECTOS' } },
+    { tranid: 'IF-NULL', location: null }
+  ];
+
+  const visiblesGDL = filter(ifs, 'GDL').map(i => i.tranid);
+  check('escáner GDL ve GDL', visiblesGDL.includes('IF-GDL'), JSON.stringify(visiblesGDL));
+  check('escáner GDL ve OUTLET GDL', visiblesGDL.includes('IF-OGDL'), JSON.stringify(visiblesGDL));
+  check('escáner GDL NO ve OUTLET MEX', !visiblesGDL.includes('IF-OMEX'), JSON.stringify(visiblesGDL));
+  check('escáner GDL NO ve MEX', !visiblesGDL.includes('IF-MEX'), JSON.stringify(visiblesGDL));
+  check('escáner GDL ve whitelist', visiblesGDL.includes('IF-PROY'), JSON.stringify(visiblesGDL));
+  check('escáner GDL no ve location nula', !visiblesGDL.includes('IF-NULL'), JSON.stringify(visiblesGDL));
+
+  const visiblesMEX = filter(ifs, 'MEX').map(i => i.tranid);
+  check('escáner MEX ve OUTLET MEX', visiblesMEX.includes('IF-OMEX'), JSON.stringify(visiblesMEX));
+  check('escáner MEX NO ve OUTLET GDL', !visiblesMEX.includes('IF-OGDL'), JSON.stringify(visiblesMEX));
+}
+
+// ============================================================
+// 9) Prueba en vivo (opcional)
 // ============================================================
 
 async function pruebaEnVivo() {
-  header('8. PRUEBA EN VIVO (crear_caso + limpieza)');
+  header('9. PRUEBA EN VIVO (crear_caso + limpieza)');
 
   const marca = `test-casos-${Date.now()}`;
   let discId = null;
@@ -598,6 +635,7 @@ async function main() {
   pruebasScopeUbicacion();
   pruebasFiltroTipo();
   pruebasKPIsJustificadas();
+  pruebasScopeEscaner();
 
   if (LIVE && HAS_ENV) {
     await pruebaEnVivo();
