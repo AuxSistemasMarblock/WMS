@@ -1,9 +1,7 @@
 const supabase = require('../config/supabase');
 const netsuiteRestletClient = require('../config/netsuiteRestlet');
 const config = require('../config/environments');
-
-const RESTRICTED_LOCATION_PREFIXES = ['MEX', 'MTY', 'GDL'];
-const SHARED_LOCATIONS = ['TEMPORAL', 'PROYECTOS', 'Material Transformado', 'MATRIZ'];
+const { esVisibleParaUbicacion } = require('../services/locationScope');
 
 function extractLocation(location) {
   if (typeof location === 'string') return location;
@@ -12,27 +10,14 @@ function extractLocation(location) {
   return null;
 }
 
-function startsWithRestrictedPrefix(ifLocation) {
-  return RESTRICTED_LOCATION_PREFIXES.some(prefix => {
-    return ifLocation === prefix || ifLocation.startsWith(prefix + ':') || ifLocation.startsWith(prefix + ' ');
-  });
-}
-
-function isSharedLocation(ifLocation) {
-  if (!ifLocation) return false;
-  if (SHARED_LOCATIONS.includes(ifLocation)) return true;
-  return !startsWithRestrictedPrefix(ifLocation);
-}
-
+/**
+ * IFs visibles para el usuario: solo su ubicación/sucursal (incluido su outlet)
+ * y la whitelist compartida. NUNCA outlets de otra sucursal.
+ */
 function filterIFsByUserLocation(ifRecords, userLocationName) {
-  return ifRecords.filter(ifRecord => {
-    const ifLocation = extractLocation(ifRecord.location);
-    if (!ifLocation) return false;
-    if (isSharedLocation(ifLocation)) return true;
-    if (ifLocation === userLocationName) return true;
-    const ifLocationTokens = ifLocation.split(/[\s:]+/).filter(Boolean);
-    return ifLocationTokens.includes(userLocationName);
-  });
+  return ifRecords.filter(ifRecord =>
+    esVisibleParaUbicacion(extractLocation(ifRecord.location), userLocationName)
+  );
 }
 
 function formatIFRecord(ifRecord) {
@@ -438,5 +423,7 @@ const diagnosticTest = async (req, res) => {
 module.exports = {
   getIFs,
   submitData,
-  diagnosticTest
+  diagnosticTest,
+  // Exportado para tests
+  _filterIFsByUserLocation: filterIFsByUserLocation
 };
