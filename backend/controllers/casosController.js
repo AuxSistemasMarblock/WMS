@@ -2,11 +2,12 @@
  * Controller del gestor de casos de auditoría (WMS).
  *
  * Patrón: routes -> controller -> services.
- *  - Delega la confronta en confrontaCacheService.ejecutarConfronta() y la
- *    persistencia de discrepancias en casosService (T1). NO reimplementa
- *    fingerprint ni sync.
- *  - Accede a Supabase con la service role key (backend/config/supabase.js),
- *    que bypassa RLS (ver supabase/migrations/0001_gestor_casos.sql).
+ *  - Capa HTTP delgada: lee req (params/query/body), aplica validaciones de
+ *    entrada y scope de ubicación, delega TODA la persistencia en casosService
+ *    (incluida la RPC transaccional crear_caso) y responde con el contrato JSON
+ *    existente.
+ *  - La confronta se orquesta en casosService.sincronizar() (que a su vez usa
+ *    confrontaCacheService).
  *
  * Scope de ubicación:
  *  - jefe_almacen ve/opera solo su ubicación (por prefijo de sucursal, con el
@@ -19,8 +20,6 @@
  * interno con console.error.
  */
 
-const supabase = require('../config/supabase');
-const confrontaCacheService = require('../services/confrontaCacheService');
 const casosService = require('../services/casosService');
 const config = require('../config/environments');
 
@@ -31,12 +30,23 @@ const ESTADOS_CASO = ['pendiente_aprobacion', 'aprobado', 'rechazado'];
 const ESTADOS_DISCREPANCIA = ['abierta', 'en_revision', 'justificada'];
 
 // ============================================================
-// Helpers
+// Helpers HTTP / scope
 // ============================================================
 
 function logError(contexto, e) {
   console.error(`${contexto} error:`, e && e.message ? e.message : e);
   if (e && e.stack && process.env.VERBOSE === '1') console.error(e.stack);
+}
+
+/**
+ * Responde un error propagado por el service: usa `e.status` (400/500) y
+ * adjunta `e.details` cuando existe. Errores inesperados -> 500.
+ */
+function responderError(res, e) {
+  const status = e && e.status ? e.status : 500;
+  const payload = { error: e && e.message ? e.message : String(e) };
+  if (e && e.details !== undefined) payload.details = e.details;
+  res.status(status).json(payload);
 }
 
 /**
@@ -85,23 +95,6 @@ function tokenMatch(loc, userLocationName) {
 }
 
 /**
- * Obtiene el nombre de ubicación del usuario autenticado desde
- * req.user.ubicacion_id -> tabla ubicaciones (patrón auth/netsuiteController).
- * Devuelve null si no se puede resolver.
- */
-async function getUserLocationName(req) {
-  const ubicacionId = req.user?.ubicacion_id;
-  if (!ubicacionId) return null;
-  const { data, error } = await supabase
-    .from('ubicaciones')
-    .select('nombre')
-    .eq('id', ubicacionId)
-    .single();
-  if (error || !data) return null;
-  return data.nombre;
-}
-
-/**
  * Indica si una fila (caso o discrepancia) es visible para el usuario.
  * - gerente/admin: todo.
  * - jefe: ubicaciones compartidas o de su sucursal.
@@ -132,51 +125,20 @@ function normalizarIds(valor) {
 }
 
 /**
- * Lee un valor de body o query (body tiene prioridad).
- */
-function valor(req, clave) {
-  if (req.body && req.body[clave] !== undefined && req.body[clave] !== null && req.body[clave] !== '') {
-    return req.body[clave];
-  }
-  return req.query ? req.query[clave] : undefined;
-}
-
-// ============================================================
-// Folio
-// ============================================================
-
-/**
- * Genera el siguiente folio CASO-<YYYY>-<secuencial 4 dígitos>.
- * Usa MAX(folio) del año para calcular el secuencial. El llamador reintenta
- * ante colisión de folio (unique + código 23505).
- */
-async function generarFolio(anio) {
-  const prefijo = `CASO-${anio}-`;
-  const { data, error } = await supabase
-    .from('casos')
-    .select('folio')
-    .like('folio', `${prefijo}%`)
-    .order('folio', { ascending: false })
-    .limit(1);
-
-  if (error) throw new Error(`Error generando folio: ${error.message}`);
-
-  let secuencial = 1;
-  if (data && data.length > 0 && data[0].folio) {
-    const partes = String(data[0].folio).split('-');
-    const ultimo = parseInt(partes[partes.length - 1], 10);
-    if (Number.isInteger(ultimo)) secuencial = ultimo + 1;
-  }
-  return `${prefijo}${String(secuencial).padStart(4, '0')}`;
-}
-
-/**
  * Extrae solo las discrepancias vivas (resultado de confronta).
  */
 function discrepanciasDeResultado(resultado) {
   return (resultado && Array.isArray(resultado.todas_las_discrepancias))
     ? resultado.todas_las_discrepancias
     : [];
+}
+
+/**
+ * Resuelve el nombre de ubicación del usuario en una sola consulta al service.
+ * Devuelve null si no se puede resolver.
+ */
+async function ubicacionDelUsuario(req) {
+  return casosService.obtenerNombreUbicacion(req.user?.ubicacion_id);
 }
 
 // ============================================================
@@ -188,8 +150,7 @@ const postSync = async (req, res) => {
     const { desde, hasta, sucursal } = { ...req.query, ...(req.body || {}) };
     const filtros = { desde, hasta, sucursal: sucursal || null };
 
-    const resultado = await confrontaCacheService.ejecutarConfronta(filtros);
-    const sync = await casosService.syncDiscrepancias(resultado);
+    const sync = await casosService.sincronizar(filtros);
 
     if (sync.error) {
       return res.status(500).json({ error: 'Error al sincronizar discrepancias', details: sync.error });
@@ -202,7 +163,7 @@ const postSync = async (req, res) => {
     });
   } catch (e) {
     logError('postSync', e);
-    res.status(500).json({ error: e.message });
+    responderError(res, e);
   }
 };
 
@@ -218,26 +179,11 @@ const getDiscrepancias = async (req, res) => {
       return res.status(400).json({ error: `estado debe ser ${ESTADOS_DISCREPANCIA.join('|')}` });
     }
 
-    let query = supabase.from('discrepancias').select('*');
-
-    if (estado) query = query.eq('estado', estado);
-    if (tipo) query = query.eq('tipo', tipo);
-    if (sucursal) query = query.eq('sucursal', sucursal);
-    if (if_tranid) query = query.eq('if_tranid', if_tranid);
-    if (desde) query = query.gte('if_fecha', desde);
-    if (hasta) query = query.lte('if_fecha', hasta);
-
-    const { data, error } = await query.order('ultima_vista', { ascending: false });
-
-    if (error) {
-      console.error('getDiscrepancias db error:', error.message);
-      return res.status(500).json({ error: 'Error al leer discrepancias' });
-    }
+    let discrepancias = await casosService.listarDiscrepancias({ estado, tipo, sucursal, desde, hasta, if_tranid });
 
     // Scope de ubicación para jefe_almacen.
-    let discrepancias = data || [];
     if (!esGerenteOAdmin(req)) {
-      const ubicacionNombre = await getUserLocationName(req);
+      const ubicacionNombre = await ubicacionDelUsuario(req);
       if (!ubicacionNombre) {
         return res.status(403).json({ error: 'Ubicación no encontrada para el usuario' });
       }
@@ -251,7 +197,7 @@ const getDiscrepancias = async (req, res) => {
     });
   } catch (e) {
     logError('getDiscrepancias', e);
-    res.status(500).json({ error: e.message });
+    responderError(res, e);
   }
 };
 
@@ -261,21 +207,11 @@ const getDiscrepancias = async (req, res) => {
 
 const getTiposJustificacion = async (req, res) => {
   try {
-    const { data, error } = await supabase
-      .from('tipos_justificacion')
-      .select('*')
-      .eq('activo', true)
-      .order('orden', { ascending: true });
-
-    if (error) {
-      console.error('getTiposJustificacion db error:', error.message);
-      return res.status(500).json({ error: 'Error al leer tipos de justificación' });
-    }
-
-    res.json({ tipos_justificacion: data || [] });
+    const tipos = await casosService.listarTiposJustificacion();
+    res.json({ tipos_justificacion: tipos });
   } catch (e) {
     logError('getTiposJustificacion', e);
-    res.status(500).json({ error: e.message });
+    responderError(res, e);
   }
 };
 
@@ -302,40 +238,20 @@ const postCaso = async (req, res) => {
     // Scope de ubicación (jefe limitado a su sucursal; admin puede todo).
     let ubicacionNombre = null;
     if (!esGerenteOAdmin(req)) {
-      ubicacionNombre = await getUserLocationName(req);
+      ubicacionNombre = await ubicacionDelUsuario(req);
       if (!ubicacionNombre) {
         return res.status(403).json({ error: 'Ubicación no encontrada para el usuario' });
       }
     }
 
     // Validar tipo de justificación activo.
-    const { data: tipo, error: tipoError } = await supabase
-      .from('tipos_justificacion')
-      .select('id, clave, nombre, activo')
-      .eq('id', tipoJustificacionId)
-      .eq('activo', true)
-      .maybeSingle();
-
-    if (tipoError) {
-      console.error('postCaso tipo db error:', tipoError.message);
-      return res.status(500).json({ error: 'Error al validar tipo de justificación' });
-    }
+    const tipo = await casosService.obtenerTipoJustificacionActivo(tipoJustificacionId);
     if (!tipo) {
       return res.status(400).json({ error: 'Tipo de justificación inválido o inactivo' });
     }
 
     // Validar discrepancias: existen, están 'abierta' y son de la ubicación del jefe.
-    const { data: discRows, error: discError } = await supabase
-      .from('discrepancias')
-      .select('id, estado, sucursal, caso_id')
-      .in('id', discrepanciaIds);
-
-    if (discError) {
-      console.error('postCaso discrepancias db error:', discError.message);
-      return res.status(500).json({ error: 'Error al validar discrepancias' });
-    }
-
-    const encontradas = discRows || [];
+    const encontradas = await casosService.obtenerDiscrepanciasPorIds(discrepanciaIds);
     const porId = new Map(encontradas.map(d => [d.id, d]));
 
     const faltantes = discrepanciaIds.filter(id => !porId.has(id));
@@ -357,69 +273,22 @@ const postCaso = async (req, res) => {
       }
     }
 
-    // Crear caso con reintento ante colisión de folio (unique).
-    const anio = new Date().getFullYear();
-    const ahora = new Date().toISOString();
     const sucursalCaso = encontradas[0]?.sucursal || ubicacionNombre || null;
 
-    let caso = null;
-    let ultimoError = null;
-    for (let intento = 0; intento < 5; intento++) {
-      const folio = await generarFolio(anio);
-      const { data, error } = await supabase
-        .from('casos')
-        .insert({
-          folio,
-          ubicacion_id: req.user?.ubicacion_id ?? null,
-          sucursal: sucursalCaso,
-          tipo_justificacion_id: tipoJustificacionId,
-          justificacion,
-          estado: 'pendiente_aprobacion',
-          creado_por: req.user?.id ?? null,
-          enviado_at: ahora
-        })
-        .select('*')
-        .single();
-
-      if (!error) {
-        caso = data;
-        break;
-      }
-      ultimoError = error;
-      // 23505 = unique_violation (colisión de folio). Reintentar con nuevo folio.
-      if (error.code !== '23505') break;
-    }
-
-    if (!caso) {
-      console.error('postCaso insert error:', ultimoError && ultimoError.message);
-      return res.status(500).json({ error: 'No se pudo crear el caso', details: ultimoError && ultimoError.message });
-    }
-
-    // Actualizar discrepancias a 'en_revision' con caso_id.
-    const { error: updError } = await supabase
-      .from('discrepancias')
-      .update({ estado: 'en_revision', caso_id: caso.id, updated_at: new Date().toISOString() })
-      .in('id', discrepanciaIds);
-
-    if (updError) {
-      console.error('postCaso update discrepancias error:', updError.message);
-      return res.status(500).json({ error: 'Caso creado pero no se pudieron actualizar las discrepancias', details: updError.message });
-    }
-
-    // Registrar eventos: caso_creado y justificacion_enviada.
-    const eventos = [
-      { caso_id: caso.id, evento: 'caso_creado', actor_id: req.user?.id ?? null, datos: { folio: caso.folio, discrepancia_ids: discrepanciaIds } },
-      { caso_id: caso.id, evento: 'justificacion_enviada', actor_id: req.user?.id ?? null, datos: { tipo_justificacion_id: tipoJustificacionId, justificacion } }
-    ];
-    const { error: eventosError } = await supabase.from('caso_eventos').insert(eventos);
-    if (eventosError) {
-      console.error('postCaso eventos error:', eventosError.message);
-    }
+    // Creación ATÓMICA vía RPC transaccional public.crear_caso.
+    const caso = await casosService.crearCaso({
+      discrepanciaIds,
+      tipoJustificacionId,
+      justificacion,
+      ubicacionId: req.user?.ubicacion_id ?? null,
+      sucursal: sucursalCaso,
+      creadoPor: req.user?.id ?? null
+    });
 
     res.status(201).json({ caso });
   } catch (e) {
     logError('postCaso', e);
-    res.status(500).json({ error: e.message });
+    responderError(res, e);
   }
 };
 
@@ -435,22 +304,10 @@ const getCasos = async (req, res) => {
       return res.status(400).json({ error: `estado debe ser ${ESTADOS_CASO.join('|')}` });
     }
 
-    let query = supabase.from('casos').select('*');
-    if (estado) query = query.eq('estado', estado);
-    if (sucursal) query = query.eq('sucursal', sucursal);
-    if (desde) query = query.gte('created_at', desde);
-    if (hasta) query = query.lte('created_at', hasta);
+    let casos = await casosService.listarCasos({ estado, sucursal, desde, hasta });
 
-    const { data, error } = await query.order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('getCasos db error:', error.message);
-      return res.status(500).json({ error: 'Error al leer casos' });
-    }
-
-    let casos = data || [];
     if (!esGerenteOAdmin(req)) {
-      const ubicacionNombre = await getUserLocationName(req);
+      const ubicacionNombre = await ubicacionDelUsuario(req);
       if (!ubicacionNombre) {
         return res.status(403).json({ error: 'Ubicación no encontrada para el usuario' });
       }
@@ -458,49 +315,12 @@ const getCasos = async (req, res) => {
       casos = casos.filter(c => c.creado_por === req.user?.id || esVisibleParaUsuario(req, c.sucursal, ubicacionNombre));
     }
 
-    const casoIds = casos.map(c => c.id);
-
-    // Conteo de discrepancias por caso.
-    const conteoPorCaso = new Map();
-    if (casoIds.length > 0) {
-      const { data: discRows, error: discError } = await supabase
-        .from('discrepancias')
-        .select('caso_id')
-        .in('caso_id', casoIds);
-      if (discError) {
-        console.error('getCasos conteo db error:', discError.message);
-      } else {
-        for (const d of (discRows || [])) {
-          conteoPorCaso.set(d.caso_id, (conteoPorCaso.get(d.caso_id) || 0) + 1);
-        }
-      }
-    }
-
-    // Nombre de tipo de justificación.
-    const tipoIds = [...new Set(casos.map(c => c.tipo_justificacion_id).filter(id => id !== null && id !== undefined))];
-    const tiposPorId = new Map();
-    if (tipoIds.length > 0) {
-      const { data: tipos, error: tiposError } = await supabase
-        .from('tipos_justificacion')
-        .select('id, nombre, clave')
-        .in('id', tipoIds);
-      if (tiposError) {
-        console.error('getCasos tipos db error:', tiposError.message);
-      } else {
-        for (const t of (tipos || [])) tiposPorId.set(t.id, t);
-      }
-    }
-
-    const resultado = casos.map(c => ({
-      ...c,
-      total_discrepancias: conteoPorCaso.get(c.id) || 0,
-      tipo_justificacion: tiposPorId.get(c.tipo_justificacion_id) || null
-    }));
+    const resultado = await casosService.enriquecerCasos(casos);
 
     res.json({ total: resultado.length, casos: resultado });
   } catch (e) {
     logError('getCasos', e);
-    res.status(500).json({ error: e.message });
+    responderError(res, e);
   }
 };
 
@@ -510,17 +330,10 @@ const getCasos = async (req, res) => {
 
 const getResumen = async (req, res) => {
   try {
-    let query = supabase.from('casos').select('id, estado, sucursal, creado_por');
-    const { data, error } = await query;
+    let casos = await casosService.resumenCasos();
 
-    if (error) {
-      console.error('getResumen db error:', error.message);
-      return res.status(500).json({ error: 'Error al leer casos' });
-    }
-
-    let casos = data || [];
     if (!esGerenteOAdmin(req)) {
-      const ubicacionNombre = await getUserLocationName(req);
+      const ubicacionNombre = await ubicacionDelUsuario(req);
       if (!ubicacionNombre) {
         return res.status(403).json({ error: 'Ubicación no encontrada para el usuario' });
       }
@@ -535,7 +348,7 @@ const getResumen = async (req, res) => {
     res.json({ conteos });
   } catch (e) {
     logError('getResumen', e);
-    res.status(500).json({ error: e.message });
+    responderError(res, e);
   }
 };
 
@@ -548,21 +361,12 @@ const getCasoDetalle = async (req, res) => {
     const casoId = toId(req.params.id);
     if (!casoId) return res.status(400).json({ error: 'id inválido' });
 
-    const { data: caso, error } = await supabase
-      .from('casos')
-      .select('*')
-      .eq('id', casoId)
-      .maybeSingle();
-
-    if (error) {
-      console.error('getCasoDetalle db error:', error.message);
-      return res.status(500).json({ error: 'Error al leer el caso' });
-    }
+    const caso = await casosService.obtenerCaso(casoId);
     if (!caso) return res.status(404).json({ error: 'Caso no encontrado' });
 
     // Scope: jefe solo su ubicación o creador; gerente/admin todo.
     if (!esGerenteOAdmin(req)) {
-      const ubicacionNombre = await getUserLocationName(req);
+      const ubicacionNombre = await ubicacionDelUsuario(req);
       const esCreador = caso.creado_por === req.user?.id;
       const visible = ubicacionNombre && esVisibleParaUsuario(req, caso.sucursal, ubicacionNombre);
       if (!esCreador && !visible) {
@@ -570,72 +374,11 @@ const getCasoDetalle = async (req, res) => {
       }
     }
 
-    // Discrepancias asociadas.
-    const { data: discrepancias, error: discError } = await supabase
-      .from('discrepancias')
-      .select('*')
-      .eq('caso_id', casoId)
-      .order('id', { ascending: true });
-    if (discError) console.error('getCasoDetalle discrepancias db error:', discError.message);
-
-    // Eventos (timeline).
-    const { data: eventos, error: evError } = await supabase
-      .from('caso_eventos')
-      .select('*')
-      .eq('caso_id', casoId)
-      .order('created_at', { ascending: true });
-    if (evError) console.error('getCasoDetalle eventos db error:', evError.message);
-
-    // Nombres de actores (join manual a usuarios).
-    const actorIds = [...new Set([
-      caso.creado_por,
-      caso.revisado_por,
-      ...(eventos || []).map(ev => ev.actor_id)
-    ].filter(id => id !== null && id !== undefined))];
-
-    const actoresPorId = new Map();
-    if (actorIds.length > 0) {
-      const { data: usuarios, error: usError } = await supabase
-        .from('usuarios')
-        .select('id, nombre_completo, email')
-        .in('id', actorIds);
-      if (usError) {
-        console.error('getCasoDetalle usuarios db error:', usError.message);
-      } else {
-        for (const u of (usuarios || [])) actoresPorId.set(u.id, u);
-      }
-    }
-
-    const eventosConActor = (eventos || []).map(ev => ({
-      ...ev,
-      actor: actoresPorId.get(ev.actor_id) || null
-    }));
-
-    // Tipo de justificación.
-    let tipoJustificacion = null;
-    if (caso.tipo_justificacion_id) {
-      const { data: tipo, error: tipoError } = await supabase
-        .from('tipos_justificacion')
-        .select('*')
-        .eq('id', caso.tipo_justificacion_id)
-        .maybeSingle();
-      if (tipoError) console.error('getCasoDetalle tipo db error:', tipoError.message);
-      tipoJustificacion = tipo || null;
-    }
-
-    res.json({
-      caso: {
-        ...caso,
-        tipo_justificacion: tipoJustificacion,
-        creador: actoresPorId.get(caso.creado_por) || null,
-        revisor: actoresPorId.get(caso.revisado_por) || null
-      },
-      discrepancias: discrepancias || [],
-      eventos: eventosConActor
-    });
+    const detalle = await casosService.obtenerDetalleCaso(caso);
+    res.json(detalle);
   } catch (e) {
     logError('getCasoDetalle', e);
-    res.status(500).json({ error: e.message });
+    responderError(res, e);
   }
 };
 
@@ -652,21 +395,18 @@ async function cargarCaso(req, res, contexto) {
     res.status(400).json({ error: 'id inválido' });
     return null;
   }
-  const { data: caso, error } = await supabase
-    .from('casos')
-    .select('*')
-    .eq('id', casoId)
-    .maybeSingle();
-  if (error) {
-    console.error(`${contexto} db error:`, error.message);
+  try {
+    const caso = await casosService.obtenerCaso(casoId);
+    if (!caso) {
+      res.status(404).json({ error: 'Caso no encontrado' });
+      return null;
+    }
+    return caso;
+  } catch (e) {
+    logError(contexto, e);
     res.status(500).json({ error: 'Error al leer el caso' });
     return null;
   }
-  if (!caso) {
-    res.status(404).json({ error: 'Caso no encontrado' });
-    return null;
-  }
-  return caso;
 }
 
 // ============================================================
@@ -683,44 +423,13 @@ const postAprobar = async (req, res) => {
     }
 
     const comentario = String(req.body?.comentario ?? '').trim() || null;
-    const ahora = new Date().toISOString();
 
-    const { data: actualizado, error } = await supabase
-      .from('casos')
-      .update({
-        estado: 'aprobado',
-        revisado_por: req.user?.id ?? null,
-        revisado_at: ahora,
-        comentario_revision: comentario,
-        updated_at: ahora
-      })
-      .eq('id', caso.id)
-      .select('*')
-      .single();
-
-    if (error) {
-      console.error('postAprobar update error:', error.message);
-      return res.status(500).json({ error: 'No se pudo aprobar el caso' });
-    }
-
-    const { error: discError } = await supabase
-      .from('discrepancias')
-      .update({ estado: 'justificada', updated_at: ahora })
-      .eq('caso_id', caso.id);
-    if (discError) console.error('postAprobar discrepancias error:', discError.message);
-
-    const { error: evError } = await supabase.from('caso_eventos').insert({
-      caso_id: caso.id,
-      evento: 'aprobado',
-      actor_id: req.user?.id ?? null,
-      datos: comentario ? { comentario } : null
-    });
-    if (evError) console.error('postAprobar evento error:', evError.message);
+    const actualizado = await casosService.aprobarCaso(caso.id, req.user?.id ?? null, comentario);
 
     res.json({ caso: actualizado });
   } catch (e) {
     logError('postAprobar', e);
-    res.status(500).json({ error: e.message });
+    responderError(res, e);
   }
 };
 
@@ -742,40 +451,12 @@ const postRechazar = async (req, res) => {
       return res.status(400).json({ error: 'comentario es obligatorio para rechazar' });
     }
 
-    const ahora = new Date().toISOString();
-
-    const { data: actualizado, error } = await supabase
-      .from('casos')
-      .update({
-        estado: 'rechazado',
-        revisado_por: req.user?.id ?? null,
-        revisado_at: ahora,
-        comentario_revision: comentario,
-        updated_at: ahora
-      })
-      .eq('id', caso.id)
-      .select('*')
-      .single();
-
-    if (error) {
-      console.error('postRechazar update error:', error.message);
-      return res.status(500).json({ error: 'No se pudo rechazar el caso' });
-    }
-
-    // Las discrepancias permanecen 'en_revision'.
-
-    const { error: evError } = await supabase.from('caso_eventos').insert({
-      caso_id: caso.id,
-      evento: 'rechazado',
-      actor_id: req.user?.id ?? null,
-      datos: { comentario }
-    });
-    if (evError) console.error('postRechazar evento error:', evError.message);
+    const actualizado = await casosService.rechazarCaso(caso.id, req.user?.id ?? null, comentario);
 
     res.json({ caso: actualizado });
   } catch (e) {
     logError('postRechazar', e);
-    res.status(500).json({ error: e.message });
+    responderError(res, e);
   }
 };
 
@@ -805,16 +486,7 @@ const putReenviar = async (req, res) => {
       if (!tipoJustificacionId) {
         return res.status(400).json({ error: 'tipo_justificacion_id inválido' });
       }
-      const { data: tipo, error: tipoError } = await supabase
-        .from('tipos_justificacion')
-        .select('id, activo')
-        .eq('id', tipoJustificacionId)
-        .eq('activo', true)
-        .maybeSingle();
-      if (tipoError) {
-        console.error('putReenviar tipo db error:', tipoError.message);
-        return res.status(500).json({ error: 'Error al validar tipo de justificación' });
-      }
+      const tipo = await casosService.obtenerTipoJustificacionActivo(tipoJustificacionId);
       if (!tipo) return res.status(400).json({ error: 'Tipo de justificación inválido o inactivo' });
       cambios.tipo_justificacion_id = tipoJustificacionId;
     }
@@ -827,39 +499,29 @@ const putReenviar = async (req, res) => {
       cambios.justificacion = justificacion;
     }
 
-    // Actualizar discrepancias del caso si se envían.
+    // Ajustar discrepancias del caso si se envían (el diff/scope es HTTP).
+    let aAgregar = [];
+    let aQuitar = [];
     if (req.body?.discrepancia_ids !== undefined) {
       const nuevosIds = normalizarIds(req.body.discrepancia_ids);
       if (nuevosIds.length === 0) {
         return res.status(400).json({ error: 'discrepancia_ids no puede estar vacío' });
       }
 
-      const { data: actuales, error: actualesError } = await supabase
-        .from('discrepancias')
-        .select('id, estado, caso_id, sucursal')
-        .eq('caso_id', caso.id);
-      if (actualesError) {
-        console.error('putReenviar actuales db error:', actualesError.message);
-        return res.status(500).json({ error: 'Error al leer discrepancias del caso' });
-      }
+      const actuales = await casosService.obtenerDiscrepanciasDelCaso(caso.id);
+      const solicitadas = await casosService.obtenerDiscrepanciasPorIds(nuevosIds, {
+        select: 'id, estado, sucursal',
+        mensaje: 'Error al leer discrepancias'
+      });
 
-      const { data: solicitadas, error: solicitadasError } = await supabase
-        .from('discrepancias')
-        .select('id, estado, sucursal')
-        .in('id', nuevosIds);
-      if (solicitadasError) {
-        console.error('putReenviar solicitadas db error:', solicitadasError.message);
-        return res.status(500).json({ error: 'Error al leer discrepancias' });
-      }
-
-      if ((solicitadas || []).length !== nuevosIds.length) {
+      if (solicitadas.length !== nuevosIds.length) {
         return res.status(400).json({ error: 'Una o más discrepancias no existen' });
       }
 
       // Scope de ubicación del jefe (creador): validar las nuevas.
       let ubicacionNombre = null;
       if (!esGerenteOAdmin(req)) {
-        ubicacionNombre = await getUserLocationName(req);
+        ubicacionNombre = await ubicacionDelUsuario(req);
       }
       if (ubicacionNombre) {
         const fuera = solicitadas.filter(d => !esVisibleParaUsuario(req, d.sucursal, ubicacionNombre)).map(d => d.id);
@@ -868,54 +530,20 @@ const putReenviar = async (req, res) => {
         }
       }
 
-      const idsActuales = new Set((actuales || []).map(d => d.id));
+      const idsActuales = new Set(actuales.map(d => d.id));
       const idsSolicitados = new Set(nuevosIds);
 
       // Nuevas: deben estar 'abierta' y sin caso.
-      const aAgregar = (solicitadas || []).filter(d => !idsActuales.has(d.id));
+      aAgregar = solicitadas.filter(d => !idsActuales.has(d.id));
       const noAbiertas = aAgregar.filter(d => d.estado !== 'abierta').map(d => d.id);
       if (noAbiertas.length > 0) {
         return res.status(400).json({ error: `Discrepancias que no están abiertas: ${noAbiertas.join(', ')}` });
       }
 
-      const aQuitar = (actuales || []).filter(d => !idsSolicitados.has(d.id)).map(d => d.id);
-
-      if (aQuitar.length > 0) {
-        const { error: quitarError } = await supabase
-          .from('discrepancias')
-          .update({ estado: 'abierta', caso_id: null, updated_at: ahora })
-          .in('id', aQuitar);
-        if (quitarError) {
-          console.error('putReenviar quitar db error:', quitarError.message);
-          return res.status(500).json({ error: 'Error al actualizar discrepancias' });
-        }
-      }
-
-      if (aAgregar.length > 0) {
-        const { error: agregarError } = await supabase
-          .from('discrepancias')
-          .update({ estado: 'en_revision', caso_id: caso.id, updated_at: ahora })
-          .in('id', aAgregar.map(d => d.id));
-        if (agregarError) {
-          console.error('putReenviar agregar db error:', agregarError.message);
-          return res.status(500).json({ error: 'Error al actualizar discrepancias' });
-        }
-      }
+      aQuitar = actuales.filter(d => !idsSolicitados.has(d.id)).map(d => d.id);
     }
 
-    const { data: actualizado, error } = await supabase
-      .from('casos')
-      .update(cambios)
-      .eq('id', caso.id)
-      .select('*')
-      .single();
-
-    if (error) {
-      console.error('putReenviar update error:', error.message);
-      return res.status(500).json({ error: 'No se pudo reenviar el caso' });
-    }
-
-    const { error: evError } = await supabase.from('caso_eventos').insert({
+    const evento = {
       caso_id: caso.id,
       evento: 'justificacion_reenviada',
       actor_id: req.user?.id ?? null,
@@ -924,13 +552,18 @@ const putReenviar = async (req, res) => {
         justificacion: cambios.justificacion ?? caso.justificacion,
         discrepancia_ids: req.body?.discrepancia_ids !== undefined ? normalizarIds(req.body.discrepancia_ids) : undefined
       }
+    };
+
+    const actualizado = await casosService.reenviarCaso(caso.id, cambios, {
+      aAgregar: aAgregar.map(d => d.id),
+      aQuitar,
+      evento
     });
-    if (evError) console.error('putReenviar evento error:', evError.message);
 
     res.json({ caso: actualizado });
   } catch (e) {
     logError('putReenviar', e);
-    res.status(500).json({ error: e.message });
+    responderError(res, e);
   }
 };
 
@@ -957,46 +590,19 @@ const postRetirar = async (req, res) => {
       return res.status(400).json({ error: 'discrepancia_ids es obligatorio (al menos un id)' });
     }
 
-    const { data: delCaso, error: delCasoError } = await supabase
-      .from('discrepancias')
-      .select('id')
-      .eq('caso_id', caso.id)
-      .in('id', discrepanciaIds);
-
-    if (delCasoError) {
-      console.error('postRetirar db error:', delCasoError.message);
-      return res.status(500).json({ error: 'Error al leer discrepancias del caso' });
-    }
-
-    const idsDelCaso = new Set((delCaso || []).map(d => d.id));
+    const delCaso = await casosService.obtenerIdsDiscrepanciasDelCaso(caso.id, discrepanciaIds);
+    const idsDelCaso = new Set(delCaso.map(d => d.id));
     const fueraDelCaso = discrepanciaIds.filter(id => !idsDelCaso.has(id));
     if (fueraDelCaso.length > 0) {
       return res.status(400).json({ error: `Discrepancias que no pertenecen al caso: ${fueraDelCaso.join(', ')}` });
     }
 
-    const ahora = new Date().toISOString();
-    const { error } = await supabase
-      .from('discrepancias')
-      .update({ estado: 'abierta', caso_id: null, updated_at: ahora })
-      .in('id', discrepanciaIds);
-
-    if (error) {
-      console.error('postRetirar update error:', error.message);
-      return res.status(500).json({ error: 'No se pudieron retirar las discrepancias' });
-    }
-
-    const { error: evError } = await supabase.from('caso_eventos').insert({
-      caso_id: caso.id,
-      evento: 'discrepancia_retirada',
-      actor_id: req.user?.id ?? null,
-      datos: { discrepancia_ids: discrepanciaIds }
-    });
-    if (evError) console.error('postRetirar evento error:', evError.message);
+    await casosService.retirarCaso(caso.id, req.user?.id ?? null, discrepanciaIds);
 
     res.json({ retiradas: discrepanciaIds.length, discrepancia_ids: discrepanciaIds });
   } catch (e) {
     logError('postRetirar', e);
-    res.status(500).json({ error: e.message });
+    responderError(res, e);
   }
 };
 
@@ -1019,26 +625,12 @@ const postComentario = async (req, res) => {
       return res.status(400).json({ error: 'comentario no puede estar vacío' });
     }
 
-    const { data: evento, error } = await supabase
-      .from('caso_eventos')
-      .insert({
-        caso_id: caso.id,
-        evento: 'comentario',
-        actor_id: req.user?.id ?? null,
-        datos: { comentario }
-      })
-      .select('*')
-      .single();
-
-    if (error) {
-      console.error('postComentario db error:', error.message);
-      return res.status(500).json({ error: 'No se pudo registrar el comentario' });
-    }
+    const evento = await casosService.comentarCaso(caso.id, req.user?.id ?? null, comentario);
 
     res.status(201).json({ evento });
   } catch (e) {
     logError('postComentario', e);
-    res.status(500).json({ error: e.message });
+    responderError(res, e);
   }
 };
 
@@ -1060,6 +652,5 @@ module.exports = {
   _esUbicacionCompartida: esUbicacionCompartida,
   _tokenMatch: tokenMatch,
   _normalizarIds: normalizarIds,
-  _generarFolio: generarFolio,
   _discrepanciasDeResultado: discrepanciasDeResultado
 };
