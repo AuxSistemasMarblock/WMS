@@ -144,12 +144,17 @@ function evaluarCantidad(cantidadM2, lote, placasEscaneadas) {
     ? (Math.floor(placasTeoricas) + 0.5)
     : placasEsp;
 
+  // La diferencia debe medirse contra las placas esperadas normalizadas (p. ej.
+  // 1.5), no contra el redondeo entero: si se pide media placa y se escanea la
+  // placa completa, la diferencia es 0.5, no 0.
+  const diffPlacasFinal = parseFloat((placasEscaneadas - placasEsperadasNormalizadas).toFixed(2));
+
   return {
     status,
     tipo_discrepancia,
     placas_esperadas: placasEsperadasNormalizadas,
     placas_escaneadas: placasEscaneadas,
-    diferencia: Math.abs(diffPlacas),
+    diferencia: Math.abs(diffPlacasFinal),
     m2_esperados: m2EspRedondeado,
     m2_escaneados: m2EscRedondeado,
     diff_m2: diffM2Final,

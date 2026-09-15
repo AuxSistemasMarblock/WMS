@@ -129,6 +129,7 @@ const state = {
   detalleActual: null,
   revisionMode: null,
   discDetalleId: null,
+  pagina: { disc: 1, caso: 1, rev: 1 },
   filtros: {
     disc: { periodo: 'hoy', desde: HOY_YMD, hasta: HOY_YMD, tipo: '', if_tranid: '' },
     caso: { periodo: 'hoy', estado: '', if_tranid: '', desde: HOY_YMD, hasta: HOY_YMD },
@@ -139,6 +140,7 @@ const state = {
 // =================== CONSTANTES ===================
 const ROLES_PERMITIDOS = ['jefe_almacen', 'gerente', 'admin'];
 const MIN_OTRO = 15;
+const PAGE_SIZE = 10;
 
 const TIPOS_DISCREPANCIA = [
   { value: 'lote_cruzado', label: 'Lotes Cruzados' },
@@ -365,7 +367,7 @@ function tabsPorRol() {
   }
   return [
     { id: 'errores', label: 'Errores de mi almacén', count: null },
-    { id: 'mis-casos', label: 'Mis casos', count: 'tabCountCasos' }
+    { id: 'mis-casos', label: 'Mis casos', count: null }
   ];
 }
 
@@ -387,6 +389,42 @@ function switchTab(tab) {
   state.tab = tab;
   renderTabs();
   renderMain();
+}
+
+// =================== PAGINACIÓN ===================
+function totalPaginas(total) { return Math.max(1, Math.ceil(total / PAGE_SIZE)); }
+
+function paginar(lista, pagina) {
+  const start = (pagina - 1) * PAGE_SIZE;
+  return lista.slice(start, start + PAGE_SIZE);
+}
+
+function renderPaginacion(containerId, pagina, total, handler) {
+  const c = $(containerId);
+  if (!c) return;
+  const tp = totalPaginas(total);
+  const start = total === 0 ? 0 : (pagina - 1) * PAGE_SIZE + 1;
+  const end = Math.min(total, pagina * PAGE_SIZE);
+  c.innerHTML = `
+    <button class="btn btn-ghost" type="button" ${pagina <= 1 ? 'disabled' : ''} onclick="${handler}(-1)">‹ Anterior</button>
+    <span class="pagination-info">Página ${pagina} de ${tp} · Mostrando ${start}-${end} de ${total} (${PAGE_SIZE} por pág.)</span>
+    <button class="btn btn-ghost" type="button" ${pagina >= tp ? 'disabled' : ''} onclick="${handler}(1)">Siguiente ›</button>
+  `;
+}
+
+function cambiarPaginaDisc(delta) {
+  state.pagina.disc = Math.min(Math.max(1, state.pagina.disc + delta), totalPaginas(state.discrepancias.length));
+  renderDiscTable();
+}
+
+function cambiarPaginaCaso(delta) {
+  state.pagina.caso = Math.min(Math.max(1, state.pagina.caso + delta), totalPaginas(state.casos.length));
+  renderCasosTable('tbodyCasos', state.casos);
+}
+
+function cambiarPaginaRev(delta) {
+  state.pagina.rev = Math.min(Math.max(1, state.pagina.rev + delta), totalPaginas(state.casos.length));
+  renderRevisionTable(state.casos);
 }
 
 // =================== RENDER PRINCIPAL ===================
@@ -446,10 +484,6 @@ function renderErroresView() {
             ${tipoOpts}
           </select>
         </div>
-        <div class="filter-group">
-          <label for="fDiscIf">IF</label>
-          <input type="text" id="fDiscIf" class="filter-select" placeholder="IF-1234" value="${escapeHTML(f.if_tranid)}" />
-        </div>
         <div class="filter-group filters-actions">
           <button class="btn btn-primary" type="button" onclick="cargarDiscrepancias()">Aplicar</button>
         </div>
@@ -471,9 +505,13 @@ function renderErroresView() {
       </div>
       <div class="table-wrap">
         <table class="casos-table">
+          <colgroup>
+            <col style="width:4%" /><col style="width:8%" /><col style="width:9%" /><col style="width:10%" />
+            <col style="width:8%" /><col style="width:18%" /><col style="width:18%" /><col style="width:13%" /><col style="width:12%" />
+          </colgroup>
           <thead>
             <tr>
-              <th style="width:34px;" class="cell-center">
+              <th class="cell-center">
                 <input type="checkbox" title="Seleccionar todas" onchange="toggleTodasDisc(this.checked)" />
               </th>
               <th>IF</th>
@@ -481,7 +519,7 @@ function renderErroresView() {
               <th>Sucursal</th>
               <th>SKU</th>
               <th class="col-lote">Lote</th>
-              <th>Tipo</th>
+              <th class="col-tipo">Tipo</th>
               <th class="cell-center">Placas (esp / esc)</th>
               <th class="cell-center">Acción</th>
             </tr>
@@ -491,6 +529,7 @@ function renderErroresView() {
           </tbody>
         </table>
       </div>
+      <div class="pagination" id="pagDisc"></div>
     </section>
   `;
   actualizarBotonJustificar();
@@ -500,7 +539,6 @@ function leerFiltrosDisc() {
   const val = id => { const e = $(id); return e ? e.value.trim() : ''; };
   const f = leerPeriodo('fDisc');
   f.tipo = val('fDiscTipo');
-  f.if_tranid = val('fDiscIf');
   return f;
 }
 
@@ -525,11 +563,11 @@ async function cargarDiscrepancias() {
     if (f.hasta) p.set('hasta', f.hasta);
     if (f.tipo) p.set('tipo', f.tipo);
     p.set('estado', 'abierta');
-    if (f.if_tranid) p.set('if_tranid', f.if_tranid);
 
     const data = await apiFetch('/api/casos/discrepancias?' + p.toString());
     state.discrepancias = data.discrepancias || [];
     state.discSeleccion.clear();
+    state.pagina.disc = 1;
     renderDiscTable();
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state">Error: ${escapeHTML(e.message)}</div></td></tr>`;
@@ -557,13 +595,29 @@ function placasCelda(d) {
   const esp = escapeHTML(fmtPlacas(d.placas_esperadas));
   const esc = escapeHTML(fmtPlacas(d.placas_escaneadas));
   const dir = tipoDireccion(d.tipo);
+
+  const espN = Number(d.placas_esperadas);
+  const escN = Number(d.placas_escaneadas);
+  const tieneEsp = d.placas_esperadas !== null && d.placas_esperadas !== undefined && !Number.isNaN(espN);
+
+  // El signo se deriva de escaneadas - esperadas (soporta medias placas: 1.5 vs 2 => +0.5).
+  let delta = null;
+  if (tieneEsp && !Number.isNaN(escN)) {
+    delta = Number((escN - espN).toFixed(2));
+  } else if (!tieneEsp && !Number.isNaN(escN) && dir === 'sobrante') {
+    delta = escN; // Huérfana: todo lo escaneado es excedente.
+  } else if (d.diferencia !== null && d.diferencia !== undefined && !Number.isNaN(Number(d.diferencia))) {
+    const n = Math.abs(Number(d.diferencia));
+    delta = dir === 'faltante' ? -n : n;
+  }
+
   let dif = '—';
   let difCls = 'cell-muted';
-  if (d.diferencia !== null && d.diferencia !== undefined && !Number.isNaN(Number(d.diferencia))) {
-    const pref = dir === 'faltante' ? '-' : (dir === 'sobrante' ? '+' : '');
-    dif = pref + fmtPlacas(Math.abs(Number(d.diferencia)));
-    difCls = dir === 'faltante' ? 'text-error' : (dir === 'sobrante' ? 'text-warn' : 'text-media');
+  if (delta !== null) {
+    dif = (delta > 0 ? '+' : '') + fmtPlacas(delta);
+    difCls = delta < 0 ? 'text-error' : (delta > 0 ? 'text-warn' : 'cell-muted');
   }
+
   return `
     <div class="placas-main">
       <span class="placas-esp" title="Esperadas">${esp}</span>
@@ -582,11 +636,15 @@ function renderDiscTable() {
 
   if (!rows.length) {
     tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state">No hay errores sin caso para los filtros seleccionados.</div></td></tr>';
+    renderPaginacion('pagDisc', 1, 0, 'cambiarPaginaDisc');
     actualizarBotonJustificar();
     return;
   }
 
-  tbody.innerHTML = rows.map(d => {
+  state.pagina.disc = Math.min(state.pagina.disc, totalPaginas(rows.length));
+  const visibles = paginar(rows, state.pagina.disc);
+
+  tbody.innerHTML = visibles.map(d => {
     const checked = state.discSeleccion.has(Number(d.id)) ? ' checked' : '';
     return `<tr>
       <td class="cell-center">
@@ -598,7 +656,7 @@ function renderDiscTable() {
       <td>${escapeHTML(d.sucursal || '—')}</td>
       <td>${escapeHTML(d.sku || '—')}</td>
       <td class="col-lote">${escapeHTML(d.lote || d.id_lote || '—')}</td>
-      <td>${badgeTipo(d.tipo)}</td>
+      <td class="col-tipo">${badgeTipo(d.tipo)}</td>
       <td class="cell-center">${placasCelda(d)}</td>
       <td class="cell-center">
         <button class="btn-detalle" type="button" onclick="abrirDetalleDisc(${Number(d.id)})">Ver detalle</button>
@@ -606,6 +664,7 @@ function renderDiscTable() {
     </tr>`;
   }).join('');
 
+  renderPaginacion('pagDisc', state.pagina.disc, rows.length, 'cambiarPaginaDisc');
   actualizarBotonJustificar();
 }
 
@@ -809,12 +868,16 @@ function renderMisCasosView() {
       </div>
       <div class="table-wrap">
         <table class="casos-table">
+          <colgroup>
+            <col style="width:12%" /><col style="width:12%" /><col style="width:9%" /><col style="width:22%" />
+            <col style="width:14%" /><col style="width:18%" /><col style="width:13%" />
+          </colgroup>
           <thead>
             <tr>
               <th>Folio</th>
               <th>Estado</th>
               <th class="cell-num"># Errores</th>
-              <th>Tipo</th>
+              <th class="col-tipo">Tipo</th>
               <th>Sucursal</th>
               <th>Fecha</th>
               <th class="cell-center">Acción</th>
@@ -825,6 +888,7 @@ function renderMisCasosView() {
           </tbody>
         </table>
       </div>
+      <div class="pagination" id="pagCaso"></div>
     </section>
   `;
 }
@@ -849,9 +913,8 @@ async function cargarCasosJefe() {
   try {
     const data = await apiFetch('/api/casos?' + paramsCasos(f).toString());
     state.casos = data.casos || [];
+    state.pagina.caso = 1;
     renderCasosTable('tbodyCasos', state.casos);
-    const count = $('countCasos'); if (count) count.textContent = String(state.casos.length);
-    actualizarTabCount('tabCountCasos', state.casos.length);
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state">Error: ${escapeHTML(e.message)}</div></td></tr>`;
   }
@@ -864,10 +927,8 @@ async function refrescarMisCasos() {
   try {
     const data = await apiFetch('/api/casos?' + paramsCasos(f).toString());
     state.casos = data.casos || [];
-    actualizarTabCount('tabCountCasos', state.casos.length);
     if ($('tbodyCasos')) {
       renderCasosTable('tbodyCasos', state.casos);
-      const count = $('countCasos'); if (count) count.textContent = String(state.casos.length);
     }
   } catch (e) {
     // Silencioso: un fallo de refresco no debe romper el flujo de creación.
@@ -879,19 +940,23 @@ function renderCasosTable(tbodyId, casos) {
   if (!tbody) return;
   if (!casos.length) {
     tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state">No hay casos.</div></td></tr>';
+    renderPaginacion('pagCaso', 1, 0, 'cambiarPaginaCaso');
     return;
   }
-  tbody.innerHTML = casos.map(c => `
+  state.pagina.caso = Math.min(state.pagina.caso, totalPaginas(casos.length));
+  const visibles = paginar(casos, state.pagina.caso);
+  tbody.innerHTML = visibles.map(c => `
     <tr>
       <td class="cell-tranid">${escapeHTML(c.folio || '—')}</td>
       <td>${estadoCasoBadge(c.estado)}</td>
       <td class="cell-num">${escapeHTML(fmtNum(c.total_discrepancias ?? 0))}</td>
-      <td>${escapeHTML(nombreTipoJustificacion(c))}</td>
+      <td class="col-tipo">${escapeHTML(nombreTipoJustificacion(c))}</td>
       <td>${escapeHTML(c.sucursal || '—')}</td>
       <td>${escapeHTML(fmtFechaHora(c.created_at))}</td>
       <td class="cell-center"><button class="btn-detalle" type="button" onclick="abrirDetalleCaso(${Number(c.id)})">Ver detalle</button></td>
     </tr>
   `).join('');
+  renderPaginacion('pagCaso', state.pagina.caso, casos.length, 'cambiarPaginaCaso');
 }
 
 // =================== SUCURSALES (filtro gerente/admin) ===================
@@ -947,13 +1012,17 @@ function renderRevisionView() {
       </div>
       <div class="table-wrap">
         <table class="casos-table">
+          <colgroup>
+            <col style="width:12%" /><col style="width:12%" /><col style="width:12%" /><col style="width:9%" />
+            <col style="width:19%" /><col style="width:15%" /><col style="width:13%" /><col style="width:8%" />
+          </colgroup>
           <thead>
             <tr>
               <th>Folio</th>
               <th>Estado</th>
               <th>Sucursal</th>
               <th class="cell-num"># Errores</th>
-              <th>Tipo</th>
+              <th class="col-tipo">Tipo</th>
               <th>Solicitante</th>
               <th>Enviado</th>
               <th class="cell-center">Acción</th>
@@ -964,6 +1033,7 @@ function renderRevisionView() {
           </tbody>
         </table>
       </div>
+      <div class="pagination" id="pagRev"></div>
     </section>
   `;
 
@@ -996,6 +1066,7 @@ async function cargarCasosRevision() {
   try {
     const data = await apiFetch('/api/casos?' + p.toString());
     state.casos = data.casos || [];
+    state.pagina.rev = 1;
     renderRevisionTable(state.casos);
     const count = $('countRev'); if (count) count.textContent = String(state.casos.length);
     if (state.tab === 'por-aprobar') actualizarTabCount('tabCountPend', state.casos.length);
@@ -1010,20 +1081,24 @@ function renderRevisionTable(casos) {
   if (!tbody) return;
   if (!casos.length) {
     tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state">No hay casos con estos filtros.</div></td></tr>';
+    renderPaginacion('pagRev', 1, 0, 'cambiarPaginaRev');
     return;
   }
-  tbody.innerHTML = casos.map(c => `
+  state.pagina.rev = Math.min(state.pagina.rev, totalPaginas(casos.length));
+  const visibles = paginar(casos, state.pagina.rev);
+  tbody.innerHTML = visibles.map(c => `
     <tr>
       <td class="cell-tranid">${escapeHTML(c.folio || '—')}</td>
       <td>${estadoCasoBadge(c.estado)}</td>
       <td>${escapeHTML(c.sucursal || '—')}</td>
       <td class="cell-num">${escapeHTML(fmtNum(c.total_discrepancias ?? 0))}</td>
-      <td>${escapeHTML(nombreTipoJustificacion(c))}</td>
+      <td class="col-tipo">${escapeHTML(nombreTipoJustificacion(c))}</td>
       <td>${escapeHTML(c.creador?.nombre_completo || (c.creado_por ? 'Usuario #' + c.creado_por : '—'))}</td>
       <td>${escapeHTML(fmtFechaHora(c.enviado_at || c.created_at))}</td>
       <td class="cell-center"><button class="btn-detalle" type="button" onclick="abrirDetalleCaso(${Number(c.id)})">${c.estado === 'pendiente_aprobacion' ? 'Revisar' : 'Ver detalle'}</button></td>
     </tr>
   `).join('');
+  renderPaginacion('pagRev', state.pagina.rev, casos.length, 'cambiarPaginaRev');
 }
 
 // =================== DETALLE DE CASO ===================
@@ -1320,7 +1395,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   state.tab = casoId ? (esGerenteOAdmin() ? 'historial' : 'mis-casos') : (tabsPorRol()[0].id);
 
   renderTabs();
-  $('mainApp').style.display = 'block';
+  $('mainApp').style.display = 'flex';
   renderMain();
 
   if (casoId) abrirDetalleCaso(Number(casoId));

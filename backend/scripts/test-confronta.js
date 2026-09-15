@@ -103,6 +103,13 @@ async function main() {
     console.log(`     ${pass ? '\x1b[32m✓\x1b[0m' : '\x1b[31m✗\x1b[0m'} ${t.lote} + ${t.m2}m² → ${r} (esperado: ${t.esperado})`);
     if (!pass) parserOK = false;
   }
+
+  // Media placa: se pide 1.5 y se escanea la placa completa (2) => diferencia 0.5.
+  const mp = loteParser.evaluarCantidad(5.625, '15800-2.50X1.50', 2);
+  const mpOK = mp.tipo_discrepancia === 'media_placa' && mp.placas_esperadas === 1.5 && mp.diferencia === 0.5;
+  console.log(`     ${mpOK ? '\x1b[32m✓\x1b[0m' : '\x1b[31m✗\x1b[0m'} media placa esp=${mp.placas_esperadas} esc=2 → dif=${mp.diferencia} (esperado: 0.5)`);
+  if (!mpOK) parserOK = false;
+
   if (!parserOK) {
     warn('Parser tiene tests fallidos. Revisar antes de continuar.');
   } else {
