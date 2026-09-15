@@ -437,8 +437,8 @@ async function pruebaEnVivo() {
     if (!caso) throw new Error('la RPC crear_caso no devolvió caso');
     casoId = caso.id;
 
-    check('folio con formato CASO-YYYY-NNNN',
-      /^CASO-\d{4}-\d{4}$/.test(caso.folio || ''), String(caso.folio));
+    check('folio del caso es la IF de la discrepancia',
+      caso.folio === marca, String(caso.folio));
     check('estado del caso es "pendiente_aprobacion"',
       caso.estado === 'pendiente_aprobacion', String(caso.estado));
 
