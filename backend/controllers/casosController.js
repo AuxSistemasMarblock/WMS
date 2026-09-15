@@ -21,9 +21,7 @@
  */
 
 const casosService = require('../services/casosService');
-const config = require('../config/environments');
-
-const SHARED_LOCATIONS = config.netsuite.SHARED_LOCATIONS || ['TEMPORAL', 'PROYECTOS', 'Material Transformado', 'MATRIZ'];
+const { esUbicacionCompartida, esVisibleParaUbicacion } = require('../services/locationScope');
 
 const ESTADOS_CASO = ['pendiente_aprobacion', 'aprobado', 'rechazado'];
 const ESTADOS_DISCREPANCIA = ['abierta', 'en_revision', 'justificada'];
@@ -70,43 +68,16 @@ function esGerenteOAdmin(req) {
 }
 
 /**
- * Verdadero si la ubicación pertenece a la lista blanca compartida (visible
- * para todos los jefes). SOLO estas ubicaciones se comparten: cualquier otra
- * (sucursales y sus outlets, p. ej. "OUTLET MEX"/"OUTLET GDL") queda restringida
- * al alcance del usuario.
- */
-function esUbicacionCompartida(loc) {
-  if (!loc) return false;
-  return SHARED_LOCATIONS.includes(loc);
-}
-
-/**
- * Verdadero si `loc` pertenece a la sucursal `userLocationName` por tokens.
- * Se exige que TODOS los tokens de la ubicación del usuario aparezcan en la
- * ubicación de la fila:
- *   - "GDL"         ve "GDL" y "OUTLET GDL", nunca "OUTLET MEX".
- *   - "GDL:OUTLET"  ve "OUTLET GDL" (tokens GDL y OUTLET) y "GDL".
- * Evita que usuarios de outlet vean todos los outlets por el token genérico.
- */
-function tokenMatch(loc, userLocationName) {
-  if (!loc || !userLocationName) return false;
-  if (loc === userLocationName) return true;
-  const tokens = String(loc).split(/[\s:]+/).filter(Boolean);
-  const userTokens = String(userLocationName).split(/[\s:]+/).filter(Boolean);
-  if (userTokens.length === 0) return false;
-  return userTokens.every(t => tokens.includes(t));
-}
-
-/**
  * Indica si una fila (caso o discrepancia) es visible para el usuario.
  * - gerente/admin: todo.
- * - jefe: ubicaciones compartidas o de su sucursal.
+ * - jefe: su ubicación/sucursal (incluido su outlet) o la whitelist compartida.
+ *
+ * Usa el helper compartido backend/services/locationScope.js (mismo criterio que
+ * el escáner).
  */
 function esVisibleParaUsuario(req, sucursal, userLocationName) {
   if (esGerenteOAdmin(req)) return true;
-  if (!sucursal) return false;
-  if (esUbicacionCompartida(sucursal)) return true;
-  return tokenMatch(sucursal, userLocationName);
+  return esVisibleParaUbicacion(sucursal, userLocationName);
 }
 
 /**
@@ -653,7 +624,7 @@ module.exports = {
   // Helpers exportados para tests
   _rolDe: rolDe,
   _esUbicacionCompartida: esUbicacionCompartida,
-  _tokenMatch: tokenMatch,
+  _tokenMatch: esVisibleParaUbicacion,
   _esVisibleParaUsuario: esVisibleParaUsuario,
   _normalizarIds: normalizarIds,
   _discrepanciasDeResultado: discrepanciasDeResultado
