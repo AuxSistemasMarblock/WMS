@@ -36,6 +36,7 @@ if (!process.env.SUPABASE_SERVICE_ROLE_KEY) process.env.SUPABASE_SERVICE_ROLE_KE
 if (!process.env.CASOS_TZ_OFFSET) process.env.CASOS_TZ_OFFSET = '-06:00';
 
 const casosService = require('../services/casosService');
+const casosController = require('../controllers/casosController');
 const supabase = require('../config/supabase');
 
 // ============================================================
@@ -309,11 +310,49 @@ function pruebasRangoFechas() {
 }
 
 // ============================================================
-// 5) Prueba en vivo (opcional)
+// 5) Scope de ubicación del jefe de almacén
+// ============================================================
+
+function pruebasScopeUbicacion() {
+  header('5. scope de ubicación (jefe)');
+
+  const compartida = casosController._esUbicacionCompartida;
+  check('PROYECTOS es compartida', compartida('PROYECTOS') === true);
+  check('TEMPORAL es compartida', compartida('TEMPORAL') === true);
+  check('"Material Transformado" es compartida', compartida('Material Transformado') === true);
+  check('GDL NO es compartida', compartida('GDL') === false);
+  check('OUTLET MEX NO es compartida', compartida('OUTLET MEX') === false);
+  check('OUTLET GDL NO es compartida', compartida('OUTLET GDL') === false);
+
+  const tm = casosController._tokenMatch;
+  check('GDL ve GDL', tm('GDL', 'GDL') === true);
+  check('GDL ve OUTLET GDL', tm('OUTLET GDL', 'GDL') === true);
+  check('GDL NO ve OUTLET MEX', tm('OUTLET MEX', 'GDL') === false);
+  check('GDL NO ve MEX', tm('MEX', 'GDL') === false);
+  check('GDL:OUTLET ve OUTLET GDL', tm('OUTLET GDL', 'GDL:OUTLET') === true);
+  check('GDL:OUTLET NO ve OUTLET MEX', tm('OUTLET MEX', 'GDL:OUTLET') === false);
+
+  const vis = casosController._esVisibleParaUsuario;
+  const jefeGDL = { user: { rol: 'jefe_almacen' } };
+  check('jefe GDL ve GDL', vis(jefeGDL, 'GDL', 'GDL') === true);
+  check('jefe GDL ve OUTLET GDL', vis(jefeGDL, 'OUTLET GDL', 'GDL') === true);
+  check('jefe GDL NO ve OUTLET MEX', vis(jefeGDL, 'OUTLET MEX', 'GDL') === false);
+  check('jefe GDL NO ve MEX', vis(jefeGDL, 'MEX', 'GDL') === false);
+  check('jefe GDL ve ubicación compartida', vis(jefeGDL, 'PROYECTOS', 'GDL') === true);
+  check('jefe GDL no ve sucursal nula', vis(jefeGDL, null, 'GDL') === false);
+
+  const gerente = { user: { rol: 'gerente' } };
+  check('gerente ve cualquier ubicación', vis(gerente, 'OUTLET MEX', 'GDL') === true);
+  const admin = { user: { rol: 'admin' } };
+  check('admin ve cualquier ubicación', vis(admin, 'OUTLET MEX', 'GDL') === true);
+}
+
+// ============================================================
+// 6) Prueba en vivo (opcional)
 // ============================================================
 
 async function pruebaEnVivo() {
-  header('5. PRUEBA EN VIVO (crear_caso + limpieza)');
+  header('6. PRUEBA EN VIVO (crear_caso + limpieza)');
 
   const marca = `test-casos-${Date.now()}`;
   let discId = null;
@@ -465,6 +504,7 @@ async function main() {
   pruebasConstruirFila();
   await pruebasAnotarDiscrepancias();
   pruebasRangoFechas();
+  pruebasScopeUbicacion();
 
   if (LIVE && HAS_ENV) {
     await pruebaEnVivo();
