@@ -558,10 +558,30 @@ async function enriquecerCasos(casos) {
     }
   }
 
+  // Creador/revisor: para mostrar el nombre del solicitante en los listados
+  // (no solo su id).
+  const actorIds = [...new Set(
+    lista.flatMap(c => [c.creado_por, c.revisado_por]).filter(id => id !== null && id !== undefined)
+  )];
+  const actoresPorId = new Map();
+  if (actorIds.length > 0) {
+    const { data: usuarios, error: usError } = await supabase
+      .from('usuarios')
+      .select('id, nombre_completo, email')
+      .in('id', actorIds);
+    if (usError) {
+      console.error('[casosService.enriquecerCasos] usuarios error:', usError.message);
+    } else {
+      for (const u of (usuarios || [])) actoresPorId.set(u.id, u);
+    }
+  }
+
   return lista.map(c => ({
     ...c,
     total_discrepancias: conteoPorCaso.get(c.id) || 0,
-    tipo_justificacion: tiposPorId.get(c.tipo_justificacion_id) || null
+    tipo_justificacion: tiposPorId.get(c.tipo_justificacion_id) || null,
+    creador: actoresPorId.get(c.creado_por) || null,
+    revisor: actoresPorId.get(c.revisado_por) || null
   }));
 }
 

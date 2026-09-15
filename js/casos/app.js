@@ -138,7 +138,7 @@ const state = {
   detalleActual: null,
   revisionMode: null,
   discDetalleId: null,
-  pagina: { disc: 1, caso: 1, rev: 1 },
+  discIFActual: [],
   filtros: {
     disc: { periodo: 'hoy', desde: HOY_YMD, hasta: HOY_YMD, tipo: '', if_tranid: '' },
     caso: { periodo: 'hoy', estado: '', if_tranid: '', desde: HOY_YMD, hasta: HOY_YMD },
@@ -721,59 +721,151 @@ function textoDiagnostico(d) {
   return 'Revisa los datos del error para definir la justificación.';
 }
 
-function abrirDetalleDisc(id) {
+// Estatus general de la IF, igual que la confronta del dashboard.
+function estatusGeneralIF(discs) {
+  const cancelada = discs.some(d => d.tipo === 'if_no_encontrada');
+  const todosCruzados = discs.length > 0 && discs.every(d => d.es_cruzado);
+  if (cancelada) return '<span class="tipo-badge error" style="font-weight:700;">🚨 Cancelada en NetSuite</span>';
+  if (todosCruzados) return '<span class="tipo-badge warn" style="font-weight:700;">🟡 Discrepancia de Lote (Mercancía entregada)</span>';
+  return '<span class="tipo-badge error" style="font-weight:700;">🔴 Con Errores de Surtido</span>';
+}
+
+function m2DeDisc(d, tipo) {
+  const datos = d.datos || {};
+  const area = Number(d.area_placa_m2 ?? datos.area_placa_m2 ?? 0) || 0;
+  const placas = Number(tipo === 'esp' ? d.placas_esperadas : d.placas_escaneadas);
+  let v = tipo === 'esp' ? d.m2_esperados : d.m2_escaneados;
+  if ((v === null || v === undefined || v === '') && tipo === 'esp') v = datos.cantidad_m2_esperada;
+  if (v === null || v === undefined || v === '' || Number.isNaN(Number(v))) {
+    v = Number.isNaN(placas) || placas === null ? 0 : placas * area;
+  }
+  return Number(v) || 0;
+}
+
+// Fila de la auditoría por IF (mismo lenguaje visual que el dashboard).
+function filaAuditoriaIF(d) {
+  const datos = d.datos || {};
+  const espN = Number(d.placas_esperadas);
+  const escN = Number(d.placas_escaneadas);
+  const tieneEsp = d.placas_esperadas !== null && d.placas_esperadas !== undefined && !Number.isNaN(espN);
+  const esOrfana = !tieneEsp;
+
+  const area = Number(d.area_placa_m2 ?? datos.area_placa_m2 ?? 0) || 0;
+  const medidas = area > 0 ? `<div style="font-size:11px; color:var(--muted);">${area.toFixed(2)} m²/pza</div>` : '';
+
+  const espPlacasTxt = tieneEsp ? `${fmtPlacas(espN)} ${espN === 1 ? 'pza' : 'pzs'}` : '0 pzs';
+  const escPlacasTxt = `${fmtPlacas(Number.isNaN(escN) ? 0 : escN)} ${escN === 1 ? 'pza' : 'pzs'}`;
+  const m2Esp = m2DeDisc(d, 'esp');
+  const m2Esc = m2DeDisc(d, 'esc');
+  const pref = esOrfana ? '+' : '';
+  const plan = datos.plan_accion || datos.mensaje || textoDiagnostico(d);
+
+  return `
+    <tr class="${esOrfana ? 'fila-orfana' : ''}">
+      <td><strong>${escapeHTML(d.sku || '—')}</strong></td>
+      <td>
+        <div>${escapeHTML(d.lote || d.id_lote || '—')}</div>
+        ${medidas}
+      </td>
+      <td style="text-align:center;">
+        <div style="font-weight:600;">${escapeHTML(espPlacasTxt)}</div>
+        <div style="font-size:11px; color:var(--muted);">${m2Esp.toFixed(2)}m²</div>
+      </td>
+      <td style="text-align:center;">
+        <div style="font-weight:700; ${esOrfana ? 'color:var(--danger);' : ''}">${pref}${escapeHTML(escPlacasTxt)}</div>
+        <div style="font-size:11px; ${esOrfana ? 'color:var(--danger); font-weight:600;' : 'color:var(--muted);'}">${pref}${m2Esc.toFixed(2)}m²</div>
+      </td>
+      <td style="text-align:center;">${badgeTipoDisc(d)}</td>
+      <td class="plan-accion">${escapeHTML(plan)}</td>
+    </tr>`;
+}
+
+function actualizarBotonDetalle() {
+  const btn = $('btnSelDesdeDetalle');
+  if (!btn) return;
+  const id = state.discDetalleId;
+  const d = (state.discIFActual || []).find(x => Number(x.id) === Number(id));
+  const seleccionado = id != null && state.discSeleccion.has(Number(id));
+  const abierta = !d || d.estado === 'abierta';
+  btn.disabled = !abierta;
+  btn.textContent = !abierta
+    ? 'Este error ya está en un caso'
+    : (seleccionado ? 'Quitar de la selección' : 'Seleccionar para justificar');
+}
+
+function renderAuditoriaIF(discs, principal) {
+  const base = principal || discs[0] || {};
+  const datos = base.datos || {};
+  const conOperador = discs.find(x => x.datos && x.datos.escaneo_operador);
+  const operador = (conOperador && conOperador.datos.escaneo_operador) || '—';
+
+  $('discDetalleTitle').textContent = 'Auditoría y Detalle de ' + (base.if_tranid || '—');
+  $('discDetalleBody').innerHTML = `
+    <div class="detalle-modal-header">
+      <div class="detalle-header-grid">
+        <div><span class="label">Folio IF:</span> <strong class="val">${escapeHTML(base.if_tranid || '—')}</strong></div>
+        <div><span class="label">SO Origen:</span> <span class="val">${escapeHTML(base.if_so || datos.if_so || '—')}</span></div>
+        <div><span class="label">Fecha:</span> <span class="val">${escapeHTML(fmtFecha(base.if_fecha))}</span></div>
+        <div><span class="label">Sucursal:</span> <span class="val">${escapeHTML(base.sucursal || '—')}</span></div>
+        <div><span class="label">Operador:</span> <span class="val">${escapeHTML(operador)}</span></div>
+        <div><span class="label">Estatus General:</span> ${estatusGeneralIF(discs)}</div>
+      </div>
+    </div>
+
+    <div class="detalle-table-wrap">
+      <table class="detalle-table">
+        <thead>
+          <tr>
+            <th style="width:12%;">SKU</th>
+            <th style="width:20%;">Lote / Medidas</th>
+            <th style="width:13%; text-align:center;">Esperado</th>
+            <th style="width:13%; text-align:center;">Escaneado</th>
+            <th style="width:16%; text-align:center;">Diagnóstico</th>
+            <th style="width:26%;">Plan de Acción</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${discs.map(filaAuditoriaIF).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  actualizarBotonDetalle();
+}
+
+async function abrirDetalleDisc(id) {
   const d = state.discrepancias.find(x => Number(x.id) === Number(id));
   if (!d) return;
   state.discDetalleId = Number(id);
-  renderDetalleDisc(d);
+  state.discIFActual = [d];
   abrirModal('discDetalleModal');
-}
+  $('discDetalleTitle').textContent = 'Auditoría y Detalle de ' + (d.if_tranid || '—');
+  $('discDetalleBody').innerHTML = '<div class="empty-state"><span class="loading-inline">Cargando detalle de la IF…</span></div>';
+  actualizarBotonDetalle();
 
-function renderDetalleDisc(d) {
-  const datos = d.datos || {};
-  const m2 = v => (v === null || v === undefined || v === '' ? '—' : Number(v).toFixed(2) + ' m²');
-  const seleccionado = state.discSeleccion.has(Number(d.id));
-  $('discDetalleTitle').textContent = 'Error · ' + (d.if_tranid || '—');
-
-  $('discDetalleBody').innerHTML = `
-    <div class="caso-resumen">
-      <div><span class="label">IF</span><span class="val cell-tranid">${escapeHTML(d.if_tranid || '—')}</span></div>
-      <div><span class="label">SO origen</span><span class="val">${escapeHTML(d.if_so || datos.if_so || '—')}</span></div>
-      <div><span class="label">Fecha</span><span class="val">${escapeHTML(fmtFecha(d.if_fecha))}</span></div>
-      <div><span class="label">Sucursal</span><span class="val">${escapeHTML(d.sucursal || '—')}</span></div>
-      <div><span class="label">SKU</span><span class="val">${escapeHTML(d.sku || '—')}</span></div>
-      <div><span class="label">Lote</span><span class="val">${escapeHTML(d.lote || d.id_lote || '—')}</span></div>
-      <div><span class="label">Tipo</span><span class="val">${badgeTipoDisc(d)}</span></div>
-      <div><span class="label">Operador</span><span class="val">${escapeHTML(datos.escaneo_operador || '—')}</span></div>
-      <div><span class="label">Ubicación escaneada</span><span class="val">${escapeHTML(datos.ubicacion_escaneada || '—')}</span></div>
-      <div><span class="label">Ubicación esperada</span><span class="val">${escapeHTML(datos.ubicacion_esperada || '—')}</span></div>
-      <div><span class="label">Placas (esp / esc / dif)</span><span class="val">${escapeHTML(fmtPlacas(d.placas_esperadas))} / ${escapeHTML(fmtPlacas(d.placas_escaneadas))} / ${escapeHTML(fmtPlacas(d.diferencia))}</span></div>
-      <div><span class="label">Metros (esp / esc)</span><span class="val">${m2(d.m2_esperados)} / ${m2(d.m2_escaneados)}</span></div>
-    </div>
-
-    <div class="form-field">
-      <label>¿Qué pasó?</label>
-      <div class="timeline-comment" style="margin-top:0;">${escapeHTML(textoDiagnostico(d))}</div>
-    </div>
-    <div class="form-hint">${seleccionado
-      ? '✅ Este error ya está seleccionado para justificar.'
-      : 'Usa "Seleccionar para justificar" para incluirlo en un caso.'}</div>
-  `;
-
-  const btn = $('btnSelDesdeDetalle');
-  if (btn) btn.textContent = seleccionado ? 'Quitar de la selección' : 'Seleccionar para justificar';
+  try {
+    const p = new URLSearchParams();
+    if (d.if_tranid) p.set('if_tranid', d.if_tranid);
+    const data = await apiFetch('/api/casos/discrepancias' + (p.toString() ? '?' + p.toString() : ''));
+    state.discIFActual = data.discrepancias || [d];
+  } catch (e) {
+    state.discIFActual = [d];
+  }
+  renderAuditoriaIF(state.discIFActual, d);
 }
 
 function seleccionarDesdeDetalle() {
   const id = state.discDetalleId;
   if (id == null) return;
+  const d = (state.discIFActual || []).find(x => Number(x.id) === Number(id));
+  if (d && d.estado !== 'abierta') return;
   if (state.discSeleccion.has(id)) state.discSeleccion.delete(id);
   else state.discSeleccion.add(id);
   const cb = document.querySelector(`#tbodyDisc input[data-disc-id="${id}"]`);
   if (cb) cb.checked = state.discSeleccion.has(id);
   actualizarBotonJustificar();
-  const d = state.discrepancias.find(x => Number(x.id) === id);
-  if (d) renderDetalleDisc(d);
+  actualizarBotonDetalle();
 }
 
 async function abrirJustificar() {
@@ -1022,8 +1114,8 @@ function renderRevisionView() {
       <div class="table-wrap">
         <table class="casos-table">
           <colgroup>
-            <col style="width:12%" /><col style="width:12%" /><col style="width:12%" /><col style="width:9%" />
-            <col style="width:19%" /><col style="width:15%" /><col style="width:13%" /><col style="width:8%" />
+            <col style="width:13%" /><col style="width:12%" /><col style="width:12%" /><col style="width:7%" />
+            <col style="width:19%" /><col style="width:15%" /><col style="width:14%" /><col style="width:8%" />
           </colgroup>
           <thead>
             <tr>
