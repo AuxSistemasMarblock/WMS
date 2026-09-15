@@ -131,7 +131,7 @@ const state = {
   discDetalleId: null,
   filtros: {
     disc: { periodo: 'hoy', desde: HOY_YMD, hasta: HOY_YMD, tipo: '', if_tranid: '' },
-    caso: { periodo: 'hoy', estado: '', desde: HOY_YMD, hasta: HOY_YMD },
+    caso: { periodo: 'hoy', estado: '', if_tranid: '', desde: HOY_YMD, hasta: HOY_YMD },
     rev: { periodo: 'hoy', estado: '', sucursal: '', desde: HOY_YMD, hasta: HOY_YMD }
   }
 };
@@ -765,6 +765,7 @@ async function enviarJustificacion() {
     cerrarModal('justificarModal');
     state.discSeleccion.clear();
     await cargarDiscrepancias();
+    await refrescarMisCasos();
   } catch (e) {
     errEl.textContent = 'Error: ' + e.message;
   } finally {
@@ -787,6 +788,10 @@ function renderMisCasosView() {
             <option value="aprobado"${f.estado === 'aprobado' ? ' selected' : ''}>Aprobado</option>
             <option value="rechazado"${f.estado === 'rechazado' ? ' selected' : ''}>Rechazado</option>
           </select>
+        </div>
+        <div class="filter-group">
+          <label for="fCasoIf">IF</label>
+          <input type="text" id="fCasoIf" class="filter-select" placeholder="IF-1234" value="${escapeHTML(f.if_tranid || '')}" />
         </div>
         <div class="filter-group filters-actions">
           <button class="btn btn-primary" type="button" onclick="cargarCasosJefe()">Aplicar</button>
@@ -838,6 +843,7 @@ async function cargarCasosJefe() {
   if (!tbody) return;
   const f = leerPeriodo('fCaso');
   f.estado = ($('fCasoEstado') || {}).value || '';
+  f.if_tranid = ($('fCasoIf') || {}).value.trim() || '';
   tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state">Cargando casos…</div></td></tr>';
 
   try {
@@ -848,6 +854,23 @@ async function cargarCasosJefe() {
     actualizarTabCount('tabCountCasos', state.casos.length);
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state">Error: ${escapeHTML(e.message)}</div></td></tr>`;
+  }
+}
+
+// Refresca los datos de "Mis casos" sin depender de que la vista esté montada
+// (se usa después de crear un caso para no perder el contexto de Errores).
+async function refrescarMisCasos() {
+  const f = state.filtros.caso;
+  try {
+    const data = await apiFetch('/api/casos?' + paramsCasos(f).toString());
+    state.casos = data.casos || [];
+    actualizarTabCount('tabCountCasos', state.casos.length);
+    if ($('tbodyCasos')) {
+      renderCasosTable('tbodyCasos', state.casos);
+      const count = $('countCasos'); if (count) count.textContent = String(state.casos.length);
+    }
+  } catch (e) {
+    // Silencioso: un fallo de refresco no debe romper el flujo de creación.
   }
 }
 
