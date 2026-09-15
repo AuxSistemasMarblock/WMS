@@ -8,6 +8,7 @@
  */
 
 const confrontaCacheService = require('../services/confrontaCacheService');
+const confrontaService = require('../services/confrontaService');
 const casosService = require('../services/casosService');
 const envConfig = require('../config/environments');
 
@@ -64,9 +65,39 @@ async function anotarResultado(resultado) {
     else if (estado === 'justificada') desglose.justificadas++;
     else desglose.abiertas++;
   }
+
+  calcularKPIsConJustificadas(resultado);
+
   if (resultado.kpis) resultado.kpis.desglose_justificacion = desglose;
 
   return resultado;
+}
+
+/**
+ * Recalcula los KPIs tratando las discrepancias `justificada` (caso aprobado)
+ * como OK: se excluyen del cálculo y un IF cuyas discrepancias quedaron todas
+ * justificadas se reclasifica como OK. Muta `resultado.kpis`/tops.
+ *
+ * Es puro respecto a la clasificación original: no mueve `ifs_ok`/
+ * `ifs_con_errores`, por lo que es idempotente aunque `resultado` venga de caché.
+ */
+function calcularKPIsConJustificadas(resultado) {
+  if (!resultado || !Array.isArray(resultado.todas_las_discrepancias)) return resultado;
+  const esJustificada = d => !!(d && d.justificacion && d.justificacion.estado === 'justificada');
+
+  const vigentes = resultado.todas_las_discrepancias.filter(d => !esJustificada(d));
+  const ifsConErrorVigentes = (resultado.ifs_con_errores || []).filter(ifDoc =>
+    (ifDoc.discrepancias || []).some(d => !esJustificada(d))
+  );
+  const ifsConErrorOriginales = (resultado.ifs_con_errores || []).length;
+  const ifsOk = (resultado.ifs_ok || []).length + (ifsConErrorOriginales - ifsConErrorVigentes.length);
+  const lineasConError = ifsConErrorVigentes.reduce((s, i) => s + (i.lineas_con_error || 0), 0);
+
+  return confrontaService.calcularKPIs(resultado, vigentes, {
+    ifsOk,
+    ifsConErrores: ifsConErrorVigentes.length,
+    lineasConError
+  });
 }
 
 /**
@@ -404,5 +435,6 @@ module.exports = {
   health,
   // Exportados para tests / compatibilidad
   _ejecutarConfronta: confrontaCacheService.ejecutarConfronta,
-  _clearCache: confrontaCacheService._clearCache
+  _clearCache: confrontaCacheService._clearCache,
+  _calcularKPIsConJustificadas: calcularKPIsConJustificadas
 };
