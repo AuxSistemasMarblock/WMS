@@ -186,6 +186,25 @@
 .text-warn { color: var(--warn); }
 .text-media { color: var(--badge-media-text); }
 
+/* ─────────────────────────────────────────────
+   AUDITORÍA DE IF EN EL MODAL DE ERROR (estilo confronta)
+   ───────────────────────────────────────────── */
+
+.detalle-table tbody tr.fila-orfana {
+  background: var(--badge-warn-bg);
+}
+
+.detalle-table tbody tr.fila-orfana:hover {
+  background: color-mix(in srgb, var(--warn) 22%, var(--surface));
+}
+
+.detalle-table td.plan-accion {
+  white-space: normal;
+  word-break: break-word;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .cell-num {
   text-align: right;
   font-variant-numeric: tabular-nums;
