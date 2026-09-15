@@ -48,3 +48,6 @@ backend/secrets/
 !package.json
 !package-lock.json
 !tsconfig.json
+
+# Agents
+*.agent
