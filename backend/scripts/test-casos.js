@@ -32,6 +32,8 @@ const HAS_ENV = !!(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE
 // permitir el require; las pruebas unitarias mockean `supabase`.
 if (!process.env.SUPABASE_URL) process.env.SUPABASE_URL = 'http://localhost:54321';
 if (!process.env.SUPABASE_SERVICE_ROLE_KEY) process.env.SUPABASE_SERVICE_ROLE_KEY = 'unit-test-placeholder';
+// Fijar el offset de negocio para que las aserciones de fecha sean deterministas.
+if (!process.env.CASOS_TZ_OFFSET) process.env.CASOS_TZ_OFFSET = '-06:00';
 
 const casosService = require('../services/casosService');
 const supabase = require('../config/supabase');
@@ -260,11 +262,58 @@ async function pruebasAnotarDiscrepancias() {
 }
 
 // ============================================================
-// 2) Prueba en vivo (opcional)
+// 4) Rango de fechas (filtros sobre columnas timestamptz)
+// ============================================================
+
+function crearMockQuery() {
+  const llamadas = [];
+  const q = {
+    gte: (col, val) => { llamadas.push(['gte', col, val]); return q; },
+    lte: (col, val) => { llamadas.push(['lte', col, val]); return q; },
+    lt: (col, val) => { llamadas.push(['lt', col, val]); return q; }
+  };
+  return { q, llamadas };
+}
+
+function pruebasRangoFechas() {
+  header('4. rangoFechas');
+
+  check('esFechaSolo reconoce YYYY-MM-DD',
+    casosService._esFechaSolo('2026-09-15') === true, 'YYYY-MM-DD');
+  check('esFechaSolo rechaza fecha con hora',
+    casosService._esFechaSolo('2026-09-15T10:00:00Z') === false, 'con hora');
+
+  check('diaSiguiente 2026-09-15 -> 2026-09-16',
+    casosService._diaSiguiente('2026-09-15') === '2026-09-16');
+  check('diaSiguiente cruza fin de mes',
+    casosService._diaSiguiente('2026-09-30') === '2026-10-01');
+  check('inicioDiaUTC respeta offset -06:00 -> 06:00Z',
+    casosService._inicioDiaUTC('2026-09-15') === '2026-09-15T06:00:00.000Z',
+    casosService._inicioDiaUTC('2026-09-15'));
+
+  const { q, llamadas } = crearMockQuery();
+  casosService._rangoFechas(q, 'created_at', '2026-09-15', '2026-09-15');
+  check('desde fecha -> gte medianoche local en UTC',
+    llamadas[0][0] === 'gte' && llamadas[0][2] === '2026-09-15T06:00:00.000Z',
+    JSON.stringify(llamadas[0]));
+  check('hasta fecha -> lt del dia siguiente (incluye el dia completo)',
+    llamadas[1][0] === 'lt' && llamadas[1][2] === '2026-09-16T06:00:00.000Z',
+    JSON.stringify(llamadas[1]));
+
+  const { q: q2, llamadas: l2 } = crearMockQuery();
+  casosService._rangoFechas(q2, 'created_at', '2026-09-15T00:00:00Z', '2026-09-15T23:59:59Z');
+  check('valores con hora se usan tal cual (gte/lte)',
+    l2[0][0] === 'gte' && l2[0][2] === '2026-09-15T00:00:00Z' &&
+    l2[1][0] === 'lte' && l2[1][2] === '2026-09-15T23:59:59Z',
+    JSON.stringify(l2));
+}
+
+// ============================================================
+// 5) Prueba en vivo (opcional)
 // ============================================================
 
 async function pruebaEnVivo() {
-  header('4. PRUEBA EN VIVO (crear_caso + limpieza)');
+  header('5. PRUEBA EN VIVO (crear_caso + limpieza)');
 
   const marca = `test-casos-${Date.now()}`;
   let discId = null;
@@ -415,6 +464,7 @@ async function main() {
   pruebasFingerprint();
   pruebasConstruirFila();
   await pruebasAnotarDiscrepancias();
+  pruebasRangoFechas();
 
   if (LIVE && HAS_ENV) {
     await pruebaEnVivo();
