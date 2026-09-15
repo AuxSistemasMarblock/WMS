@@ -139,6 +139,7 @@ const state = {
   revisionMode: null,
   discDetalleId: null,
   discIFActual: [],
+  pagina: { disc: 1, caso: 1, rev: 1 },
   filtros: {
     disc: { periodo: 'hoy', desde: HOY_YMD, hasta: HOY_YMD, tipo: '', if_tranid: '' },
     caso: { periodo: 'hoy', estado: '', if_tranid: '', desde: HOY_YMD, hasta: HOY_YMD },
