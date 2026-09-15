@@ -115,6 +115,8 @@ async function apiFetch(path, opts = {}) {
 }
 
 // =================== ESTADO ===================
+const HOY_YMD = ymd(new Date());
+
 const state = {
   rol: '',
   user: null,
@@ -123,12 +125,13 @@ const state = {
   discSeleccion: new Set(),
   casos: [],
   tipos: [],
+  sucursales: [],
   detalleActual: null,
   revisionMode: null,
   filtros: {
-    disc: { desde: '', hasta: '', tipo: '', estado: '', if_tranid: '' },
-    caso: { estado: '', desde: '', hasta: '' },
-    rev: { estado: '', sucursal: '', desde: '', hasta: '' }
+    disc: { periodo: 'hoy', desde: HOY_YMD, hasta: HOY_YMD, tipo: '', estado: '', if_tranid: '' },
+    caso: { periodo: 'hoy', estado: '', desde: HOY_YMD, hasta: HOY_YMD },
+    rev: { periodo: 'hoy', estado: '', sucursal: '', desde: HOY_YMD, hasta: HOY_YMD }
   }
 };
 
@@ -237,6 +240,112 @@ function estadoDiscPill(estado) {
 function abrirModal(id) { const m = $(id); if (m) m.classList.add('active'); }
 function cerrarModal(id) { const m = $(id); if (m) m.classList.remove('active'); }
 
+// =================== PERÍODO (mismos presets que confronta) ===================
+const PERIODO_PRESETS = [
+  { id: 'hoy', label: 'Hoy' },
+  { id: 'semana', label: 'Esta semana' },
+  { id: 'mes', label: 'Este mes' },
+  { id: 'mes_pasado', label: 'Mes pasado' },
+  { id: 'personalizado', label: 'Personalizado' }
+];
+
+// Prefijo de inputs -> clave en state.filtros
+const PERIODO_STATE_KEY = { fDisc: 'disc', fCaso: 'caso', fRev: 'rev' };
+
+function ymd(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${dd}`;
+}
+
+function calcularPeriodo(preset) {
+  const hoy = new Date();
+  const desde = new Date();
+  let hasta = new Date();
+
+  switch (preset) {
+    case 'hoy': break;
+    case 'semana': {
+      const day = hoy.getDay() || 7;
+      desde.setDate(hoy.getDate() - (day - 1));
+      break;
+    }
+    case 'mes':
+      desde.setDate(1);
+      break;
+    case 'mes_pasado':
+      desde.setMonth(hoy.getMonth() - 1, 1);
+      hasta = new Date(hoy.getFullYear(), hoy.getMonth(), 0);
+      break;
+    case 'personalizado':
+      return null;
+    default:
+  }
+  return { desde: ymd(desde), hasta: ymd(hasta) };
+}
+
+// Botones de preset (dentro de la fila de filtros).
+function periodoPresetsHTML(prefix, periodo) {
+  const btns = PERIODO_PRESETS.map(p =>
+    `<button type="button" class="preset-btn${p.id === periodo ? ' active' : ''}" data-preset="${p.id}" onclick="setPeriodo('${prefix}','${p.id}')">${escapeHTML(p.label)}</button>`
+  ).join('');
+  return `
+    <div class="filter-group">
+      <label>Período</label>
+      <div class="preset-buttons" id="${prefix}Presets">${btns}</div>
+    </div>`;
+}
+
+// Fila de rango personalizado (se oculta salvo "personalizado").
+function periodoCustomRangeHTML(prefix, periodo, desde, hasta) {
+  const custom = periodo === 'personalizado' ? 'flex' : 'none';
+  return `
+    <div class="filters-row custom-range" id="${prefix}CustomRange" style="display:${custom};">
+      <div class="filter-group">
+        <label for="${prefix}Desde">Desde</label>
+        <input type="date" id="${prefix}Desde" class="filter-select" value="${escapeHTML(desde || '')}" />
+      </div>
+      <div class="filter-group">
+        <label for="${prefix}Hasta">Hasta</label>
+        <input type="date" id="${prefix}Hasta" class="filter-select" value="${escapeHTML(hasta || '')}" />
+      </div>
+    </div>`;
+}
+
+function setPeriodo(prefix, preset) {
+  const f = state.filtros[PERIODO_STATE_KEY[prefix]];
+  if (!f) return;
+  f.periodo = preset;
+
+  const box = $(prefix + 'Presets');
+  if (box) box.querySelectorAll('.preset-btn').forEach(b => b.classList.toggle('active', b.dataset.preset === preset));
+
+  const custom = $(prefix + 'CustomRange');
+  if (custom) custom.style.display = preset === 'personalizado' ? 'flex' : 'none';
+
+  if (preset === 'personalizado') return;
+
+  const r = calcularPeriodo(preset);
+  if (!r) return;
+  f.desde = r.desde;
+  f.hasta = r.hasta;
+  const d = $(prefix + 'Desde'); if (d) d.value = r.desde;
+  const h = $(prefix + 'Hasta'); if (h) h.value = r.hasta;
+}
+
+// Vuelca a state el rango personalizado cuando aplica; deja intactos los presets.
+function leerPeriodo(prefix) {
+  const f = state.filtros[PERIODO_STATE_KEY[prefix]];
+  if (f && f.periodo === 'personalizado') {
+    const d = $(prefix + 'Desde');
+    const h = $(prefix + 'Hasta');
+    if (d && d.value) f.desde = d.value;
+    if (h && h.value) f.hasta = h.value;
+  }
+  return f;
+}
+
 // =================== TABS ===================
 function tabsPorRol() {
   if (esGerenteOAdmin()) {
@@ -322,14 +431,7 @@ function renderErroresView() {
   $('viewContent').innerHTML = `
     <section class="filters-card">
       <div class="filters-row">
-        <div class="filter-group">
-          <label for="fDiscDesde">Fecha desde</label>
-          <input type="date" id="fDiscDesde" class="filter-select" value="${escapeHTML(f.desde)}" />
-        </div>
-        <div class="filter-group">
-          <label for="fDiscHasta">Fecha hasta</label>
-          <input type="date" id="fDiscHasta" class="filter-select" value="${escapeHTML(f.hasta)}" />
-        </div>
+        ${periodoPresetsHTML('fDisc', f.periodo)}
         <div class="filter-group">
           <label for="fDiscTipo">Tipo</label>
           <select id="fDiscTipo" class="filter-select">
@@ -350,6 +452,7 @@ function renderErroresView() {
         </div>
         <button class="btn btn-primary" type="button" onclick="cargarDiscrepancias()">Aplicar</button>
       </div>
+      ${periodoCustomRangeHTML('fDisc', f.periodo, f.desde, f.hasta)}
     </section>
 
     <section class="table-card">
@@ -396,14 +499,11 @@ function renderErroresView() {
 
 function leerFiltrosDisc() {
   const val = id => { const e = $(id); return e ? e.value.trim() : ''; };
-  state.filtros.disc = {
-    desde: val('fDiscDesde'),
-    hasta: val('fDiscHasta'),
-    tipo: val('fDiscTipo'),
-    estado: val('fDiscEstado'),
-    if_tranid: val('fDiscIf')
-  };
-  return state.filtros.disc;
+  const f = leerPeriodo('fDisc');
+  f.tipo = val('fDiscTipo');
+  f.estado = val('fDiscEstado');
+  f.if_tranid = val('fDiscIf');
+  return f;
 }
 
 async function cargarDiscrepancias() {
@@ -576,6 +676,7 @@ function renderMisCasosView() {
   $('viewContent').innerHTML = `
     <section class="filters-card">
       <div class="filters-row">
+        ${periodoPresetsHTML('fCaso', f.periodo)}
         <div class="filter-group">
           <label for="fCasoEstado">Estado</label>
           <select id="fCasoEstado" class="filter-select">
@@ -585,16 +686,9 @@ function renderMisCasosView() {
             <option value="rechazado"${f.estado === 'rechazado' ? ' selected' : ''}>Rechazado</option>
           </select>
         </div>
-        <div class="filter-group">
-          <label for="fCasoDesde">Desde</label>
-          <input type="date" id="fCasoDesde" class="filter-select" value="${escapeHTML(f.desde)}" />
-        </div>
-        <div class="filter-group">
-          <label for="fCasoHasta">Hasta</label>
-          <input type="date" id="fCasoHasta" class="filter-select" value="${escapeHTML(f.hasta)}" />
-        </div>
         <button class="btn btn-primary" type="button" onclick="cargarCasosJefe()">Aplicar</button>
       </div>
+      ${periodoCustomRangeHTML('fCaso', f.periodo, f.desde, f.hasta)}
     </section>
 
     <section class="table-card">
@@ -629,12 +723,8 @@ function renderMisCasosView() {
 async function cargarCasosJefe() {
   const tbody = $('tbodyCasos');
   if (!tbody) return;
-  state.filtros.caso = {
-    estado: ($('fCasoEstado') || {}).value || '',
-    desde: ($('fCasoDesde') || {}).value || '',
-    hasta: ($('fCasoHasta') || {}).value || ''
-  };
-  const f = state.filtros.caso;
+  const f = leerPeriodo('fCaso');
+  f.estado = ($('fCasoEstado') || {}).value || '';
   const p = new URLSearchParams();
   if (f.estado) p.set('estado', f.estado);
   if (f.desde) p.set('desde', f.desde);
@@ -675,6 +765,21 @@ function renderCasosTable(tbodyId, casos) {
   `).join('');
 }
 
+// =================== SUCURSALES (filtro gerente/admin) ===================
+async function cargarSucursales() {
+  if (state.sucursales.length) return state.sucursales;
+  const data = await apiFetch('/api/dashboard/sucursales');
+  state.sucursales = data.sucursales || [];
+  return state.sucursales;
+}
+
+function sucursalOptionsHTML(actual) {
+  const opts = state.sucursales.map(s =>
+    `<option value="${escapeHTML(s.nombre)}"${String(s.nombre) === String(actual) ? ' selected' : ''}>${escapeHTML(s.nombre)}</option>`
+  ).join('');
+  return `<option value="">Todas las sucursales</option>${opts}`;
+}
+
 // =================== VISTA GERENTE / ADMIN ===================
 function renderRevisionView() {
   const esPorAprobar = state.tab === 'por-aprobar';
@@ -682,17 +787,10 @@ function renderRevisionView() {
   $('viewContent').innerHTML = `
     <section class="filters-card">
       <div class="filters-row">
+        ${periodoPresetsHTML('fRev', f.periodo)}
         <div class="filter-group">
           <label for="fRevSucursal">Sucursal</label>
-          <input type="text" id="fRevSucursal" class="filter-select" placeholder="Todas" value="${escapeHTML(f.sucursal)}" />
-        </div>
-        <div class="filter-group">
-          <label for="fRevDesde">Desde</label>
-          <input type="date" id="fRevDesde" class="filter-select" value="${escapeHTML(f.desde)}" />
-        </div>
-        <div class="filter-group">
-          <label for="fRevHasta">Hasta</label>
-          <input type="date" id="fRevHasta" class="filter-select" value="${escapeHTML(f.hasta)}" />
+          <select id="fRevSucursal" class="filter-select">${sucursalOptionsHTML(f.sucursal)}</select>
         </div>
         ${esPorAprobar ? '' : `
         <div class="filter-group">
@@ -706,6 +804,7 @@ function renderRevisionView() {
         </div>`}
         <button class="btn btn-primary" type="button" onclick="cargarCasosRevision()">Aplicar</button>
       </div>
+      ${periodoCustomRangeHTML('fRev', f.periodo, f.desde, f.hasta)}
     </section>
 
     <section class="table-card">
@@ -736,15 +835,23 @@ function renderRevisionView() {
       </div>
     </section>
   `;
+
+  // La lista de sucursales se carga una vez; si aún no está, se rellena al llegar.
+  if (!state.sucursales.length) {
+    cargarSucursales()
+      .then(() => {
+        const sel = $('fRevSucursal');
+        if (sel) sel.innerHTML = sucursalOptionsHTML(state.filtros.rev.sucursal);
+      })
+      .catch(e => showToast('Error cargando sucursales: ' + e.message, 'error'));
+  }
 }
 
 async function cargarCasosRevision() {
   const tbody = $('tbodyRev');
   if (!tbody) return;
-  const f = state.filtros.rev;
+  const f = leerPeriodo('fRev');
   f.sucursal = ($('fRevSucursal') || {}).value || '';
-  f.desde = ($('fRevDesde') || {}).value || '';
-  f.hasta = ($('fRevHasta') || {}).value || '';
   f.estado = state.tab === 'por-aprobar'
     ? 'pendiente_aprobacion'
     : ((($('fHistEstado') || {}).value) || '');
