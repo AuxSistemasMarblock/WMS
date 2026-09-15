@@ -588,13 +588,8 @@ function confrontar(ifsEsperadas, escaneos) {
     resultado.todas_las_discrepancias.push(...discrepancias);
   }
 
-  const tops = agregarTopErrores(resultado.todas_las_discrepancias);
-  resultado.top_skus = tops.top_skus;
-  resultado.top_lotes = tops.top_lotes;
-  resultado.top_ubicaciones = tops.top_ubicaciones;
-  resultado.top_operadores = tops.top_operadores;
-
   resultado.total_placas_escaneadas = escaneos.length - placas_en_ifs_canceladas;
+  resultado.placas_en_ifs_canceladas = placas_en_ifs_canceladas;
 
   const fracTotal = resultado.total_placas_esperadas - Math.floor(resultado.total_placas_esperadas);
   resultado.total_placas_esperadas = (fracTotal > 0.08 && fracTotal < 0.92)
@@ -604,10 +599,39 @@ function confrontar(ifsEsperadas, escaneos) {
   const masSalidas = agregarTopArticulosMasSalidas(escaneos);
   resultado.top_articulos_mas_salidas = masSalidas;
 
-  const totalIfsEvaluadas = resultado.ifs_ok.length + resultado.ifs_con_errores.length;
-  resultado.tasa_exactitud = totalIfsEvaluadas > 0
-    ? (resultado.ifs_ok.length / totalIfsEvaluadas) * 100
-    : 100;
+  calcularKPIs(resultado, resultado.todas_las_discrepancias);
+
+  return resultado;
+}
+
+/**
+ * Calcula tops y KPIs a partir de una lista de discrepancias.
+ *
+ * Se usa en `confrontar` (discrepancias crudas) y en el dashboard después de
+ * anotar la justificación, donde las discrepancias `justificada` se excluyen del
+ * cálculo (se toman como OK) para no inflar los KPIs con datos ya auditados.
+ *
+ * @param {Object} resultado     - Resultado de confronta (muta tops/kpis/tasa).
+ * @param {Array}  discrepancias - Discrepancias a considerar.
+ * @param {Object} [opciones]    - Overrides: { ifsOk, ifsConErrores, lineasConError }.
+ */
+function calcularKPIs(resultado, discrepancias, opciones = {}) {
+  const disc = Array.isArray(discrepancias) ? discrepancias : [];
+  const ifsOk = opciones.ifsOk != null ? opciones.ifsOk : (resultado.ifs_ok || []).length;
+  const ifsConErrores = opciones.ifsConErrores != null ? opciones.ifsConErrores : (resultado.ifs_con_errores || []).length;
+  const lineasConError = opciones.lineasConError != null ? opciones.lineasConError : resultado.lineas_con_error;
+  const ifsCanceladas = (resultado.ifs_canceladas_erp || []).length;
+  const placasCanceladas = resultado.placas_en_ifs_canceladas || 0;
+
+  const tops = agregarTopErrores(disc);
+  resultado.top_skus = tops.top_skus;
+  resultado.top_lotes = tops.top_lotes;
+  resultado.top_ubicaciones = tops.top_ubicaciones;
+  resultado.top_operadores = tops.top_operadores;
+
+  const totalIfsEvaluadas = ifsOk + ifsConErrores;
+  const tasaExactitud = totalIfsEvaluadas > 0 ? (ifsOk / totalIfsEvaluadas) * 100 : 100;
+  resultado.tasa_exactitud = tasaExactitud;
 
   let m2Sobrante = 0;
   let m2Faltante = 0;
@@ -617,7 +641,7 @@ function confrontar(ifsEsperadas, escaneos) {
   let m2CruzadosEntregado = 0;
   let m2CruzadosDiff = 0;
 
-  for (const d of resultado.todas_las_discrepancias) {
+  for (const d of disc) {
     if (d.es_cruzado) {
       if (d.tipo === 'linea_faltante' || d.tipo === 'cantidad_faltante') {
         const parsedEntregado = parseLote(d.lote_entregado);
@@ -643,7 +667,7 @@ function confrontar(ifsEsperadas, escaneos) {
     }
   }
 
-  for (const ifCanc of resultado.ifs_canceladas_erp) {
+  for (const ifCanc of (resultado.ifs_canceladas_erp || [])) {
     for (const l of ifCanc.lineas) {
       const parsed = parseLote(l.lote);
       if (parsed) {
@@ -666,7 +690,7 @@ function confrontar(ifsEsperadas, escaneos) {
   let countFaltantesReales = 0;
   let countLineasOmitidas = 0;
 
-  for (const d of resultado.todas_las_discrepancias) {
+  for (const d of disc) {
     if (d.tipo === 'media_placa') {
       countMediaPlaca++;
       const esc = d.placas_escaneadas || 0;
@@ -702,8 +726,8 @@ function confrontar(ifsEsperadas, escaneos) {
     linea_faltante: countLineasOmitidas,
     faltantes_reales: countFaltantesReales,
     no_escaneadas: countLineasOmitidas,
-    ubicacion_incorrecta: resultado.todas_las_discrepancias.filter(d => d.tipo === 'ubicacion_incorrecta').length,
-    ifs_canceladas_erp: resultado.ifs_canceladas_erp.length
+    ubicacion_incorrecta: disc.filter(d => d.tipo === 'ubicacion_incorrecta').length,
+    ifs_canceladas_erp: ifsCanceladas
   };
 
   const m2SobrantePuro = m2Sobrante + m2Huerfanos;
@@ -712,17 +736,17 @@ function confrontar(ifsEsperadas, escaneos) {
   const m2BalanceNeto = (m2SobranteTotal + m2CruzadosDiff) - m2Faltante;
 
   resultado.kpis = {
-    ifs_totales: resultado.ifs_ok.length + resultado.ifs_con_errores.length,
-    ifs_ok: resultado.ifs_ok.length,
-    ifs_con_errores: resultado.ifs_con_errores.length,
-    ifs_canceladas_erp: resultado.ifs_canceladas_erp.length,
-    tasa_exactitud: resultado.tasa_exactitud,
+    ifs_totales: totalIfsEvaluadas,
+    ifs_ok: ifsOk,
+    ifs_con_errores: ifsConErrores,
+    ifs_canceladas_erp: ifsCanceladas,
+    tasa_exactitud: tasaExactitud,
     total_lineas: resultado.total_lineas,
-    lineas_con_error: resultado.lineas_con_error,
+    lineas_con_error: lineasConError,
     placas_esperadas: resultado.total_placas_esperadas,
     placas_escaneadas: resultado.total_placas_escaneadas,
-    placas_canceladas: placas_en_ifs_canceladas,
-    total_discrepancias: resultado.todas_las_discrepancias.length,
+    placas_canceladas: placasCanceladas,
+    total_discrepancias: disc.length,
     desglose_errores: conteoDiscrepancias,
     impacto_placas: {
       media_placa: parseFloat(impactoPlacasMediaPlaca.toFixed(1)),
@@ -754,6 +778,7 @@ function confrontar(ifsEsperadas, escaneos) {
 
 module.exports = {
   confrontar,
+  calcularKPIs,
   // exports para tests unitarios
   _evaluarLinea: evaluarLinea,
   _agruparEscaneos: agruparEscaneos,
