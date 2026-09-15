@@ -3,6 +3,16 @@
    Reutiliza variables.css, styles.css y dashboard.css.
    ================================ */
 
+/* El footer queda siempre al fondo de la pantalla aunque la tabla sea corta */
+#mainApp {
+  min-height: 100vh;
+  flex-direction: column;
+}
+
+#mainApp > main {
+  flex: 1;
+}
+
 .casos-main {
   padding-bottom: 32px;
 }
@@ -107,26 +117,38 @@
   accent-color: var(--accent2);
 }
 
-/* En pantallas chicas las tablas hacen scroll horizontal en vez de recortar */
-.casos-main .table-wrap {
-  overflow-x: auto;
-}
-
 .table-wrap table.casos-table {
-  table-layout: auto;
+  table-layout: fixed;
   width: 100%;
-  min-width: 820px;
 }
 
 .casos-table tbody td {
   vertical-align: middle;
-}
-
-.casos-table th.col-lote,
-.casos-table td.col-lote {
   white-space: normal;
   word-break: break-word;
-  min-width: 120px;
+}
+
+/* Celdas que no deben partirse */
+.casos-table td.cell-tranid,
+.casos-table td.cell-num,
+.casos-table td .caso-badge {
+  white-space: nowrap;
+}
+
+/* Lote/Tipo pueden ocupar dos líneas; el badge se ajusta al ancho de la celda */
+.casos-table th.col-lote,
+.casos-table td.col-lote,
+.casos-table th.col-tipo,
+.casos-table td.col-tipo {
+  white-space: normal;
+  word-break: break-word;
+}
+
+.casos-table .col-tipo .tipo-badge,
+.casos-table .col-tipo .caso-badge {
+  white-space: normal;
+  max-width: 100%;
+  text-align: left;
 }
 
 /* Placas (esperadas / escaneadas / diferencia) */

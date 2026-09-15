@@ -365,7 +365,7 @@ function tabsPorRol() {
   }
   return [
     { id: 'errores', label: 'Errores de mi almacén', count: null },
-    { id: 'mis-casos', label: 'Mis casos', count: 'tabCountCasos' }
+    { id: 'mis-casos', label: 'Mis casos', count: null }
   ];
 }
 
@@ -446,10 +446,6 @@ function renderErroresView() {
             ${tipoOpts}
           </select>
         </div>
-        <div class="filter-group">
-          <label for="fDiscIf">IF</label>
-          <input type="text" id="fDiscIf" class="filter-select" placeholder="IF-1234" value="${escapeHTML(f.if_tranid)}" />
-        </div>
         <div class="filter-group filters-actions">
           <button class="btn btn-primary" type="button" onclick="cargarDiscrepancias()">Aplicar</button>
         </div>
@@ -471,9 +467,13 @@ function renderErroresView() {
       </div>
       <div class="table-wrap">
         <table class="casos-table">
+          <colgroup>
+            <col style="width:4%" /><col style="width:8%" /><col style="width:9%" /><col style="width:10%" />
+            <col style="width:8%" /><col style="width:18%" /><col style="width:18%" /><col style="width:13%" /><col style="width:12%" />
+          </colgroup>
           <thead>
             <tr>
-              <th style="width:34px;" class="cell-center">
+              <th class="cell-center">
                 <input type="checkbox" title="Seleccionar todas" onchange="toggleTodasDisc(this.checked)" />
               </th>
               <th>IF</th>
@@ -481,7 +481,7 @@ function renderErroresView() {
               <th>Sucursal</th>
               <th>SKU</th>
               <th class="col-lote">Lote</th>
-              <th>Tipo</th>
+              <th class="col-tipo">Tipo</th>
               <th class="cell-center">Placas (esp / esc)</th>
               <th class="cell-center">Acción</th>
             </tr>
@@ -500,7 +500,6 @@ function leerFiltrosDisc() {
   const val = id => { const e = $(id); return e ? e.value.trim() : ''; };
   const f = leerPeriodo('fDisc');
   f.tipo = val('fDiscTipo');
-  f.if_tranid = val('fDiscIf');
   return f;
 }
 
@@ -525,7 +524,6 @@ async function cargarDiscrepancias() {
     if (f.hasta) p.set('hasta', f.hasta);
     if (f.tipo) p.set('tipo', f.tipo);
     p.set('estado', 'abierta');
-    if (f.if_tranid) p.set('if_tranid', f.if_tranid);
 
     const data = await apiFetch('/api/casos/discrepancias?' + p.toString());
     state.discrepancias = data.discrepancias || [];
@@ -598,7 +596,7 @@ function renderDiscTable() {
       <td>${escapeHTML(d.sucursal || '—')}</td>
       <td>${escapeHTML(d.sku || '—')}</td>
       <td class="col-lote">${escapeHTML(d.lote || d.id_lote || '—')}</td>
-      <td>${badgeTipo(d.tipo)}</td>
+      <td class="col-tipo">${badgeTipo(d.tipo)}</td>
       <td class="cell-center">${placasCelda(d)}</td>
       <td class="cell-center">
         <button class="btn-detalle" type="button" onclick="abrirDetalleDisc(${Number(d.id)})">Ver detalle</button>
@@ -809,12 +807,16 @@ function renderMisCasosView() {
       </div>
       <div class="table-wrap">
         <table class="casos-table">
+          <colgroup>
+            <col style="width:12%" /><col style="width:12%" /><col style="width:9%" /><col style="width:22%" />
+            <col style="width:14%" /><col style="width:18%" /><col style="width:13%" />
+          </colgroup>
           <thead>
             <tr>
               <th>Folio</th>
               <th>Estado</th>
               <th class="cell-num"># Errores</th>
-              <th>Tipo</th>
+              <th class="col-tipo">Tipo</th>
               <th>Sucursal</th>
               <th>Fecha</th>
               <th class="cell-center">Acción</th>
@@ -850,8 +852,6 @@ async function cargarCasosJefe() {
     const data = await apiFetch('/api/casos?' + paramsCasos(f).toString());
     state.casos = data.casos || [];
     renderCasosTable('tbodyCasos', state.casos);
-    const count = $('countCasos'); if (count) count.textContent = String(state.casos.length);
-    actualizarTabCount('tabCountCasos', state.casos.length);
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state">Error: ${escapeHTML(e.message)}</div></td></tr>`;
   }
@@ -864,10 +864,8 @@ async function refrescarMisCasos() {
   try {
     const data = await apiFetch('/api/casos?' + paramsCasos(f).toString());
     state.casos = data.casos || [];
-    actualizarTabCount('tabCountCasos', state.casos.length);
     if ($('tbodyCasos')) {
       renderCasosTable('tbodyCasos', state.casos);
-      const count = $('countCasos'); if (count) count.textContent = String(state.casos.length);
     }
   } catch (e) {
     // Silencioso: un fallo de refresco no debe romper el flujo de creación.
@@ -886,7 +884,7 @@ function renderCasosTable(tbodyId, casos) {
       <td class="cell-tranid">${escapeHTML(c.folio || '—')}</td>
       <td>${estadoCasoBadge(c.estado)}</td>
       <td class="cell-num">${escapeHTML(fmtNum(c.total_discrepancias ?? 0))}</td>
-      <td>${escapeHTML(nombreTipoJustificacion(c))}</td>
+      <td class="col-tipo">${escapeHTML(nombreTipoJustificacion(c))}</td>
       <td>${escapeHTML(c.sucursal || '—')}</td>
       <td>${escapeHTML(fmtFechaHora(c.created_at))}</td>
       <td class="cell-center"><button class="btn-detalle" type="button" onclick="abrirDetalleCaso(${Number(c.id)})">Ver detalle</button></td>
@@ -947,13 +945,17 @@ function renderRevisionView() {
       </div>
       <div class="table-wrap">
         <table class="casos-table">
+          <colgroup>
+            <col style="width:12%" /><col style="width:12%" /><col style="width:12%" /><col style="width:9%" />
+            <col style="width:19%" /><col style="width:15%" /><col style="width:13%" /><col style="width:8%" />
+          </colgroup>
           <thead>
             <tr>
               <th>Folio</th>
               <th>Estado</th>
               <th>Sucursal</th>
               <th class="cell-num"># Errores</th>
-              <th>Tipo</th>
+              <th class="col-tipo">Tipo</th>
               <th>Solicitante</th>
               <th>Enviado</th>
               <th class="cell-center">Acción</th>
@@ -1018,7 +1020,7 @@ function renderRevisionTable(casos) {
       <td>${estadoCasoBadge(c.estado)}</td>
       <td>${escapeHTML(c.sucursal || '—')}</td>
       <td class="cell-num">${escapeHTML(fmtNum(c.total_discrepancias ?? 0))}</td>
-      <td>${escapeHTML(nombreTipoJustificacion(c))}</td>
+      <td class="col-tipo">${escapeHTML(nombreTipoJustificacion(c))}</td>
       <td>${escapeHTML(c.creador?.nombre_completo || (c.creado_por ? 'Usuario #' + c.creado_por : '—'))}</td>
       <td>${escapeHTML(fmtFechaHora(c.enviado_at || c.created_at))}</td>
       <td class="cell-center"><button class="btn-detalle" type="button" onclick="abrirDetalleCaso(${Number(c.id)})">${c.estado === 'pendiente_aprobacion' ? 'Revisar' : 'Ver detalle'}</button></td>
@@ -1320,7 +1322,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   state.tab = casoId ? (esGerenteOAdmin() ? 'historial' : 'mis-casos') : (tabsPorRol()[0].id);
 
   renderTabs();
-  $('mainApp').style.display = 'block';
+  $('mainApp').style.display = 'flex';
   renderMain();
 
   if (casoId) abrirDetalleCaso(Number(casoId));
