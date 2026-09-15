@@ -83,6 +83,15 @@ function badgeTipo(tipo) {
   }
 }
 
+// La confronta no guarda `lote_cruzado` como tipo: lo marca con `es_cruzado`
+// sobre linea_faltante/sku_lote_no_esperado. Para el badge (igual que el
+// dashboard) una discrepancia cruzada se muestra como "Lote Cruzado".
+function tipoEfectivo(d) {
+  if (!d) return d;
+  return d.es_cruzado ? 'lote_cruzado' : d.tipo;
+}
+function badgeTipoDisc(d) { return badgeTipo(tipoEfectivo(d)); }
+
 // =================== AUTH ===================
 function getToken() { return sessionStorage.getItem('authToken'); }
 function getCurrentUser() {
@@ -656,7 +665,7 @@ function renderDiscTable() {
       <td>${escapeHTML(d.sucursal || '—')}</td>
       <td>${escapeHTML(d.sku || '—')}</td>
       <td class="col-lote">${escapeHTML(d.lote || d.id_lote || '—')}</td>
-      <td class="col-tipo">${badgeTipo(d.tipo)}</td>
+      <td class="col-tipo">${badgeTipoDisc(d)}</td>
       <td class="cell-center">${placasCelda(d)}</td>
       <td class="cell-center">
         <button class="btn-detalle" type="button" onclick="abrirDetalleDisc(${Number(d.id)})">Ver detalle</button>
@@ -734,7 +743,7 @@ function renderDetalleDisc(d) {
       <div><span class="label">Sucursal</span><span class="val">${escapeHTML(d.sucursal || '—')}</span></div>
       <div><span class="label">SKU</span><span class="val">${escapeHTML(d.sku || '—')}</span></div>
       <div><span class="label">Lote</span><span class="val">${escapeHTML(d.lote || d.id_lote || '—')}</span></div>
-      <div><span class="label">Tipo</span><span class="val">${badgeTipo(d.tipo)}</span></div>
+      <div><span class="label">Tipo</span><span class="val">${badgeTipoDisc(d)}</span></div>
       <div><span class="label">Operador</span><span class="val">${escapeHTML(datos.escaneo_operador || '—')}</span></div>
       <div><span class="label">Ubicación escaneada</span><span class="val">${escapeHTML(datos.ubicacion_escaneada || '—')}</span></div>
       <div><span class="label">Ubicación esperada</span><span class="val">${escapeHTML(datos.ubicacion_esperada || '—')}</span></div>
@@ -789,7 +798,7 @@ function renderJustResumen() {
   cont.innerHTML = sel.map(d => `
     <div class="resumen-item">
       <span class="resumen-if">${escapeHTML(d.if_tranid || '—')}</span>
-      ${badgeTipo(d.tipo)}
+      ${badgeTipoDisc(d)}
       <span class="cell-muted">${escapeHTML(d.sku || '—')} · ${escapeHTML(d.lote || d.id_lote || '—')}</span>
     </div>`).join('') || '<div class="empty-state">Sin errores seleccionados</div>';
 }
@@ -1177,7 +1186,7 @@ function renderDetalleCaso(data) {
           ${g.items.map(d => `
             <div class="disc-row">
               ${puedeRetirar ? `<input type="checkbox" data-retirar-id="${d.id}" title="Seleccionar para retirar">` : ''}
-              ${badgeTipo(d.tipo)}
+              ${badgeTipoDisc(d)}
               <span class="disc-sku">${escapeHTML(d.sku || '—')}</span>
               <span class="disc-meta">Lote: ${escapeHTML(d.lote || d.id_lote || '—')}</span>
               <span class="disc-meta">Esp: ${escapeHTML(fmtNum(d.placas_esperadas))} · Esc: ${escapeHTML(fmtNum(d.placas_escaneadas))} · Dif: ${escapeHTML(fmtNum(d.diferencia))}</span>

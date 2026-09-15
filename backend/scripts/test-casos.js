@@ -348,11 +348,43 @@ function pruebasScopeUbicacion() {
 }
 
 // ============================================================
-// 6) Prueba en vivo (opcional)
+// 6) Filtro por tipo de discrepancia (lote cruzado)
+// ============================================================
+
+function crearMockQueryEq() {
+  const llamadas = [];
+  const q = {
+    eq: (col, val) => { llamadas.push(['eq', col, val]); return q; },
+    gte: () => q, lte: () => q, lt: () => q
+  };
+  return { q, llamadas };
+}
+
+function pruebasFiltroTipo() {
+  header('6. aplicarFiltroTipo');
+
+  const { q, llamadas } = crearMockQueryEq();
+  casosService._aplicarFiltroTipo(q, '');
+  check('sin tipo no aplica filtros', llamadas.length === 0, JSON.stringify(llamadas));
+
+  const { q: q2, llamadas: l2 } = crearMockQueryEq();
+  casosService._aplicarFiltroTipo(q2, 'lote_cruzado');
+  check('lote_cruzado -> es_cruzado = true',
+    l2.length === 1 && l2[0][1] === 'es_cruzado' && l2[0][2] === true, JSON.stringify(l2));
+
+  const { q: q3, llamadas: l3 } = crearMockQueryEq();
+  casosService._aplicarFiltroTipo(q3, 'linea_faltante');
+  check('linea_faltante -> tipo = X y es_cruzado = false',
+    l3.length === 2 && l3[0][1] === 'tipo' && l3[0][2] === 'linea_faltante' &&
+    l3[1][1] === 'es_cruzado' && l3[1][2] === false, JSON.stringify(l3));
+}
+
+// ============================================================
+// 7) Prueba en vivo (opcional)
 // ============================================================
 
 async function pruebaEnVivo() {
-  header('6. PRUEBA EN VIVO (crear_caso + limpieza)');
+  header('7. PRUEBA EN VIVO (crear_caso + limpieza)');
 
   const marca = `test-casos-${Date.now()}`;
   let discId = null;
@@ -505,6 +537,7 @@ async function main() {
   await pruebasAnotarDiscrepancias();
   pruebasRangoFechas();
   pruebasScopeUbicacion();
+  pruebasFiltroTipo();
 
   if (LIVE && HAS_ENV) {
     await pruebaEnVivo();
