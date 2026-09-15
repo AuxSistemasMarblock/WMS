@@ -1,22 +1,19 @@
 /**
  * Controller del Dashboard de Supply Chain.
  *
- * Endpoints que alimentan el dashboard.html. Internamente:
- *  - Llama a netsuiteSearchService.getIFsEsperadasAgrupadas() (paginado)
- *  - Llama a googleSheetsService.getEscaneos()
- *  - Llama a confrontaService.confrontar()
- *
- * Caché en memoria con TTL para evitar recalcular en cada request.
+ * Endpoints que alimentan el dashboard.html. Internamente delega en:
+ *  - confrontaCacheService.ejecutarConfronta() (caché TTL + single-flight:
+ *    netsuiteSearchService + googleSheetsService + confrontaService).
+ *  - casosService (persistencia/justificación de discrepancias).
  */
 
-const netsuiteSearchService = require('../services/netsuiteSearchService');
-const googleSheetsService = require('../services/googleSheetsService');
+const confrontaCacheService = require('../services/confrontaCacheService');
 const confrontaService = require('../services/confrontaService');
+const casosService = require('../services/casosService');
 const envConfig = require('../config/environments');
 
-const CACHE_TTL_MS = 15_000; // 15 segundos
-const cache = new Map(); // key: JSON.stringify(filtros), value: { ts, data }
-const inFlight = new Map(); // key: JSON.stringify(filtros), value: Promise (single-flight)
+// Ejecuta la confronta con caché TTL + single-flight (movido a su servicio).
+const ejecutarConfronta = confrontaCacheService.ejecutarConfronta;
 
 /**
  * Loguea un error incluyendo el detalle de la respuesta HTTP (útil para
@@ -31,95 +28,76 @@ function logError(contexto, e) {
 }
 
 /**
- * Construye la clave de caché a partir de los filtros
+ * Dispara la sincronización de discrepancias de forma fire-and-forget (una
+ * sola vez por resultado). No bloquea la respuesta y no lanza.
  */
-function cacheKey(filtros) {
-  return JSON.stringify(filtros);
+function dispararSync(resultado) {
+  if (!resultado || !Array.isArray(resultado.todas_las_discrepancias)) return;
+  if (resultado.__syncDisparado) return;
+  Object.defineProperty(resultado, '__syncDisparado', {
+    value: true, enumerable: false, writable: true, configurable: true
+  });
+  casosService.syncDiscrepancias(resultado).catch(e =>
+    console.error('[dashboard] syncDiscrepancias error:', e.message)
+  );
 }
 
 /**
- * Devuelve el cache si está vigente
+ * Tras obtener el resultado de confronta:
+ *  - dispara syncDiscrepancias de forma fire-and-forget (una vez por resultado).
+ *  - adjunta la justificación a las discrepancias vivas (anotarDiscrepancias).
+ *  - agrega `kpis.desglose_justificacion` {abiertas, en_revision, justificadas}
+ *    sin tocar ningún otro KPI existente.
  */
-function getCached(filtros) {
-  const key = cacheKey(filtros);
-  const entry = cache.get(key);
-  if (!entry) return null;
-  if (Date.now() - entry.ts > CACHE_TTL_MS) {
-    cache.delete(key);
-    return null;
+async function anotarResultado(resultado) {
+  if (!resultado || !Array.isArray(resultado.todas_las_discrepancias)) {
+    return resultado;
   }
-  return entry.data;
+
+  dispararSync(resultado);
+
+  await casosService.anotarDiscrepancias(resultado.todas_las_discrepancias);
+
+  const desglose = { abiertas: 0, en_revision: 0, justificadas: 0 };
+  for (const d of resultado.todas_las_discrepancias) {
+    const estado = d && d.justificacion ? d.justificacion.estado : null;
+    if (estado === 'en_revision') desglose.en_revision++;
+    else if (estado === 'justificada') desglose.justificadas++;
+    else desglose.abiertas++;
+  }
+
+  calcularKPIsConJustificadas(resultado);
+
+  if (resultado.kpis) resultado.kpis.desglose_justificacion = desglose;
+
+  return resultado;
 }
 
 /**
- * Guarda en caché
- */
-function setCached(filtros, data) {
-  cache.set(cacheKey(filtros), { ts: Date.now(), data });
-}
-
-/**
- * Ejecuta la confronta completa con caché y single-flight.
+ * Recalcula los KPIs tratando las discrepancias `justificada` (caso aprobado)
+ * como OK: se excluyen del cálculo y un IF cuyas discrepancias quedaron todas
+ * justificadas se reclasifica como OK. Muta `resultado.kpis`/tops.
  *
- * El dashboard dispara ~9 endpoints en paralelo por cada cambio de filtro
- * (cargarTodo). Sin single-flight, todos fallan el caché a la vez y ejecutan
- * la confronta completa concurrentemente, generando una ráfaga de llamadas a
- * NetSuite que deriva en errores transitorios (400). Con single-flight todos
- * comparten UNA sola ejecución por cache key.
+ * Es puro respecto a la clasificación original: no mueve `ifs_ok`/
+ * `ifs_con_errores`, por lo que es idempotente aunque `resultado` venga de caché.
  */
-async function ejecutarConfronta({ desde, hasta, sucursal }) {
-  const filtros = { desde, hasta, sucursal };
-  const cached = getCached(filtros);
-  if (cached) return cached;
+function calcularKPIsConJustificadas(resultado) {
+  if (!resultado || !Array.isArray(resultado.todas_las_discrepancias)) return resultado;
+  const esJustificada = d => !!(d && d.justificacion && d.justificacion.estado === 'justificada');
 
-  const key = cacheKey(filtros);
-  if (inFlight.has(key)) return inFlight.get(key);
+  const vigentes = resultado.todas_las_discrepancias.filter(d => !esJustificada(d));
+  const ifsConErrorVigentes = (resultado.ifs_con_errores || []).filter(ifDoc =>
+    (ifDoc.discrepancias || []).some(d => !esJustificada(d))
+  );
+  const ifsConErrorOriginales = (resultado.ifs_con_errores || []).length;
+  const ifsOk = (resultado.ifs_ok || []).length + (ifsConErrorOriginales - ifsConErrorVigentes.length);
+  const lineasConError = ifsConErrorVigentes.reduce((s, i) => s + (i.lineas_con_error || 0), 0);
 
-  const promise = (async () => {
-    try {
-      // 1) Escaneos: la ventana de fechas se aplica sobre la FECHA DE ESCANEO (Sheets).
-      const escaneos = await googleSheetsService.getEscaneos({
-        desde, hasta, sucursal
-      });
-
-      // 2) IFs esperadas: UNA sola llamada a NetSuite que devuelve las IFs del
-      //    período (trandate en ventana, para detectar linea_faltante) Y además
-      //    conserva las IFs escaneadas aunque su trandate quede fuera de la
-      //    ventana (la fecha relevante para la confronta es la del escaneo).
-      const tranidsEscaneados = [...new Set(
-        escaneos.map(e => e.if_tranid).filter(Boolean)
-      )];
-
-      let ifsEsperadas = [];
-      try {
-        ifsEsperadas = await netsuiteSearchService.getIFsEsperadasAgrupadas({
-          desde, hasta, sucursal,
-          tranidsRelevantes: tranidsEscaneados
-        });
-      } catch (e) {
-        // No derribar el dashboard por un error transitorio de NetSuite:
-        // degradamos a sin IFs esperadas (las escaneadas saldrán como
-        // if_no_encontrada en la confronta) y logueamos el detalle real.
-        console.error('[ejecutarConfronta] Error leyendo IFs de NetSuite:', e.message);
-        if (e.response) {
-          console.error('[ejecutarConfronta] NetSuite response:', JSON.stringify(e.response.data));
-        }
-        if (process.env.VERBOSE === '1' && e.stack) console.error(e.stack);
-      }
-
-      const resultado = confrontaService.confrontar(ifsEsperadas, escaneos);
-      if (ifsEsperadas.length === 0 && tranidsEscaneados.length > 0) {
-        resultado.warnings = ['No se pudieron leer las IFs esperadas de NetSuite; se reportan las IFs escaneadas como no localizadas.'];
-      }
-      setCached(filtros, resultado);
-      return resultado;
-    } finally {
-      inFlight.delete(key);
-    }
-  })();
-
-  inFlight.set(key, promise);
-  return promise;
+  return confrontaService.calcularKPIs(resultado, vigentes, {
+    ifsOk,
+    ifsConErrores: ifsConErrorVigentes.length,
+    lineasConError
+  });
 }
 
 /**
@@ -138,6 +116,7 @@ const getResumen = async (req, res) => {
   try {
     const filtros = normalizarFiltros(req);
     const resultado = await ejecutarConfronta(filtros);
+    await anotarResultado(resultado);
 
     res.json({
       filtros,
@@ -159,6 +138,7 @@ const getConfrontaFull = async (req, res) => {
   try {
     const filtros = normalizarFiltros(req);
     const resultado = await ejecutarConfronta(filtros);
+    await anotarResultado(resultado);
     res.json({ filtros, resultado, generado_en: new Date().toISOString() });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -170,6 +150,7 @@ const getIFsMalSacadas = async (req, res) => {
     const filtros = normalizarFiltros(req);
     const { operador, tipo } = req.query;
     const resultado = await ejecutarConfronta(filtros);
+    await anotarResultado(resultado);
 
     // Incluimos tanto errores de surtido como canceladas en ERP
     let ifs = [...resultado.ifs_con_errores, ...resultado.ifs_canceladas_erp];
@@ -223,6 +204,7 @@ const getIFsCanceladas = async (req, res) => {
   try {
     const filtros = normalizarFiltros(req);
     const resultado = await ejecutarConfronta(filtros);
+    await anotarResultado(resultado);
 
     const compact = resultado.ifs_canceladas_erp.map(i => ({
       tranid: i.tranid,
@@ -256,6 +238,7 @@ const getIFDetalle = async (req, res) => {
     const { tranid } = req.params;
     const filtros = normalizarFiltros(req);
     const resultado = await ejecutarConfronta(filtros);
+    await anotarResultado(resultado);
 
     const ifDoc = resultado.ifs.find(i => i.tranid === tranid);
     if (!ifDoc) {
@@ -279,6 +262,7 @@ const getDiscrepancias = async (req, res) => {
     const filtros = normalizarFiltros(req);
     const { tipo, operador, sku } = req.query;
     const resultado = await ejecutarConfronta(filtros);
+    await anotarResultado(resultado);
 
     let discrepancias = resultado.todas_las_discrepancias;
 
@@ -316,6 +300,7 @@ const getTopErrores = async (req, res) => {
     const filtros = normalizarFiltros(req);
     const { dimension = 'sku' } = req.query;
     const resultado = await ejecutarConfronta(filtros);
+    dispararSync(resultado);
 
     let top;
     switch (dimension) {
@@ -347,6 +332,7 @@ const getIFsOK = async (req, res) => {
     const filtros = normalizarFiltros(req);
     const { limit } = req.query;
     const resultado = await ejecutarConfronta(filtros);
+    dispararSync(resultado);
 
     let compact = resultado.ifs_ok.map(i => ({
       tranid: i.tranid,
@@ -382,6 +368,7 @@ const getArticulosMasSalidas = async (req, res) => {
     const filtros = normalizarFiltros(req);
     const { dimension = 'sku' } = req.query;
     const resultado = await ejecutarConfronta(filtros);
+    dispararSync(resultado);
 
     let top;
     switch (dimension) {
@@ -446,7 +433,8 @@ module.exports = {
   getSucursales,
   getArticulosMasSalidas,
   health,
-  // Exportados para tests
-  _ejecutarConfronta: ejecutarConfronta,
-  _clearCache: () => cache.clear()
+  // Exportados para tests / compatibilidad
+  _ejecutarConfronta: confrontaCacheService.ejecutarConfronta,
+  _clearCache: confrontaCacheService._clearCache,
+  _calcularKPIsConJustificadas: calcularKPIsConJustificadas
 };

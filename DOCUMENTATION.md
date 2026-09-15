@@ -32,6 +32,7 @@
    - 4.3 Taxonomía y Detección de Discrepancias (`confrontaService.js`)
    - 4.4 Rendimiento: Caché en Memoria y Patrón Single-Flight
    - 4.5 Interfaz Analítica, Visualizaciones y Auditoría por Partida (`js/dashboard/app.js`)
+   - 4.6 Gestor de Casos: Flujo de Justificación en 2 Fases (`casos.html`)
 5. [Módulo 3: Impresión de Etiquetas Zebra & Motor ZPL (`etiquetas.html`)](#5-módulo-3-impresión-de-etiquetas-zebra--motor-zpl)
    - 5.1 Flujo Dual de Operación (Stock Disponible vs Recepción IR)
    - 5.2 Consulta y Desambiguación de Pedimentos Aduanales (`irService.js`)
@@ -90,19 +91,19 @@ Sus metas funcionales y de ingeniería son:
 
 ### 1.2 Módulos del Ecosistema
 
-El frontend se divide en **tres aplicaciones SPA independientes (Single Page Applications)** servidas por Nginx, que comparten estilos, autenticación y sesión:
+El frontend se divide en **cuatro aplicaciones SPA independientes (Single Page Applications)** servidas por Nginx, que comparten estilos, autenticación y sesión:
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           WMS FRONTEND ECOSYSTEM                            │
-├──────────────────────────┬──────────────────────────┬───────────────────────┤
-│  1. Escáner de Salidas   │  2. Dashboard Confronta  │ 3. Etiquetas Zebra    │
-│  (index.html)            │  (dashboard.html)        │ (etiquetas.html)      │
-│  • Escaneo rápido QR HID │  • Cruce NetSuite vs GSheets • Búsqueda de Stock │
-│  • Validación IF abierta │  • KPIs de exactitud     │ • Detalle de IRs      │
-│  • Captura de firmas 2x2 │  • Auditoría de errores  │ • Pedimento aduanal   │
-│  • Subida y cierre de IF │  • Top causas raíz       │ • Generador ZPL / USB │
-└──────────────────────────┴──────────────────────────┴───────────────────────┘
+┌────────────────────┬─────────────────────┬─────────────────────┬─────────────────────────────┐
+│                                    WMS FRONTEND ECOSYSTEM                                    │
+├────────────────────┼─────────────────────┼─────────────────────┼─────────────────────────────┤
+│  1. Escáner Salidas│  2. Dashboard       │  3. Etiquetas Zebra │  4. Gestor de Casos         │
+│  (index.html)      │  (dashboard.html)   │  (etiquetas.html)   │  (casos.html)               │
+│  • Escaneo QR HID  │  • Cruce NS vs GS   │  • Búsqueda stock   │  • Errores de mi almacén    │
+│  • Validación IF   │  • KPIs de exactitud│  • Detalle de IRs   │  • Justificación y envío    │
+│  • Firmas 2x2      │  • Auditoría errores│  • Pedimento aduanal│  • Aprobación / rechazo     │
+│  • Cierre de IF    │  • Top causas raíz  │  • Generador ZPL/USB│  • Timeline y comentarios   │
+└────────────────────┴─────────────────────┴─────────────────────┴─────────────────────────────┘
 ```
 
 ### 1.3 Diagrama de Arquitectura C4 (Nivel Contenedores)
@@ -170,13 +171,15 @@ graph TB
 
 La autenticación se realiza mediante tokens JWT firmados (`HS256`, 24h de expiración). La autorización está implementada en base a roles almacenados en la base de datos Supabase.
 
-| Rol (`roles.clave`) | Destino Post-Login | Escáner (`index.html`) | Etiquetas (`etiquetas.html`) | Dashboard (`dashboard.html`) | Registro Usuarios (`/auth/register`) |
-|---|---|:---:|:---:|:---:|:---:|
-| `aux_almacen` | `index.html` | ✅ Lectura / Despacho | ❌ Sin acceso | ❌ Sin acceso | ❌ Sin acceso |
-| `jefe_almacen` | `index.html` | ✅ Lectura / Despacho | ✅ Consulta / Impresión | ❌ Sin acceso | ❌ Sin acceso |
-| `gerente` | `dashboard.html` | ❌ Sin acceso | ❌ Sin acceso | ✅ Auditoría Global (Todas las sucursales) | ❌ Sin acceso |
-| `admin` | `dashboard.html` | ✅ Control Total | ✅ Control Total | ✅ Auditoría Global (Todas las sucursales) | ✅ Exclusivo Admin |
-| `cliente` | `index.html` | ✅ Solo Firma | ❌ Sin acceso | ❌ Sin acceso | ❌ Sin acceso |
+| Rol (`roles.clave`) | Destino Post-Login | Escáner (`index.html`) | Etiquetas (`etiquetas.html`) | Dashboard (`dashboard.html`) | Casos (`casos.html`) | Registro Usuarios (`/auth/register`) |
+|---|---|:---:|:---:|:---:|:---:|:---:|
+| `aux_almacen` | `index.html` | ✅ Lectura / Despacho | ❌ Sin acceso | ❌ Sin acceso | ❌ Sin acceso | ❌ Sin acceso |
+| `jefe_almacen` | `index.html` | ✅ Lectura / Despacho | ✅ Consulta / Impresión | ❌ Sin acceso | ✅ Justifica errores de su ubicación | ❌ Sin acceso |
+| `gerente` | `dashboard.html` | ❌ Sin acceso | ❌ Sin acceso | ✅ Auditoría Global (Todas las sucursales) | ✅ Aprueba / Rechaza casos (Líder de Almacén) | ❌ Sin acceso |
+| `admin` | `dashboard.html` | ✅ Control Total | ✅ Control Total | ✅ Auditoría Global (Todas las sucursales) | ✅ Control Total | ✅ Exclusivo Admin |
+| `cliente` | `index.html` | ✅ Solo Firma | ❌ Sin acceso | ❌ Sin acceso | ❌ Sin acceso | ❌ Sin acceso |
+
+> **Rol efectivo en el Gestor de Casos**: el `jefe_almacen` crea y da seguimiento a los casos de las discrepancias de **su** ubicación (respetando las ubicaciones compartidas); el `gerente` opera como **Líder de Almacén** y es el único rol junto con `admin` facultado para **aprobar o rechazar** los casos, adicionalmente a su acceso global al Dashboard.
 
 > **Firmas Físicas vs Roles de Sesión**: Las firmas de `jefeAlmacen` y `gerente` solicitadas durante el despacho de placas son **etiquetas de firma en el canvas** requeridas por volumen (>3 placas requiere jefe, >10 requiere gerente) y son independientes de quién haya iniciado sesión en la aplicación.
 
@@ -185,9 +188,9 @@ La autenticación se realiza mediante tokens JWT firmados (`HS256`, 24h de expir
 El componente `js/nav.js` se ejecuta en `DOMContentLoaded` en todas las páginas e inyecta la barra de navegación `#appNav` evaluando el rol del usuario en `sessionStorage`:
 
 - **Usuarios `aux_almacen` y `cliente`**: Se renderiza únicamente el botón activo a **Escáner**.
-- **Usuarios `jefe_almacen`**: Se renderizan accesos conmutables a **Escáner** y **Etiquetas**.
-- **Usuarios `gerente`**: Se renderiza únicamente el botón activo a **Dashboard** (con selector global de sucursales, confinados al dashboard).
-- **Usuarios `admin`**: Se renderizan accesos a **Escáner**, **Etiquetas** y **Dashboard** (control total de la plataforma).
+- **Usuarios `jefe_almacen`**: Se renderizan accesos conmutables a **Escáner**, **Etiquetas** y **Casos**.
+- **Usuarios `gerente`**: Se renderizan accesos a **Dashboard** (con selector global de sucursales) y **Casos** (revisión y aprobación como Líder de Almacén).
+- **Usuarios `admin`**: Se renderizan accesos a **Escáner**, **Etiquetas**, **Dashboard** y **Casos** (control total de la plataforma).
 
 ### 2.3 Modelo de Datos Relacional (PostgreSQL / Supabase)
 
@@ -198,6 +201,14 @@ erDiagram
     usuarios ||--o{ firmas : "captura"
     ubicaciones ||--o{ firmas : "sucursal origen"
     usuarios ||--o{ audit_logs : "ejecuta accion"
+    ubicaciones ||--o{ casos : "sucursal del caso"
+    usuarios ||--o{ casos : "crea (creado_por)"
+    usuarios ||--o{ casos : "revisa (revisado_por)"
+    tipos_justificacion ||--o{ casos : "clasifica"
+    casos ||--o{ discrepancias : "agrupa"
+    casos ||--o{ caso_eventos : "registra (timeline)"
+    usuarios ||--o{ caso_eventos : "actua (actor_id)"
+    discrepancias ||--o{ caso_eventos : "referencia"
 
     roles {
         int8 id PK
@@ -252,7 +263,75 @@ erDiagram
         varchar user_agent
         timestamp created_at
     }
+
+    discrepancias {
+        int8 id PK
+        text fingerprint UK "sha256 de la huella (IF|SKU|lote|tipo)"
+        text tipo "cantidad_faltante, lote_cruzado, etc."
+        text if_tranid
+        text if_id
+        text if_so
+        text sucursal
+        text if_fecha
+        text sku
+        text lote
+        text id_lote
+        int placas_esperadas
+        int placas_escaneadas
+        int diferencia
+        numeric diff_m2
+        numeric m2_esperados
+        numeric m2_escaneados
+        bool es_cruzado "Default false"
+        jsonb datos "Snapshot crudo de la confronta"
+        text estado "abierta | en_revision | justificada"
+        int8 caso_id FK "-> casos.id (nullable)"
+        timestamptz primera_vista
+        timestamptz ultima_vista
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    casos {
+        int8 id PK
+        text folio UK "YYYY-NNNN (secuencial anual; un caso agrupa N IFs)"
+        int8 ubicacion_id FK "-> ubicaciones.id"
+        text sucursal
+        int8 tipo_justificacion_id FK "-> tipos_justificacion.id"
+        text justificacion
+        text estado "pendiente_aprobacion | aprobado | rechazado"
+        int8 creado_por FK "-> usuarios.id"
+        timestamptz enviado_at
+        int8 revisado_por FK "-> usuarios.id"
+        timestamptz revisado_at
+        text comentario_revision
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    caso_eventos {
+        int8 id PK
+        int8 caso_id FK "-> casos.id"
+        int8 discrepancia_id FK "-> discrepancias.id (nullable)"
+        text evento "caso_creado, aprobado, rechazado, comentario, etc."
+        int8 actor_id FK "-> usuarios.id"
+        jsonb datos "Payload del evento"
+        timestamptz created_at
+    }
+
+    tipos_justificacion {
+        int8 id PK
+        text clave UK
+        text nombre
+        text descripcion
+        bool requiere_comentario "Default true"
+        bool activo "Default true"
+        int orden
+        timestamptz created_at
+    }
 ```
+
+> **Acceso y Seguridad (Service Role)**: Las tablas `discrepancias`, `casos`, `caso_eventos` y `tipos_justificacion` tienen **RLS habilitado sin políticas**: ningún rol `anon`/`authenticated` puede leerlas ni escribirlas. El backend accede a ellas con la **`SUPABASE_SERVICE_ROLE_KEY`** (service role), que bypassa RLS. Los identificadores (`caso_id`, `discrepancia_id`, `actor_id`, `creado_por`, `revisado_por`, `ubicacion_id`, `tipo_justificacion_id`) se almacenan como `bigint` con **foreign keys reales** declaradas en [`supabase/migrations/0001_gestor_casos.sql`](file:///home/mrchilaquiles/Documents/Chamba/WMS/supabase/migrations/0001_gestor_casos.sql) (**ya aplicadas en Supabase**); las relaciones del diagrama coinciden con el esquema y los joins se resuelven manualmente en `casosService.js` (capa de persistencia), invocada por `casosController.js`.
 
 ### 2.4 Matriz y Reglas de Segmentación Geográfica de Ubicaciones
 
@@ -411,6 +490,55 @@ Al cargar o filtrar el dashboard, el cliente ejecuta hasta 9 llamadas simultáne
 - **Gráficos Chart.js**: Gráfico de Dona para Tasa de Exactitud y Gráfico de Barras horizontales para Top 5 Artículos con Mayor Salida.
 - **Auditoría Partida por Partida**: Modal interactivo que desglosa cada IF, comparando SKU, lote, piezas esperadas, escaneadas, status visual y el historial del operador que realizó la lectura.
 
+### 4.6 Gestor de Casos: Flujo de Justificación en 2 Fases (`casos.html`)
+
+El **Gestor de Casos** (`casos.html` + `js/casos/app.js`) es la capa de **auditoría persistente** de la confronta: convierte las discrepancias vivas detectadas por el motor (`confrontaService.js`) en casos trazables con folio, y resuelve mediante un **flujo humano de 2 fases** si cada error se justifica o se rechaza. Las tablas (`discrepancias`, `casos`, `caso_eventos`, `tipos_justificacion`) y la función transaccional `public.crear_caso` **ya están aplicadas en Supabase** (ver §2.3); el backend las opera con la service role y cada transición queda registrada en `caso_eventos`.
+
+> **Creación atómica vía RPC**: `POST /api/casos` ya **no** hace 3 escrituras REST separadas (insert caso → update discrepancias → insert eventos). El backend invoca la función `public.crear_caso(p_discrepancia_ids, p_tipo_justificacion_id, p_justificacion, p_ubicacion_id, p_sucursal, p_creado_por)` con `supabase.rpc`, que ejecuta **todo en una sola transacción** (o se aplica completo o no se aplica nada), serializando el folio anual `YYYY-NNNN` (p. ej. `2026-0001`) con un *advisory lock*. Ante un error de validación de la función (`errcode 22023`) el API responde **400** con el mensaje; cualquier otro error responde **500**. `p_sucursal` puede ir `null` y la función resuelve la sucursal de la primera discrepancia. Toda la persistencia vive en `casosService.js`; `casosController.js` queda como capa HTTP (validación, scope de ubicación y armado de la respuesta).
+
+**Fase 1 — Jefe de Almacén (justificación)**
+1. `POST /api/casos/sync` ejecuta la confronta y hace *upsert* de las discrepancias por `fingerprint`, sin duplicar filas ni pisar las que ya están `justificada`.
+2. El jefe ve únicamente los errores de **su ubicación** (ubicaciones compartidas incluidas) y selecciona una o varias discrepancias en estado `abierta`.
+3. Elige un **tipo de justificación** del catálogo `tipos_justificacion` y redacta el detalle.
+4. `POST /api/casos` crea el caso **atómicamente** vía la RPC `public.crear_caso`: inserta el caso con folio `YYYY-NNNN` (`2026-0001`) en estado `pendiente_aprobacion`, mueve las discrepancias a `en_revision` con su `caso_id` y registra la bitácora, todo en una sola transacción.
+
+**Fase 2 — Gerente / Líder de Almacén (aprobación)**
+5. El `gerente` (o `admin`) revisa el detalle y el *timeline* del caso en `GET /api/casos/:id`.
+6. `POST /api/casos/:id/aprobar` → el caso pasa a `aprobado` y todas sus discrepancias a `justificada`.
+7. `POST /api/casos/:id/rechazar` (comentario obligatorio) → el caso pasa a `rechazado` y las discrepancias permanecen `en_revision`. El jefe puede `reenviar` (editar tipo, justificación o discrepancias y volver a `pendiente_aprobacion`) o `retirar` discrepancias (regresan a `abierta`).
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Jefe as Jefe de Almacén
+    actor Gerente as Gerente (Líder de Almacén)
+    participant UI as Frontend (casos.html)
+    participant Back as Backend (/api/casos)
+    participant DB as Supabase (service role)
+
+    Jefe->>Back: POST /api/casos/sync (confronta + upsert por fingerprint)
+    Back->>DB: Upsert discrepancias (estado abierta)
+    Jefe->>UI: Selecciona errores de su almacén + tipo de justificación
+    UI->>Back: POST /api/casos (discrepancia_ids, tipo, justificación)
+    Back->>DB: rpc crear_caso() [atómico] -> caso + discrepancias en_revision + eventos
+    Back-->>UI: 201 Created (folio)
+    Gerente->>Back: POST /api/casos/:id/aprobar
+    Back->>DB: Caso aprobado + discrepancias justificada + evento
+    Back-->>Gerente: 200 OK (Dashboard marca "justificado")
+```
+
+**Estados y transiciones**:
+
+| Entidad | Estados | Transiciones permitidas |
+|---|---|---|
+| `discrepancias.estado` | `abierta`, `en_revision`, `justificada` | `abierta` → `en_revision` (crear caso); `en_revision` → `justificada` (aprobar); `en_revision` → `abierta` (retirar) |
+| `casos.estado` | `pendiente_aprobacion`, `aprobado`, `rechazado` | `pendiente_aprobacion` → `aprobado` / `rechazado`; `rechazado` → `pendiente_aprobacion` (reenviar) |
+
+**Impacto en los KPIs del Dashboard**
+- La **`tasa_exactitud` se mantiene bruta**: un error `justificada` sigue contando como error en el cálculo original; la justificación no "maquilla" el indicador.
+- El dashboard agrega `kpis.desglose_justificacion = { abiertas, en_revision, justificadas }` como **desglose adicional, sin modificar ningún otro KPI**, para separar el error real del ya explicado.
+- Al aprobarse un caso, el error se **conserva** en el detalle de la IF y se muestra como **"justificado"** con su folio y enlace directo ("Abrir en Gestor de Casos" → `casos.html?caso=<id>`).
+
 ---
 
 ## 5. Módulo 3: Impresión de Etiquetas Zebra & Motor ZPL
@@ -532,6 +660,18 @@ WebUSB de Chrome/Edge en **Windows** solo expone dispositivos cuyo driver sea **
 | | `GET` | `/api/dashboard/top-errores` | JWT | `gerente`, `admin` | Ranking de fallas por SKU, lote, ubicación, operador |
 | | `GET` | `/api/dashboard/ifs-ok` | JWT | `gerente`, `admin` | Listado de IFs concluidas con 100% exactitud |
 | | `GET` | `/api/dashboard/articulos-mas-salidas` | JWT | `gerente`, `admin` | Top artículos con mayor volumen de piezas |
+| **Casos** | `POST` | `/api/casos/sync` | JWT | `jefe_almacen`, `gerente`, `admin` | Ejecuta la confronta y hace *upsert* de las discrepancias por `fingerprint` |
+| | `GET` | `/api/casos/discrepancias` | JWT | `jefe_almacen`, `gerente`, `admin` | Lista discrepancias persistidas (filtros `estado`, `tipo`, `sucursal`, `desde`, `hasta`, `if_tranid`) |
+| | `GET` | `/api/casos/tipos-justificacion` | JWT | `jefe_almacen`, `gerente`, `admin` | Catálogo de tipos de justificación activos (`orden` ascendente) |
+| | `GET` | `/api/casos` | JWT | `jefe_almacen`, `gerente`, `admin` | Listado de casos con filtros y total de discrepancias por caso |
+| | `POST` | `/api/casos` | JWT | `jefe_almacen`, `admin` | Crea un caso (Fase 1) desde discrepancias `abierta` de forma **atómica** vía RPC `public.crear_caso`; genera folio anual `YYYY-NNNN` (400 si la validación de la función devuelve `22023`) |
+| | `GET` | `/api/casos/:id` | JWT | `jefe_almacen`, `gerente`, `admin` | Detalle del caso: tipo de justificación, discrepancias y timeline de eventos |
+| | `POST` | `/api/casos/:id/aprobar` | JWT | `gerente`, `admin` | Aprueba el caso y marca sus discrepancias como `justificada` |
+| | `POST` | `/api/casos/:id/rechazar` | JWT | `gerente`, `admin` | Rechaza el caso (comentario obligatorio); las discrepancias siguen `en_revision` |
+| | `PUT` | `/api/casos/:id/reenviar` | JWT | `jefe_almacen`, `admin` | Reenvía un caso `rechazado` a revisión (permite editar tipo/justificación/discrepancias) |
+| | `POST` | `/api/casos/:id/retirar` | JWT | `jefe_almacen`, `admin` | Retira discrepancias de un caso `rechazado` y las devuelve a `abierta` |
+| | `POST` | `/api/casos/:id/comentarios` | JWT | `jefe_almacen`, `gerente`, `admin` | Agrega un comentario al timeline del caso |
+| | `GET` | `/api/casos/resumen` | JWT | `jefe_almacen`, `gerente`, `admin` | Conteos de casos por estado (`pendiente_aprobacion`, `aprobado`, `rechazado`) |
 | **Etiquetas** | `GET` | `/api/etiquetas/existencias` | JWT | `jefe_almacen`, `admin` | Existencias de stock filtradas por sucursal |
 | | `GET` | `/api/etiquetas/lotes` | JWT | `jefe_almacen`, `admin` | Lotes disponibles para un SKU específico |
 | | `POST` | `/api/etiquetas/pedimento` | JWT | `jefe_almacen`, `admin` | Consulta pedimento aduanal y embarque |
@@ -937,6 +1077,7 @@ window.APP_CONFIG = {
 - **v3.0.0 (Versión Actual)**:
   - **Módulo de Etiquetas Zebra**: Búsqueda de existencias, consulta de Recepciones IR, cruce de pedimento aduanal, motor geométrico ZPL II y driver WebUSB nativo.
   - **Módulo Dashboard de Confronta**: Auditoría matemática de $m^2 \to \text{placas}$, cruce NetSuite vs Google Sheets (GCP Service Account), taxonomía de 7 discrepancias, optimización single-flight con caché TTL 15s y gráficas ejecutivas Chart.js.
+  - **Gestor de Casos y Persistencia de Auditoría**: Discrepancias persistidas en Supabase con `fingerprint` (upsert idempotente), tablas `discrepancias`, `casos`, `caso_eventos` y `tipos_justificacion` con RLS solo-service-role, flujo de justificación en 2 fases (Jefe de Almacén → Gerente/Líder de Almacén) y desglose `kpis.desglose_justificacion` en el dashboard sin alterar la `tasa_exactitud` bruta.
   - **Arquitectura RBAC**: Modelo relacional con tabla `roles` en Supabase y navegación condicional (`js/nav.js`).
   - **Seguridad**: Proxy `/webhook/scan` para ocultar URLs externas y actualización del runtime a Node.js 22 Alpine.
 
@@ -951,4 +1092,4 @@ window.APP_CONFIG = {
 ---
 
 **Mantenido por**: Área de Ingeniería de Software — Marblock WMS  
-**Última Revisión Técnica**: Agosto 2026
+**Última Revisión Técnica**: Septiembre 2026

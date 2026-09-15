@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WMS · Gestor de Casos</title>
+  <link rel="icon" href="images/logo_ico.png" type="image/png" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600;700&display=swap"
+    rel="stylesheet"
+  />
+  <!-- Meta tema y Anti-FOUC -->
+  <meta name="theme-color" content="#004a99" />
+  <script>try{var t=localStorage.getItem("wms-theme");document.documentElement.setAttribute("data-theme",t==="dark"||t===null&&matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")}catch(e){}</script>
+  <script src="js/theme.js?v=150"></script>
+
+  <link rel="stylesheet" href="css/variables.css?v=150" />
+  <link rel="stylesheet" href="css/styles.css?v=150" />
+  <link rel="stylesheet" href="css/dashboard.css?v=151" />
+  <link rel="stylesheet" href="css/casos.css?v=155" />
+</head>
+<body>
+
+<div id="toast" class="toast"></div>
+
+<div id="mainApp" style="display: none;">
+
+  <header>
+    <div class="logo">
+      <img src="images/logo.png" alt="Logo Empresa" style="height:30px; width:auto; border-radius:6px; padding:2px;"/>
+    </div>
+    <nav class="app-nav" id="appNav"></nav>
+    <div class="header-right">
+      <div class="user-info">
+        <div class="user-details">
+          <div class="user-name" id="currentUserName">Usuario</div>
+          <div class="user-meta">
+            <span id="currentUserLocation">Ubicación</span> ·
+            <span id="currentUserRole">Rol</span>
+          </div>
+        </div>
+      </div>
+      <button class="theme-toggle" id="themeToggle" type="button" role="switch" aria-checked="false" aria-label="Cambiar entre modo claro y oscuro" title="Cambiar tema">
+        <span class="theme-toggle-thumb"></span>
+        <span class="theme-toggle-icon icon-sun" aria-hidden="true">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        </span>
+        <span class="theme-toggle-icon icon-moon" aria-hidden="true">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </span>
+      </button>
+      <button class="btn btn-logout" onclick="handleLogout()" title="Cerrar sesión">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 13l4 4m0-4l-4 4M16 3v8"/></svg>
+        Logout
+      </button>
+    </div>
+  </header>
+
+  <main class="casos-main">
+    <div class="casos-tabs" id="casosTabs"></div>
+    <div id="viewContent"></div>
+  </main>
+
+  <footer class="app-footer" id="appFooter"></footer>
+</div>
+
+<!-- MODAL: JUSTIFICAR SELECCIÓN (JEFE DE ALMACÉN) -->
+<div id="justificarModal" class="confirm-modal">
+  <div class="confirm-card casos-modal-lg">
+    <div class="modal-head">
+      <h3 class="confirm-title">📝 Justificar errores seleccionados</h3>
+      <button class="btn btn-ghost" type="button" onclick="cerrarModal('justificarModal')">✕</button>
+    </div>
+    <div class="resumen-seleccion">
+      <div class="resumen-title">Errores incluidos en el caso</div>
+      <div id="justResumen"></div>
+    </div>
+    <div class="form-field">
+      <label for="justTipo">Tipo de justificación <span class="req">*</span></label>
+      <select id="justTipo"></select>
+    </div>
+    <div class="form-field">
+      <label for="justTexto">Justificación <span class="req">*</span></label>
+      <textarea id="justTexto" placeholder="Describe el motivo del ajuste..."></textarea>
+      <div class="form-hint" id="justHint">Si eliges "Otro (requiere detalle)" deberás describir con al menos 15 caracteres.</div>
+    </div>
+    <div class="form-error" id="justError"></div>
+    <div class="confirm-actions" style="justify-content:flex-end;">
+      <button class="btn btn-ghost" type="button" onclick="cerrarModal('justificarModal')">Cancelar</button>
+      <button class="btn btn-primary" type="button" id="btnEnviarJust" onclick="enviarJustificacion()">Crear caso</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: DETALLE DE CASO -->
+<div id="detalleCasoModal" class="confirm-modal">
+  <div class="confirm-card casos-modal-xl">
+    <div class="modal-head">
+      <h3 class="confirm-title" id="detalleCasoTitle">Caso</h3>
+      <button class="btn btn-ghost" type="button" onclick="cerrarModal('detalleCasoModal')">✕</button>
+    </div>
+    <div class="modal-scroll" id="detalleCasoBody"></div>
+  </div>
+</div>
+
+<!-- MODAL: REVISIÓN (APROBAR / RECHAZAR) -->
+<div id="revisionModal" class="confirm-modal">
+  <div class="confirm-card casos-modal-lg">
+    <div class="modal-head">
+      <h3 class="confirm-title" id="revTitle">Revisar caso</h3>
+      <button class="btn btn-ghost" type="button" onclick="cerrarModal('revisionModal')">✕</button>
+    </div>
+    <div id="revCasoInfo" class="form-hint" style="margin-bottom:12px;"></div>
+    <div class="form-field">
+      <label for="revComentario" id="revComentarioLabel">Comentario</label>
+      <textarea id="revComentario" placeholder="Escribe un comentario..."></textarea>
+      <div class="form-hint" id="revHint"></div>
+    </div>
+    <div class="form-error" id="revError"></div>
+    <div class="confirm-actions" style="justify-content:flex-end;">
+      <button class="btn btn-ghost" type="button" onclick="cerrarModal('revisionModal')">Cancelar</button>
+      <button class="btn btn-primary" type="button" id="btnRevConfirmar" onclick="enviarRevision()">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: DETALLE DEL ERROR (DISCREPANCIA) -->
+<div id="discDetalleModal" class="confirm-modal">
+  <div class="confirm-card casos-modal-xl">
+    <div class="modal-head">
+      <h3 class="confirm-title" id="discDetalleTitle">Detalle del error</h3>
+      <button class="btn btn-ghost" type="button" onclick="cerrarModal('discDetalleModal')">✕</button>
+    </div>
+    <div class="modal-scroll" id="discDetalleBody"></div>
+    <div class="confirm-actions" style="justify-content:flex-end;">
+      <button class="btn btn-ghost" type="button" onclick="cerrarModal('discDetalleModal')">Cerrar</button>
+      <button class="btn btn-primary" type="button" id="btnSelDesdeDetalle" onclick="seleccionarDesdeDetalle()">Seleccionar para justificar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: EDITAR Y REENVIAR -->
+<div id="reenviarModal" class="confirm-modal">
+  <div class="confirm-card casos-modal-lg">
+    <div class="modal-head">
+      <h3 class="confirm-title">✏️ Editar y reenviar caso</h3>
+      <button class="btn btn-ghost" type="button" onclick="cerrarModal('reenviarModal')">✕</button>
+    </div>
+    <div class="form-field">
+      <label for="reenvTipo">Tipo de justificación <span class="req">*</span></label>
+      <select id="reenvTipo"></select>
+    </div>
+    <div class="form-field">
+      <label for="reenvTexto">Justificación <span class="req">*</span></label>
+      <textarea id="reenvTexto"></textarea>
+    </div>
+    <div class="form-error" id="reenvError"></div>
+    <div class="confirm-actions" style="justify-content:flex-end;">
+      <button class="btn btn-ghost" type="button" onclick="cerrarModal('reenviarModal')">Cancelar</button>
+      <button class="btn btn-primary" type="button" onclick="enviarReenvio()">Reenviar a revisión</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/config.js?v=150"></script>
+<script src="js/nav.js?v=150"></script>
+<script src="js/footer.js?v=150"></script>
+  <script src="js/casos/app.js?v=157"></script>
+</body>
+</html>
