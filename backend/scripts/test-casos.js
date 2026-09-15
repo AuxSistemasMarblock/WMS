@@ -150,6 +150,14 @@ function pruebasConstruirFila() {
     filaLocation.fingerprint === casosService.calcularFingerprint({ ...disc, sucursal: 'GDL' }),
     filaLocation.fingerprint);
 
+  // Medias placas: la confronta produce fracciones (p. ej. 2.5) que NO deben
+  // redondearse; el sync fallaba al insertarlas en columnas int.
+  const filaMedia = casosService._construirFila(
+    { ...disc, placas_esperadas: 2.5, placas_escaneadas: 3, diferencia: 0.5 }, ahora);
+  check('preserva placas fraccionarias (medias placas)',
+    Number(filaMedia.placas_esperadas) === 2.5 && Number(filaMedia.diferencia) === 0.5,
+    `${filaMedia.placas_esperadas} / ${filaMedia.diferencia}`);
+
   check('_construirFila(null) devuelve null', casosService._construirFila(null, ahora) === null);
 }
 
