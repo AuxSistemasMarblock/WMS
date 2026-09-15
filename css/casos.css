@@ -12,40 +12,39 @@
    ───────────────────────────────────────────── */
 
 .casos-tabs {
-  display: flex;
-  gap: 6px;
+  display: inline-flex;
+  gap: 4px;
   flex-wrap: wrap;
   margin: 16px 20px 0 20px;
-  border-bottom: 1px solid var(--border);
+  padding: 4px;
+  background: var(--gray-1);
+  border: 1px solid var(--border);
+  border-radius: 10px;
 }
 
 .casos-tab {
   appearance: none;
   border: 1px solid transparent;
-  border-bottom: none;
   background: transparent;
   color: var(--muted);
   font-family: inherit;
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 600;
-  padding: 10px 18px;
-  border-radius: 8px 8px 0 0;
+  padding: 8px 16px;
+  border-radius: 7px;
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
-  position: relative;
-  bottom: -1px;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .casos-tab:hover {
-  background: var(--gray-1);
   color: var(--text);
 }
 
 .casos-tab.active {
   background: var(--surface);
   border-color: var(--border);
-  border-bottom: 1px solid var(--surface);
   color: var(--accent2);
+  box-shadow: var(--shadow-1);
 }
 
 .casos-tab .tab-count {
@@ -75,6 +74,29 @@
 }
 
 /* ─────────────────────────────────────────────
+   FILTROS (espaciado y orden)
+   ───────────────────────────────────────────── */
+
+.casos-main .filters-card {
+  margin-top: 16px;
+}
+
+.filters-row .filters-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: flex-end;
+}
+
+.casos-main .preset-btn {
+  padding: 7px 12px;
+  font-size: 12.5px;
+}
+
+.casos-main .filter-select {
+  min-width: 140px;
+}
+
+/* ─────────────────────────────────────────────
    TABLAS: checkboxes y celdas
    ───────────────────────────────────────────── */
 
@@ -85,18 +107,54 @@
   accent-color: var(--accent2);
 }
 
-.casos-table input[type="checkbox"]:disabled {
-  cursor: not-allowed;
-  opacity: 0.4;
+/* En pantallas chicas las tablas hacen scroll horizontal en vez de recortar */
+.casos-main .table-wrap {
+  overflow-x: auto;
 }
 
 .table-wrap table.casos-table {
   table-layout: auto;
+  width: 100%;
+  min-width: 820px;
 }
 
 .casos-table tbody td {
   vertical-align: middle;
 }
+
+.casos-table th.col-lote,
+.casos-table td.col-lote {
+  white-space: normal;
+  word-break: break-word;
+  min-width: 120px;
+}
+
+/* Placas (esperadas / escaneadas / diferencia) */
+.placas-main {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  justify-content: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.placas-main .placas-esp,
+.placas-main .placas-esc {
+  font-weight: 700;
+}
+
+.placas-main .placas-sep {
+  color: var(--muted);
+}
+
+.placas-diff {
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.text-error { color: var(--danger); }
+.text-warn { color: var(--warn); }
+.text-media { color: var(--badge-media-text); }
 
 .cell-num {
   text-align: right;
