@@ -595,13 +595,29 @@ function placasCelda(d) {
   const esp = escapeHTML(fmtPlacas(d.placas_esperadas));
   const esc = escapeHTML(fmtPlacas(d.placas_escaneadas));
   const dir = tipoDireccion(d.tipo);
+
+  const espN = Number(d.placas_esperadas);
+  const escN = Number(d.placas_escaneadas);
+  const tieneEsp = d.placas_esperadas !== null && d.placas_esperadas !== undefined && !Number.isNaN(espN);
+
+  // El signo se deriva de escaneadas - esperadas (soporta medias placas: 1.5 vs 2 => +0.5).
+  let delta = null;
+  if (tieneEsp && !Number.isNaN(escN)) {
+    delta = Number((escN - espN).toFixed(2));
+  } else if (!tieneEsp && !Number.isNaN(escN) && dir === 'sobrante') {
+    delta = escN; // Huérfana: todo lo escaneado es excedente.
+  } else if (d.diferencia !== null && d.diferencia !== undefined && !Number.isNaN(Number(d.diferencia))) {
+    const n = Math.abs(Number(d.diferencia));
+    delta = dir === 'faltante' ? -n : n;
+  }
+
   let dif = '—';
   let difCls = 'cell-muted';
-  if (d.diferencia !== null && d.diferencia !== undefined && !Number.isNaN(Number(d.diferencia))) {
-    const pref = dir === 'faltante' ? '-' : (dir === 'sobrante' ? '+' : '');
-    dif = pref + fmtPlacas(Math.abs(Number(d.diferencia)));
-    difCls = dir === 'faltante' ? 'text-error' : (dir === 'sobrante' ? 'text-warn' : 'text-media');
+  if (delta !== null) {
+    dif = (delta > 0 ? '+' : '') + fmtPlacas(delta);
+    difCls = delta < 0 ? 'text-error' : (delta > 0 ? 'text-warn' : 'cell-muted');
   }
+
   return `
     <div class="placas-main">
       <span class="placas-esp" title="Esperadas">${esp}</span>
