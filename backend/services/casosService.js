@@ -379,6 +379,21 @@ async function obtenerTipoJustificacionActivo(id) {
 // ============================================================
 
 /**
+ * Aplica el filtro por tipo de discrepancia.
+ *
+ * "Lote cruzado" NO es un `tipo` en la tabla: la confronta lo marca con el flag
+ * `es_cruzado` (sobre `linea_faltante`/`sku_lote_no_esperado`). Por eso:
+ *   - tipo === 'lote_cruzado'  -> es_cruzado = true
+ *   - cualquier otro tipo      -> tipo = X y es_cruzado = false (las cruzadas
+ *     se agrupan aparte, igual que en el dashboard)
+ */
+function aplicarFiltroTipo(query, tipo) {
+  if (!tipo) return query;
+  if (tipo === 'lote_cruzado') return query.eq('es_cruzado', true);
+  return query.eq('tipo', tipo).eq('es_cruzado', false);
+}
+
+/**
  * Discrepancias persistidas con filtros opcionales.
  */
 async function listarDiscrepancias(filtros = {}) {
@@ -386,7 +401,7 @@ async function listarDiscrepancias(filtros = {}) {
 
   let query = supabase.from('discrepancias').select('*');
   if (estado) query = query.eq('estado', estado);
-  if (tipo) query = query.eq('tipo', tipo);
+  query = aplicarFiltroTipo(query, tipo);
   if (sucursal) query = query.eq('sucursal', sucursal);
   if (if_tranid) query = query.eq('if_tranid', if_tranid);
   if (desde) query = query.gte('if_fecha', desde);
@@ -885,5 +900,6 @@ module.exports = {
   _esFechaSolo: esFechaSolo,
   _diaSiguiente: diaSiguiente,
   _inicioDiaUTC: inicioDiaUTC,
-  _rangoFechas: rangoFechas
+  _rangoFechas: rangoFechas,
+  _aplicarFiltroTipo: aplicarFiltroTipo
 };
