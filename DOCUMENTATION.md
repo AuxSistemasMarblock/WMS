@@ -331,7 +331,7 @@ erDiagram
     }
 ```
 
-> **Acceso y Seguridad (Service Role)**: Las tablas `discrepancias`, `casos`, `caso_eventos` y `tipos_justificacion` tienen **RLS habilitado sin políticas**: ningún rol `anon`/`authenticated` puede leerlas ni escribirlas. El backend accede a ellas con la **`SUPABASE_SERVICE_ROLE_KEY`** (service role), que bypassa RLS. Los identificadores (`caso_id`, `discrepancia_id`, `actor_id`, `creado_por`, `revisado_por`, `ubicacion_id`, `tipo_justificacion_id`) se almacenan como `bigint` simples, sin foreign keys declaradas en la migración [`supabase/migrations/0001_gestor_casos.sql`](file:///home/mrchilaquiles/Documents/Chamba/WMS/supabase/migrations/0001_gestor_casos.sql); las relaciones del diagrama expresan la lógica de negocio y los joins se resuelven manualmente en `casosController.js`.
+> **Acceso y Seguridad (Service Role)**: Las tablas `discrepancias`, `casos`, `caso_eventos` y `tipos_justificacion` tienen **RLS habilitado sin políticas**: ningún rol `anon`/`authenticated` puede leerlas ni escribirlas. El backend accede a ellas con la **`SUPABASE_SERVICE_ROLE_KEY`** (service role), que bypassa RLS. Los identificadores (`caso_id`, `discrepancia_id`, `actor_id`, `creado_por`, `revisado_por`, `ubicacion_id`, `tipo_justificacion_id`) se almacenan como `bigint` con **foreign keys reales** declaradas en [`supabase/migrations/0001_gestor_casos.sql`](file:///home/mrchilaquiles/Documents/Chamba/WMS/supabase/migrations/0001_gestor_casos.sql) (**ya aplicadas en Supabase**); las relaciones del diagrama coinciden con el esquema y los joins se resuelven manualmente en `casosService.js` (capa de persistencia), invocada por `casosController.js`.
 
 ### 2.4 Matriz y Reglas de Segmentación Geográfica de Ubicaciones
 
@@ -492,13 +492,15 @@ Al cargar o filtrar el dashboard, el cliente ejecuta hasta 9 llamadas simultáne
 
 ### 4.6 Gestor de Casos: Flujo de Justificación en 2 Fases (`casos.html`)
 
-El **Gestor de Casos** (`casos.html` + `js/casos/app.js`) es la capa de **auditoría persistente** de la confronta: convierte las discrepancias vivas detectadas por el motor (`confrontaService.js`) en casos trazables con folio, y resuelve mediante un **flujo humano de 2 fases** si cada error se justifica o se rechaza. Todo se persiste en Supabase (ver §2.3) con la service role y cada transición queda registrada en `caso_eventos`.
+El **Gestor de Casos** (`casos.html` + `js/casos/app.js`) es la capa de **auditoría persistente** de la confronta: convierte las discrepancias vivas detectadas por el motor (`confrontaService.js`) en casos trazables con folio, y resuelve mediante un **flujo humano de 2 fases** si cada error se justifica o se rechaza. Las tablas (`discrepancias`, `casos`, `caso_eventos`, `tipos_justificacion`) y la función transaccional `public.crear_caso` **ya están aplicadas en Supabase** (ver §2.3); el backend las opera con la service role y cada transición queda registrada en `caso_eventos`.
+
+> **Creación atómica vía RPC**: `POST /api/casos` ya **no** hace 3 escrituras REST separadas (insert caso → update discrepancias → insert eventos). El backend invoca la función `public.crear_caso(p_discrepancia_ids, p_tipo_justificacion_id, p_justificacion, p_ubicacion_id, p_sucursal, p_creado_por)` con `supabase.rpc`, que ejecuta **todo en una sola transacción** (o se aplica completo o no se aplica nada), serializando el folio `CASO-YYYY-NNNN` por año con un *advisory lock*. Ante un error de validación de la función (`errcode 22023`) el API responde **400** con el mensaje; cualquier otro error responde **500**. `p_sucursal` puede ir `null` y la función resuelve la sucursal de la primera discrepancia. Toda la persistencia vive en `casosService.js`; `casosController.js` queda como capa HTTP (validación, scope de ubicación y armado de la respuesta).
 
 **Fase 1 — Jefe de Almacén (justificación)**
 1. `POST /api/casos/sync` ejecuta la confronta y hace *upsert* de las discrepancias por `fingerprint`, sin duplicar filas ni pisar las que ya están `justificada`.
 2. El jefe ve únicamente los errores de **su ubicación** (ubicaciones compartidas incluidas) y selecciona una o varias discrepancias en estado `abierta`.
 3. Elige un **tipo de justificación** del catálogo `tipos_justificacion` y redacta el detalle.
-4. `POST /api/casos` crea el caso con folio `CASO-YYYY-NNNN` en estado `pendiente_aprobacion` y mueve las discrepancias a `en_revision` con su `caso_id`.
+4. `POST /api/casos` crea el caso **atómicamente** vía la RPC `public.crear_caso`: inserta el caso con folio `CASO-YYYY-NNNN` en estado `pendiente_aprobacion`, mueve las discrepancias a `en_revision` con su `caso_id` y registra la bitácora, todo en una sola transacción.
 
 **Fase 2 — Gerente / Líder de Almacén (aprobación)**
 5. El `gerente` (o `admin`) revisa el detalle y el *timeline* del caso en `GET /api/casos/:id`.
@@ -518,7 +520,7 @@ sequenceDiagram
     Back->>DB: Upsert discrepancias (estado abierta)
     Jefe->>UI: Selecciona errores de su almacén + tipo de justificación
     UI->>Back: POST /api/casos (discrepancia_ids, tipo, justificación)
-    Back->>DB: Insert caso CASO-YYYY-NNNN + discrepancias en_revision
+    Back->>DB: rpc crear_caso() [atómico] -> caso + discrepancias en_revision + eventos
     Back-->>UI: 201 Created (folio)
     Gerente->>Back: POST /api/casos/:id/aprobar
     Back->>DB: Caso aprobado + discrepancias justificada + evento
@@ -662,7 +664,7 @@ WebUSB de Chrome/Edge en **Windows** solo expone dispositivos cuyo driver sea **
 | | `GET` | `/api/casos/discrepancias` | JWT | `jefe_almacen`, `gerente`, `admin` | Lista discrepancias persistidas (filtros `estado`, `tipo`, `sucursal`, `desde`, `hasta`, `if_tranid`) |
 | | `GET` | `/api/casos/tipos-justificacion` | JWT | `jefe_almacen`, `gerente`, `admin` | Catálogo de tipos de justificación activos (`orden` ascendente) |
 | | `GET` | `/api/casos` | JWT | `jefe_almacen`, `gerente`, `admin` | Listado de casos con filtros y total de discrepancias por caso |
-| | `POST` | `/api/casos` | JWT | `jefe_almacen`, `admin` | Crea un caso (Fase 1) desde discrepancias `abierta`; genera folio `CASO-YYYY-NNNN` |
+| | `POST` | `/api/casos` | JWT | `jefe_almacen`, `admin` | Crea un caso (Fase 1) desde discrepancias `abierta` de forma **atómica** vía RPC `public.crear_caso`; genera folio `CASO-YYYY-NNNN` (400 si la validación de la función devuelve `22023`) |
 | | `GET` | `/api/casos/:id` | JWT | `jefe_almacen`, `gerente`, `admin` | Detalle del caso: tipo de justificación, discrepancias y timeline de eventos |
 | | `POST` | `/api/casos/:id/aprobar` | JWT | `gerente`, `admin` | Aprueba el caso y marca sus discrepancias como `justificada` |
 | | `POST` | `/api/casos/:id/rechazar` | JWT | `gerente`, `admin` | Rechaza el caso (comentario obligatorio); las discrepancias siguen `en_revision` |
