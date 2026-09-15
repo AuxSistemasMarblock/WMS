@@ -29,6 +29,60 @@ function str(valor) {
   return String(valor).trim();
 }
 
+// Offset de negocio para interpretar los filtros de fecha del gestor de casos.
+// El frontend envía fechas locales (YYYY-MM-DD) y las columnas filtradas son
+// timestamptz (UTC); el offset traduce el día local a instantes UTC.
+// Default -06:00 (centro de México, sin DST).
+const CASOS_TZ_OFFSET = process.env.CASOS_TZ_OFFSET || '-06:00';
+
+/**
+ * Verdadero si el valor es una fecha local sin hora (YYYY-MM-DD).
+ */
+function esFechaSolo(valor) {
+  return typeof valor === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(valor.trim());
+}
+
+/**
+ * Instante UTC (ISO) de la medianoche local de una fecha YYYY-MM-DD.
+ */
+function inicioDiaUTC(fecha) {
+  return new Date(`${fecha.trim()}T00:00:00${CASOS_TZ_OFFSET}`).toISOString();
+}
+
+/**
+ * Día siguiente a una fecha YYYY-MM-DD (aritmética de calendario, sin TZ).
+ */
+function diaSiguiente(fecha) {
+  const [y, m, d] = fecha.trim().split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
+}
+
+/**
+ * Aplica un rango de fechas inclusivo sobre una columna timestamptz.
+ * Un `hasta` en formato YYYY-MM-DD se interpreta como el día completo
+ * (`< hasta + 1 día`), evitando que `lte(..., 'YYYY-MM-DD')` excluya el propio
+ * día por comparar contra la medianoche. Si el valor ya trae hora, se usa tal cual.
+ *
+ * @param {Object} query   - Query de Supabase.
+ * @param {string} columna - Columna timestamptz.
+ * @param {string} desde   - Fecha/rango inferior (opcional).
+ * @param {string} hasta   - Fecha/rango superior (opcional).
+ * @returns {Object} El query con los filtros aplicados.
+ */
+function rangoFechas(query, columna, desde, hasta) {
+  if (desde) {
+    query = query.gte(columna, esFechaSolo(desde) ? inicioDiaUTC(desde) : desde);
+  }
+  if (hasta) {
+    if (esFechaSolo(hasta)) {
+      query = query.lt(columna, inicioDiaUTC(diaSiguiente(hasta)));
+    } else {
+      query = query.lte(columna, hasta);
+    }
+  }
+  return query;
+}
+
 /**
  * Calcula el fingerprint (sha256 hex) de una discrepancia:
  *   `${tipo}|${if_tranid}|${sku}|${lote}|${sucursal}`
@@ -407,13 +461,41 @@ async function obtenerIdsDiscrepanciasDelCaso(casoId, ids) {
  * Casos con filtros opcionales (sin scope de ubicación; lo aplica el controller).
  */
 async function listarCasos(filtros = {}) {
-  const { estado, sucursal, desde, hasta } = filtros;
+  const { estado, sucursal, desde, hasta, if_tranid } = filtros;
 
-  let query = supabase.from('casos').select('*');
+  // Filtro por IF: los casos no guardan el tranid; se resuelve con los casos
+  // que tienen alguna discrepancia cuyo if_tranid coincide (búsqueda parcial).
+  if (if_tranid) {
+    const { data, error } = await supabase
+      .from('discrepancias')
+      .select('caso_id')
+      .ilike('if_tranid', `%${if_tranid}%`)
+      .not('caso_id', 'is', null);
+
+    if (error) {
+      console.error('[casosService.listarCasos] if_tranid error:', error.message);
+      throw httpError(500, 'Error al leer casos');
+    }
+
+    const casoIds = [...new Set((data || []).map(r => r.caso_id).filter(id => id !== null && id !== undefined))];
+    if (casoIds.length === 0) return [];
+
+    let query = supabase.from('casos').select('*').in('id', casoIds);
+    return ejecutarListadoCasos(query, { estado, sucursal, desde, hasta });
+  }
+
+  const query = supabase.from('casos').select('*');
+  return ejecutarListadoCasos(query, { estado, sucursal, desde, hasta });
+}
+
+/**
+ * Aplica los filtros comunes a una query de casos y ejecuta el listado.
+ */
+async function ejecutarListadoCasos(baseQuery, { estado, sucursal, desde, hasta }) {
+  let query = baseQuery;
   if (estado) query = query.eq('estado', estado);
   if (sucursal) query = query.eq('sucursal', sucursal);
-  if (desde) query = query.gte('created_at', desde);
-  if (hasta) query = query.lte('created_at', hasta);
+  query = rangoFechas(query, 'created_at', desde, hasta);
 
   const { data, error } = await query.order('created_at', { ascending: false });
 
@@ -799,5 +881,9 @@ module.exports = {
   _sucursalDe: sucursalDe,
   _fingerprintDe: fingerprintDe,
   _construirFila: construirFila,
-  _httpError: httpError
+  _httpError: httpError,
+  _esFechaSolo: esFechaSolo,
+  _diaSiguiente: diaSiguiente,
+  _inicioDiaUTC: inicioDiaUTC,
+  _rangoFechas: rangoFechas
 };

@@ -298,13 +298,13 @@ const postCaso = async (req, res) => {
 
 const getCasos = async (req, res) => {
   try {
-    const { estado, sucursal, desde, hasta } = req.query;
+    const { estado, sucursal, desde, hasta, if_tranid } = req.query;
 
     if (estado && !ESTADOS_CASO.includes(estado)) {
       return res.status(400).json({ error: `estado debe ser ${ESTADOS_CASO.join('|')}` });
     }
 
-    let casos = await casosService.listarCasos({ estado, sucursal, desde, hasta });
+    let casos = await casosService.listarCasos({ estado, sucursal, desde, hasta, if_tranid });
 
     if (!esGerenteOAdmin(req)) {
       const ubicacionNombre = await ubicacionDelUsuario(req);
