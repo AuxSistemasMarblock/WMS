@@ -50,4 +50,4 @@ backend/secrets/
 !tsconfig.json
 
 # Agents
-*.agent
+.agents/
