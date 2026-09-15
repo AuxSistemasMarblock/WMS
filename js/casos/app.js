@@ -125,6 +125,7 @@ const state = {
   discSeleccion: new Set(),
   casos: [],
   tipos: [],
+  sucursales: [],
   detalleActual: null,
   revisionMode: null,
   filtros: {
@@ -764,6 +765,21 @@ function renderCasosTable(tbodyId, casos) {
   `).join('');
 }
 
+// =================== SUCURSALES (filtro gerente/admin) ===================
+async function cargarSucursales() {
+  if (state.sucursales.length) return state.sucursales;
+  const data = await apiFetch('/api/dashboard/sucursales');
+  state.sucursales = data.sucursales || [];
+  return state.sucursales;
+}
+
+function sucursalOptionsHTML(actual) {
+  const opts = state.sucursales.map(s =>
+    `<option value="${escapeHTML(s.nombre)}"${String(s.nombre) === String(actual) ? ' selected' : ''}>${escapeHTML(s.nombre)}</option>`
+  ).join('');
+  return `<option value="">Todas las sucursales</option>${opts}`;
+}
+
 // =================== VISTA GERENTE / ADMIN ===================
 function renderRevisionView() {
   const esPorAprobar = state.tab === 'por-aprobar';
@@ -774,7 +790,7 @@ function renderRevisionView() {
         ${periodoPresetsHTML('fRev', f.periodo)}
         <div class="filter-group">
           <label for="fRevSucursal">Sucursal</label>
-          <input type="text" id="fRevSucursal" class="filter-select" placeholder="Todas" value="${escapeHTML(f.sucursal)}" />
+          <select id="fRevSucursal" class="filter-select">${sucursalOptionsHTML(f.sucursal)}</select>
         </div>
         ${esPorAprobar ? '' : `
         <div class="filter-group">
@@ -819,6 +835,16 @@ function renderRevisionView() {
       </div>
     </section>
   `;
+
+  // La lista de sucursales se carga una vez; si aún no está, se rellena al llegar.
+  if (!state.sucursales.length) {
+    cargarSucursales()
+      .then(() => {
+        const sel = $('fRevSucursal');
+        if (sel) sel.innerHTML = sucursalOptionsHTML(state.filtros.rev.sucursal);
+      })
+      .catch(e => showToast('Error cargando sucursales: ' + e.message, 'error'));
+  }
 }
 
 async function cargarCasosRevision() {
