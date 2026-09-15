@@ -23,7 +23,6 @@
 const casosService = require('../services/casosService');
 const config = require('../config/environments');
 
-const RESTRICTED_LOCATION_PREFIXES = config.netsuite.RESTRICTED_LOCATION_PREFIXES || ['MEX', 'MTY', 'GDL'];
 const SHARED_LOCATIONS = config.netsuite.SHARED_LOCATIONS || ['TEMPORAL', 'PROYECTOS', 'Material Transformado', 'MATRIZ'];
 
 const ESTADOS_CASO = ['pendiente_aprobacion', 'aprobado', 'rechazado'];
@@ -71,27 +70,31 @@ function esGerenteOAdmin(req) {
 }
 
 /**
- * Verdadero si la ubicación es compartida (visible para todos).
- * Mismo criterio que netsuiteController.filterIFsByUserLocation.
+ * Verdadero si la ubicación pertenece a la lista blanca compartida (visible
+ * para todos los jefes). SOLO estas ubicaciones se comparten: cualquier otra
+ * (sucursales y sus outlets, p. ej. "OUTLET MEX"/"OUTLET GDL") queda restringida
+ * al alcance del usuario.
  */
 function esUbicacionCompartida(loc) {
   if (!loc) return false;
-  if (SHARED_LOCATIONS.includes(loc)) return true;
-  const tienePrefijoRestringido = RESTRICTED_LOCATION_PREFIXES.some(prefix => {
-    return loc === prefix || loc.startsWith(prefix + ':') || loc.startsWith(prefix + ' ');
-  });
-  return !tienePrefijoRestringido;
+  return SHARED_LOCATIONS.includes(loc);
 }
 
 /**
  * Verdadero si `loc` pertenece a la sucursal `userLocationName` por tokens.
- * Mismo criterio de tokens que filterIFsByUserLocation.
+ * Se exige que TODOS los tokens de la ubicación del usuario aparezcan en la
+ * ubicación de la fila:
+ *   - "GDL"         ve "GDL" y "OUTLET GDL", nunca "OUTLET MEX".
+ *   - "GDL:OUTLET"  ve "OUTLET GDL" (tokens GDL y OUTLET) y "GDL".
+ * Evita que usuarios de outlet vean todos los outlets por el token genérico.
  */
 function tokenMatch(loc, userLocationName) {
   if (!loc || !userLocationName) return false;
   if (loc === userLocationName) return true;
   const tokens = String(loc).split(/[\s:]+/).filter(Boolean);
-  return tokens.includes(userLocationName);
+  const userTokens = String(userLocationName).split(/[\s:]+/).filter(Boolean);
+  if (userTokens.length === 0) return false;
+  return userTokens.every(t => tokens.includes(t));
 }
 
 /**
@@ -651,6 +654,7 @@ module.exports = {
   _rolDe: rolDe,
   _esUbicacionCompartida: esUbicacionCompartida,
   _tokenMatch: tokenMatch,
+  _esVisibleParaUsuario: esVisibleParaUsuario,
   _normalizarIds: normalizarIds,
   _discrepanciasDeResultado: discrepanciasDeResultado
 };
