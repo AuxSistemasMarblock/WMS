@@ -126,13 +126,21 @@
   vertical-align: middle;
   white-space: normal;
   word-break: break-word;
+  overflow: hidden;
 }
 
 /* Celdas que no deben partirse */
 .casos-table td.cell-tranid,
-.casos-table td.cell-num,
-.casos-table td .caso-badge {
+.casos-table td.cell-num {
   white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Los badges pueden ocupar dos líneas antes que desbordar la celda */
+.casos-table td .caso-badge,
+.casos-table td .tipo-badge {
+  white-space: normal;
+  max-width: 100%;
 }
 
 /* Lote/Tipo pueden ocupar dos líneas; el badge se ajusta al ancho de la celda */
