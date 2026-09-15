@@ -37,6 +37,7 @@ if (!process.env.CASOS_TZ_OFFSET) process.env.CASOS_TZ_OFFSET = '-06:00';
 
 const casosService = require('../services/casosService');
 const casosController = require('../controllers/casosController');
+const dashboardController = require('../controllers/dashboardController');
 const supabase = require('../config/supabase');
 
 // ============================================================
@@ -380,11 +381,69 @@ function pruebasFiltroTipo() {
 }
 
 // ============================================================
-// 7) Prueba en vivo (opcional)
+// 7) KPIs: discrepancias justificadas cuentan como OK
+// ============================================================
+
+function discTest(justificada, tipo = 'linea_faltante') {
+  return {
+    tipo,
+    es_cruzado: false,
+    placas_esperadas: 2,
+    placas_escaneadas: 0,
+    diferencia: 2,
+    cantidad_m2_esperada: 6,
+    diff_m2: 6,
+    justificacion: { estado: justificada ? 'justificada' : 'abierta' }
+  };
+}
+
+function casoTestConDiscs(discs) {
+  const ifDoc = { lineas_con_error: 1, discrepancias: discs };
+  return {
+    ifs_ok: [],
+    ifs_con_errores: [ifDoc],
+    ifs_canceladas_erp: [],
+    placas_en_ifs_canceladas: 0,
+    total_lineas: 3,
+    lineas_con_error: 1,
+    total_placas_esperadas: 10,
+    total_placas_escaneadas: 10,
+    todas_las_discrepancias: discs
+  };
+}
+
+function pruebasKPIsJustificadas() {
+  header('7. KPIs: justificadas como OK');
+
+  const r1 = casoTestConDiscs([discTest(true)]);
+  dashboardController._calcularKPIsConJustificadas(r1);
+  check('justificada => 0 discrepancias de error', r1.kpis.total_discrepancias === 0, String(r1.kpis.total_discrepancias));
+  check('justificada => desviacion m2 = 0', r1.kpis.m2.desviacion_total === 0, String(r1.kpis.m2.desviacion_total));
+  check('IF totalmente justificado => ifs_ok 1',
+    r1.kpis.ifs_ok === 1 && r1.kpis.ifs_con_errores === 0,
+    JSON.stringify({ ok: r1.kpis.ifs_ok, err: r1.kpis.ifs_con_errores }));
+  check('tasa de exactitud 100', r1.kpis.tasa_exactitud === 100, String(r1.kpis.tasa_exactitud));
+
+  dashboardController._calcularKPIsConJustificadas(r1);
+  check('recalculo idempotente', r1.kpis.ifs_ok === 1 && r1.kpis.total_discrepancias === 0,
+    JSON.stringify({ ok: r1.kpis.ifs_ok, disc: r1.kpis.total_discrepancias }));
+
+  const r2 = casoTestConDiscs([discTest(true), discTest(false)]);
+  dashboardController._calcularKPIsConJustificadas(r2);
+  check('mezcla => 1 error vigente', r2.kpis.total_discrepancias === 1, String(r2.kpis.total_discrepancias));
+  check('mezcla => IF sigue con error',
+    r2.kpis.ifs_con_errores === 1 && r2.kpis.ifs_ok === 0,
+    JSON.stringify({ ok: r2.kpis.ifs_ok, err: r2.kpis.ifs_con_errores }));
+  check('mezcla => desviacion m2 solo del error vigente',
+    r2.kpis.m2.faltante === 6, String(r2.kpis.m2.faltante));
+}
+
+// ============================================================
+// 8) Prueba en vivo (opcional)
 // ============================================================
 
 async function pruebaEnVivo() {
-  header('7. PRUEBA EN VIVO (crear_caso + limpieza)');
+  header('8. PRUEBA EN VIVO (crear_caso + limpieza)');
 
   const marca = `test-casos-${Date.now()}`;
   let discId = null;
@@ -538,6 +597,7 @@ async function main() {
   pruebasRangoFechas();
   pruebasScopeUbicacion();
   pruebasFiltroTipo();
+  pruebasKPIsJustificadas();
 
   if (LIVE && HAS_ENV) {
     await pruebaEnVivo();
