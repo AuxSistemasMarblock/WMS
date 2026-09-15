@@ -461,7 +461,29 @@ async function obtenerIdsDiscrepanciasDelCaso(casoId, ids) {
  * Casos con filtros opcionales (sin scope de ubicación; lo aplica el controller).
  */
 async function listarCasos(filtros = {}) {
-  const { estado, sucursal, desde, hasta } = filtros;
+  const { estado, sucursal, desde, hasta, if_tranid } = filtros;
+
+  // Filtro por IF: los casos no guardan el tranid; se resuelve con los casos
+  // que tienen alguna discrepancia cuyo if_tranid coincide (búsqueda parcial).
+  if (if_tranid) {
+    const { data, error } = await supabase
+      .from('discrepancias')
+      .select('caso_id')
+      .ilike('if_tranid', `%${if_tranid}%`)
+      .not('caso_id', 'is', null);
+
+    if (error) {
+      console.error('[casosService.listarCasos] if_tranid error:', error.message);
+      throw httpError(500, 'Error al leer casos');
+    }
+
+    const casoIds = [...new Set((data || []).map(r => r.caso_id).filter(id => id !== null && id !== undefined))];
+    if (casoIds.length === 0) return [];
+
+    let query = supabase.from('casos').select('*').in('id', casoIds);
+    return ejecutarListadoCasos(query, { estado, sucursal, desde, hasta });
+  }
+
   const query = supabase.from('casos').select('*');
   return ejecutarListadoCasos(query, { estado, sucursal, desde, hasta });
 }
