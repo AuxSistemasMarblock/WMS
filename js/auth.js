@@ -202,7 +202,7 @@ async function authenticatedFetch(endpoint, options = {}) {
     headers
   });
 
-  if (response.status === 401) {
+  if (response.status === 401 && !options.skipAutoLogout) {
     // Token expirado
     handleLogout();
     throw new Error('Sesión expirada. Por favor inicia sesión nuevamente.');
