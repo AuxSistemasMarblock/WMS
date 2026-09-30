@@ -23,6 +23,12 @@ router.post('/register', verifyToken, requireAdmin, authController.register);
 router.get('/user', verifyToken, authController.getUser);
 
 /**
+ * POST /auth/set-pin
+ * Configura o actualiza PIN de autorización para jefes/admins
+ */
+router.post('/set-pin', verifyToken, authController.setPin);
+
+/**
  * POST /auth/logout
  * Cierra sesión (stateless, se maneja en frontend)
  */

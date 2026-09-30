@@ -12,3 +12,6 @@ backend/
 # Documentos pesados de referencia (no son parte del build)
 Guia_*.pdf
 Guia_*.docx
+
+# Configuración local de frontend generada dinámicamente
+js/config.js

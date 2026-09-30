@@ -134,7 +134,7 @@ function isFocusedButton() {
 }
 
 function isAnyModalOpen() {
-    return !!document.querySelector('.confirm-modal.active, .signature-modal.active');
+    return !!document.querySelector('.confirm-modal.active, .signature-modal.active, .confronta-modal.active');
 }
 
 function onPistolaKeydown(e) {

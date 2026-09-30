@@ -95,6 +95,10 @@
         </div>
       </div>
     </div>
+    <button class="btn btn-logout" id="btnConfigurarPin" style="display: none;" onclick="abrirModalConfigurarPin()" title="Configurar PIN de autorización">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      PIN
+    </button>
     <button class="theme-toggle" id="themeToggle" type="button" role="switch" aria-checked="false" aria-label="Cambiar entre modo claro y oscuro" title="Cambiar tema">
       <span class="theme-toggle-thumb"></span>
       <span class="theme-toggle-icon icon-sun" aria-hidden="true">
@@ -210,7 +214,7 @@
             <span class="count-badge" id="rowCount">0</span>
           </div>
           <div class="table-actions">
-            <button class="btn btn-primary" id="btnCompletar" onclick="startSignatureCapture()">
+            <button class="btn btn-primary" id="btnCompletar" onclick="validarYCompletarEnvio()">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="20 6 9 17 4 12"/></svg>
               Completar registro
             </button>
@@ -287,6 +291,95 @@
   </div>
 </div>
 
+<!-- MODAL DE ADVERTENCIA DE CONFRONTA -->
+<div class="confronta-modal" id="confrontaWarningModal">
+  <div class="confronta-card">
+    <div class="confronta-badge-warn">
+      <div class="confirm-icon">⚠️</div>
+      <h3 class="confirm-title" style="margin-bottom: 4px;">Diferencias en Confronta</h3>
+      <p class="confronta-subtitle">IF: <strong id="confrontaWarnIF">—</strong></p>
+    </div>
+
+    <!-- Lista de discrepancias con scroll en mobile -->
+    <div class="confronta-discrepancias-box">
+      <p class="confronta-hint">Se detectaron los siguientes errores en los lotes escaneados:</p>
+      <div class="confronta-list" id="confrontaList">
+        <!-- Rellenado dinámicamente -->
+      </div>
+    </div>
+
+    <!-- Vista 1: Botones Iniciales (Cancelar / Solicitar Autorización) -->
+    <div class="confronta-actions-stacked" id="confrontaInitialActions">
+      <button class="btn btn-warning-action" id="btnSolicitarAutorizacion" onclick="mostrarSeccionPinConfronta()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        Solicitar autorización
+      </button>
+      <button class="btn btn-ghost" id="btnCancelarConfronta" onclick="cancelarConfrontaModal()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        Cancelar
+      </button>
+    </div>
+
+    <!-- Vista 2: Sección de Entrada de PIN (oculta inicialmente) -->
+    <div class="confronta-pin-container" id="confrontaPinSection" style="display: none;">
+      <p class="confronta-pin-desc">
+        El <strong>Jefe de Almacén</strong> debe ingresar su PIN exclusivo para autorizar el envío:
+      </p>
+      <div class="confronta-pin-input-wrap">
+        <input
+          type="password"
+          id="inputPinJefe"
+          class="confronta-pin-field"
+          maxlength="6"
+          inputmode="numeric"
+          pattern="[0-9]*"
+          placeholder="••••"
+          autocomplete="off"
+        />
+        <div id="confrontaPinMsg" class="confronta-pin-error" style="display:none;"></div>
+      </div>
+      <div class="confirm-actions" style="margin-top: 14px; gap: 8px;">
+        <button class="btn btn-ghost" onclick="volverAAccionesConfronta()">Volver</button>
+        <button class="btn btn-primary" id="btnValidarPin" onclick="validarPinJefe()">
+          Autorizar y continuar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL PARA QUE EL JEFE CONFIGURE SU PIN -->
+<div class="confirm-modal" id="modalConfigurarPin">
+  <div class="confirm-card" style="max-width: 380px; text-align: left;">
+    <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+      <div style="font-size:24px;">🔑</div>
+      <h3 class="confirm-title" style="margin:0;">Configurar PIN de Jefe</h3>
+    </div>
+    <p style="font-size:13px; color:var(--muted); margin-bottom:16px;">
+      Define tu PIN numérico (4 a 6 dígitos) para autorizaciones en el escáner.
+    </p>
+    <form id="formConfigurarPin" onsubmit="guardarPinJefe(event)">
+      <div class="form-group" style="margin-bottom:12px;">
+        <label for="pinCurrentPassword" style="font-size:12px; font-weight:600;">Tu contraseña actual</label>
+        <input type="password" id="pinCurrentPassword" required placeholder="Contraseña de usuario" style="width:100%;" />
+      </div>
+      <div class="form-group" style="margin-bottom:12px;">
+        <label for="pinNuevo" style="font-size:12px; font-weight:600;">Nuevo PIN (4 a 6 números)</label>
+        <input type="password" id="pinNuevo" required maxlength="6" inputmode="numeric" pattern="[0-9]{4,6}" placeholder="Ej. 1234" style="width:100%;" />
+      </div>
+      <div class="form-group" style="margin-bottom:16px;">
+        <label for="pinConfirmar" style="font-size:12px; font-weight:600;">Confirmar nuevo PIN</label>
+        <input type="password" id="pinConfirmar" required maxlength="6" inputmode="numeric" pattern="[0-9]{4,6}" placeholder="Repite el PIN" style="width:100%;" />
+      </div>
+      <div id="pinConfigError" class="confronta-pin-error" style="display:none; margin-bottom:12px; text-align:left;"></div>
+      <div class="confirm-actions" style="justify-content: flex-end; gap:8px;">
+        <button type="button" class="btn btn-ghost" onclick="cerrarModalConfigurarPin()">Cancelar</button>
+        <button type="submit" class="btn btn-primary" id="btnGuardarPin">Guardar PIN</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 </main>
 
 <footer class="app-footer" id="appFooter"></footer>
@@ -307,6 +400,7 @@
   <script src="js/webhook.js?v=7"></script>
   <script src="js/table.js?v=7"></script>
   <script src="js/scanner.js?v=7"></script>
+  <script src="js/confronta.js?v=1"></script>
   <script src="js/app.js?v=7"></script>
 </body>
 </html>

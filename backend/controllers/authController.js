@@ -175,12 +175,77 @@ const getUser = async (req, res) => {
         email: usuario.email,
         cargo: usuario.cargo,
         rol: usuario.roles?.clave ?? usuario.cargo,
+        hasPin: Boolean(usuario.pin_hash),
         ubicacion: ubicacion || { id: usuario.ubicacion_id, nombre: 'Unknown' }
       }
     });
   } catch (error) {
     console.error('Get user error:', error);
     res.status(500).json({ error: 'Failed to get user' });
+  }
+};
+
+/**
+ * Establecer o actualizar PIN de autorización (Jefe de Almacén o Admin)
+ * POST /auth/set-pin
+ * Body: { pin, password }
+ */
+const setPin = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { pin, password } = req.body;
+
+    if (!pin || !password) {
+      return res.status(400).json({ error: 'PIN y contraseña son requeridos' });
+    }
+
+    // Validar formato: 4 a 6 dígitos numéricos
+    const pinStr = String(pin).trim();
+    if (!/^\d{4,6}$/.test(pinStr)) {
+      return res.status(400).json({ error: 'El PIN debe ser numérico de 4 a 6 dígitos' });
+    }
+
+    // Obtener usuario y validar password actual
+    const { data: usuario, error: userError } = await supabase
+      .from('usuarios')
+      .select('id, password_hash, rol_id, cargo, roles(clave)')
+      .eq('id', userId)
+      .single();
+
+    if (userError || !usuario) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    const rol = (usuario.roles?.clave || usuario.cargo || '').toLowerCase();
+    const esJefeOAdmin = rol.includes('jefe') || rol === 'admin' || rol === 'gerente';
+    if (!esJefeOAdmin) {
+      return res.status(403).json({ error: 'Solo los Jefes de Almacén o Administradores pueden configurar un PIN' });
+    }
+
+    const passwordMatch = await bcryptjs.compare(password, usuario.password_hash);
+    if (!passwordMatch) {
+      return res.status(401).json({ error: 'Contraseña incorrecta' });
+    }
+
+    // Hashear nuevo PIN con bcrypt
+    const pinHash = await bcryptjs.hash(pinStr, 10);
+
+    const { error: updateError } = await supabase
+      .from('usuarios')
+      .update({ pin_hash: pinHash })
+      .eq('id', userId);
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    res.json({
+      success: true,
+      message: 'PIN configurado exitosamente'
+    });
+  } catch (error) {
+    console.error('Error al configurar PIN:', error);
+    res.status(500).json({ error: 'Error al configurar el PIN', details: error.message });
   }
 };
 
@@ -211,4 +276,4 @@ const generateHash = async (req, res) => {
   }
 };
 
-module.exports = { login, register, getUser, logout, generateHash };
+module.exports = { login, register, getUser, setPin, logout, generateHash };
