@@ -5,6 +5,7 @@ const config = require('../config/environments');
 const { esVisibleParaUbicacion } = require('../services/locationScope');
 const confrontaService = require('../services/confrontaService');
 const netsuiteSearchService = require('../services/netsuiteSearchService');
+const netsuiteFulfillmentService = require('../services/netsuiteFulfillmentService');
 
 function extractLocation(location) {
   if (typeof location === 'string') return location;
@@ -429,7 +430,7 @@ const diagnosticTest = async (req, res) => {
  */
 const validarConfronta = async (req, res) => {
   try {
-    const { ifTranid, items } = req.body;
+    const { ifTranid, ifInternalId, items } = req.body;
     if (!ifTranid || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'ifTranid e items (no vacío) son requeridos' });
     }
@@ -445,23 +446,40 @@ const validarConfronta = async (req, res) => {
       locationName = ubicacion?.nombre || '';
     }
 
-    // Obtener líneas esperadas de la IF en NetSuite (vía saved search 3675)
-    let ifsEsperadas = [];
-    try {
-      ifsEsperadas = await netsuiteSearchService.getIFsEsperadasAgrupadas({
-        tranidsRelevantes: [ifTranid],
-        limit: 2000
-      });
-    } catch (nsErr) {
-      console.error('Error consultando NetSuite en validarConfronta:', nsErr.message);
-      return res.status(502).json({
-        ok: false,
-        error: 'NETSUITE_ERROR',
-        message: 'No fue posible consultar las líneas de la IF en NetSuite. Por favor reintenta.'
-      });
+    // Obtener líneas esperadas de la IF en NetSuite:
+    // 1. Intentar por SuiteTalk REST API (ideal para IFs empaquetadas/pendientes)
+    let ifEncontrada = null;
+    let resolvedInternalId = ifInternalId;
+
+    if (!resolvedInternalId && ifTranid) {
+      resolvedInternalId = await netsuiteFulfillmentService.resolverInternalIdPorTranid(ifTranid);
     }
 
-    const ifEncontrada = ifsEsperadas.find(i => String(i.tranid).trim() === String(ifTranid).trim());
+    if (resolvedInternalId) {
+      try {
+        ifEncontrada = await netsuiteFulfillmentService.getIFEsperadaPorId(resolvedInternalId, ifTranid);
+        console.log(`[validarConfronta] IF ${ifTranid} (id: ${resolvedInternalId}) obtenida vía SuiteTalk (${ifEncontrada.lineas.length} líneas)`);
+      } catch (stErr) {
+        console.warn(`[validarConfronta] Falló consulta SuiteTalk para IF ${ifTranid}:`, stErr.message);
+      }
+    }
+
+    // 2. Respaldo a Saved Search (customsearch3675) para IFs ya enviadas o si SuiteTalk no retornó líneas
+    if (!ifEncontrada || !ifEncontrada.lineas || ifEncontrada.lineas.length === 0) {
+      try {
+        const ifsEsperadas = await netsuiteSearchService.getIFsEsperadasAgrupadas({
+          tranidsRelevantes: [ifTranid],
+          limit: 2000
+        });
+        const matchSearch = ifsEsperadas.find(i => String(i.tranid).trim() === String(ifTranid).trim());
+        if (matchSearch) {
+          ifEncontrada = matchSearch;
+          console.log(`[validarConfronta] IF ${ifTranid} obtenida vía Saved Search (${ifEncontrada.lineas.length} líneas)`);
+        }
+      } catch (nsErr) {
+        console.warn('Error consultando saved search en validarConfronta:', nsErr.message);
+      }
+    }
 
     if (!ifEncontrada) {
       return res.status(404).json({
