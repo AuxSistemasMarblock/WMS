@@ -1742,3 +1742,236 @@ td {
     background: var(--surface-2);
     color: var(--text);
 }
+
+/* ─────────────────────────────────────────────────────────
+   MODAL DE ADVERTENCIA DE CONFRONTA Y PIN
+   ───────────────────────────────────────────────────────── */
+
+.confronta-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    background: rgba(0, 0, 0, 0.65);
+    z-index: 1050;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    overscroll-behavior: contain;
+}
+
+.confronta-modal.active {
+    display: flex;
+}
+
+.confronta-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 22px 20px;
+    max-width: 440px;
+    width: 100%;
+    max-height: 85vh;
+    max-height: 85dvh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+    text-align: left;
+}
+
+.confronta-badge-warn {
+    text-align: center;
+    margin-bottom: 12px;
+}
+
+.confronta-badge-warn .confirm-icon {
+    font-size: 32px;
+    margin-bottom: 4px;
+}
+
+.confronta-subtitle {
+    margin: 4px 0 0;
+    font-size: 14px;
+    color: var(--muted);
+}
+
+.confronta-subtitle strong {
+    color: var(--accent);
+}
+
+.confronta-discrepancias-box {
+    margin: 8px 0 16px;
+    overflow-y: auto;
+    max-height: 38vh;
+    padding-right: 4px;
+}
+
+.confronta-hint {
+    font-size: 13px;
+    color: var(--muted);
+    margin: 0 0 10px;
+    font-weight: 500;
+}
+
+.confronta-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.confronta-disc-card {
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-left: 4px solid var(--danger, #ef4444);
+    border-radius: 8px;
+    padding: 10px 12px;
+}
+
+.confronta-disc-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+}
+
+.confronta-disc-lote {
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--text);
+    font-family: monospace;
+}
+
+.confronta-disc-sku {
+    font-size: 11px;
+    padding: 2px 6px;
+    background: var(--surface-2);
+    border-radius: 4px;
+    color: var(--muted);
+    border: 1px solid var(--border);
+}
+
+.confronta-disc-error {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    font-size: 12px;
+    color: #ef4444;
+    line-height: 1.4;
+    margin-top: 4px;
+}
+
+.confronta-disc-error svg {
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.confronta-actions-stacked {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+}
+
+.confronta-actions-stacked .btn {
+    width: 100%;
+    padding: 12px 16px;
+    font-size: 14px;
+    font-weight: 600;
+    justify-content: center;
+}
+
+.btn-warning-action {
+    background: #d97706;
+    color: #ffffff;
+    border: 1px solid #b45309;
+    border-radius: 8px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+}
+
+.btn-warning-action:hover {
+    background: #b45309;
+}
+
+.confronta-pin-container {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    margin-top: 4px;
+}
+
+.confronta-pin-desc {
+    font-size: 13px;
+    color: var(--text);
+    margin: 0 0 12px;
+    line-height: 1.4;
+}
+
+.confronta-pin-input-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+
+.confronta-pin-field {
+    width: 180px;
+    font-size: 24px;
+    text-align: center;
+    letter-spacing: 10px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 2px solid var(--accent, #4285f4);
+    background: var(--surface);
+    color: var(--text);
+    outline: none;
+    font-family: monospace;
+}
+
+.confronta-pin-field:focus {
+    box-shadow: 0 0 0 3px rgba(66, 133, 244, 0.3);
+}
+
+.confronta-pin-error {
+    font-size: 12px;
+    color: #ef4444;
+    text-align: center;
+    font-weight: 600;
+    margin-top: 4px;
+}
+
+/* Resaltado de filas en la tabla con error de confronta */
+tr.row-discrepancy {
+    background: rgba(239, 68, 68, 0.18) !important;
+    border-left: 4px solid #ef4444 !important;
+}
+
+tr.row-discrepancy td {
+    color: #ef4444 !important;
+    font-weight: 600;
+}
+
+.spinner-sm {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: #fff;
+    animation: spin 0.8s linear infinite;
+    vertical-align: middle;
+    margin-right: 6px;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
