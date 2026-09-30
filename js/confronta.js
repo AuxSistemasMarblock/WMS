@@ -85,6 +85,7 @@ async function validarYCompletarEnvio() {
       method: 'POST',
       body: JSON.stringify({
         ifTranid: selectedIF.tranid,
+        ifInternalId: selectedIF.internalId,
         items: activeRecords
       })
     });
