@@ -12,4 +12,10 @@ router.get('/ifs', verifyToken, netsuiteController.getIFs);
 // Enviar datos y firmas (protegido)
 router.post('/submit', verifyToken, netsuiteController.submitData);
 
+// Validar confronta antes de firmas (protegido)
+router.post('/confronta-validar', verifyToken, netsuiteController.validarConfronta);
+
+// Autorizar discrepancias con PIN del jefe (protegido)
+router.post('/confronta-autorizar-pin', verifyToken, netsuiteController.autorizarConfrontaPin);
+
 module.exports = router;

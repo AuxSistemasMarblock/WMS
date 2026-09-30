@@ -1,7 +1,10 @@
+const bcryptjs = require('bcryptjs');
 const supabase = require('../config/supabase');
 const netsuiteRestletClient = require('../config/netsuiteRestlet');
 const config = require('../config/environments');
 const { esVisibleParaUbicacion } = require('../services/locationScope');
+const confrontaService = require('../services/confrontaService');
+const netsuiteSearchService = require('../services/netsuiteSearchService');
 
 function extractLocation(location) {
   if (typeof location === 'string') return location;
@@ -420,10 +423,214 @@ const diagnosticTest = async (req, res) => {
   }
 };
 
+/**
+ * Validar confronta de escaneos de una IF contra líneas de NetSuite
+ * POST /netsuite/confronta-validar
+ */
+const validarConfronta = async (req, res) => {
+  try {
+    const { ifTranid, items } = req.body;
+    if (!ifTranid || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'ifTranid e items (no vacío) son requeridos' });
+    }
+
+    const userUbicacionId = req.user.ubicacion_id;
+    let locationName = '';
+    if (userUbicacionId) {
+      const { data: ubicacion } = await supabase
+        .from('ubicaciones')
+        .select('id, nombre')
+        .eq('id', userUbicacionId)
+        .single();
+      locationName = ubicacion?.nombre || '';
+    }
+
+    // Obtener líneas esperadas de la IF en NetSuite (vía saved search 3675)
+    let ifsEsperadas = [];
+    try {
+      ifsEsperadas = await netsuiteSearchService.getIFsEsperadasAgrupadas({
+        tranidsRelevantes: [ifTranid],
+        limit: 2000
+      });
+    } catch (nsErr) {
+      console.error('Error consultando NetSuite en validarConfronta:', nsErr.message);
+      return res.status(502).json({
+        ok: false,
+        error: 'NETSUITE_ERROR',
+        message: 'No fue posible consultar las líneas de la IF en NetSuite. Por favor reintenta.'
+      });
+    }
+
+    const ifEncontrada = ifsEsperadas.find(i => String(i.tranid).trim() === String(ifTranid).trim());
+
+    if (!ifEncontrada) {
+      return res.status(404).json({
+        ok: false,
+        error: 'IF_NOT_FOUND',
+        message: `No se encontraron líneas esperadas para la IF ${ifTranid} en NetSuite`
+      });
+    }
+
+    // Normalizar escaneos para el confrontaService
+    const escaneos = items.map(item => ({
+      if_tranid: ifTranid,
+      sku: item.sku,
+      lote: item.lote,
+      ubicacion_escaneada: item.ubicacion || locationName,
+      timestamp: item.timestamp || new Date().toISOString(),
+      operador: req.user.nombre || 'Auxiliar'
+    }));
+
+    // Ejecutar confronta
+    const resultado = confrontaService.confrontar([ifEncontrada], escaneos);
+
+    // Filtrar discrepancias correspondientes a esta IF
+    const discrepancias = (resultado.todas_las_discrepancias || [])
+      .filter(d => String(d.if_tranid).trim() === String(ifTranid).trim())
+      .map(d => ({
+        tipo: d.tipo,
+        sku: d.sku,
+        lote: d.lote,
+        placas_esperadas: d.placas_esperadas ?? 0,
+        placas_escaneadas: d.placas_escaneadas ?? 0,
+        diferencia: d.diferencia ?? 0,
+        mensaje: d.mensaje || d.plan_accion || 'Discrepancia detectada',
+        es_cruzado: Boolean(d.es_cruzado)
+      }));
+
+    if (discrepancias.length === 0) {
+      return res.json({
+        ok: true,
+        ifTranid,
+        message: 'Confronta limpia sin discrepancias',
+        discrepancias: []
+      });
+    }
+
+    return res.json({
+      ok: false,
+      ifTranid,
+      message: 'Se detectaron discrepancias en la confronta',
+      discrepancias
+    });
+
+  } catch (error) {
+    console.error('Error en validarConfronta:', error);
+    res.status(500).json({ error: 'Error al validar la confronta', details: error.message });
+  }
+};
+
+/**
+ * Autorizar discrepancias de confronta con PIN del Jefe de Almacén
+ * POST /netsuite/confronta-autorizar-pin
+ */
+const autorizarConfrontaPin = async (req, res) => {
+  try {
+    const { pin, ifTranid, items, discrepancias } = req.body;
+    if (!pin || !ifTranid) {
+      return res.status(400).json({ error: 'PIN e ifTranid son requeridos' });
+    }
+
+    const pinStr = String(pin).trim();
+    if (!/^\d{4,6}$/.test(pinStr)) {
+      return res.status(400).json({ error: 'El PIN debe ser numérico de 4 a 6 dígitos' });
+    }
+
+    const userUbicacionId = req.user.ubicacion_id;
+    let auxLocationName = '';
+    if (userUbicacionId) {
+      const { data: ubicacionAux } = await supabase
+        .from('ubicaciones')
+        .select('id, nombre')
+        .eq('id', userUbicacionId)
+        .single();
+      auxLocationName = ubicacionAux?.nombre || '';
+    }
+
+    // Buscar usuarios activos con pin_hash
+    const { data: usuariosConPin, error: qError } = await supabase
+      .from('usuarios')
+      .select('id, nombre_completo, cargo, pin_hash, ubicacion_id, roles(clave), ubicaciones(id, nombre)')
+      .eq('activo', true)
+      .not('pin_hash', 'is', null);
+
+    if (qError || !usuariosConPin || usuariosConPin.length === 0) {
+      return res.status(401).json({ error: 'No hay Jefes de Almacén con PIN configurado en el sistema' });
+    }
+
+    // Filtrar candidatos por rol y alcance de sucursal
+    const jefesCandidatos = usuariosConPin.filter(u => {
+      const rol = (u.roles?.clave || u.cargo || '').toLowerCase();
+      const esRolJefe = rol.includes('jefe') || rol === 'admin' || rol === 'gerente';
+      if (!esRolJefe) return false;
+
+      if (rol === 'admin') return true;
+
+      const jefeLocName = u.ubicaciones?.nombre || '';
+      return esVisibleParaUbicacion(jefeLocName, auxLocationName);
+    });
+
+    if (jefesCandidatos.length === 0) {
+      return res.status(401).json({ error: 'No se encontraron Jefes de Almacén asignados a esta sucursal' });
+    }
+
+    let jefeAutorizador = null;
+    for (const jefe of jefesCandidatos) {
+      const match = await bcryptjs.compare(pinStr, jefe.pin_hash);
+      if (match) {
+        jefeAutorizador = jefe;
+        break;
+      }
+    }
+
+    if (!jefeAutorizador) {
+      return res.status(401).json({ error: 'PIN incorrecto o no pertenece a un Jefe de esta sucursal' });
+    }
+
+    // Registrar en auditoría en Supabase
+    let auditRecord = null;
+    try {
+      const { data, error: auditError } = await supabase
+        .from('autorizaciones_confronta')
+        .insert({
+          if_tranid: ifTranid,
+          usuario_auxiliar_id: req.user.id,
+          usuario_jefe_id: jefeAutorizador.id,
+          ubicacion_id: req.user.ubicacion_id,
+          discrepancias: discrepancias || []
+        })
+        .select()
+        .single();
+
+      if (auditError) {
+        console.error('Error insertando autorizaciones_confronta:', auditError);
+      } else {
+        auditRecord = data;
+      }
+    } catch (e) {
+      console.error('Excepción guardando autorizaciones_confronta:', e);
+    }
+
+    return res.json({
+      success: true,
+      authorizedBy: jefeAutorizador.nombre_completo,
+      jefeId: jefeAutorizador.id,
+      authorizationId: auditRecord?.id || null,
+      message: `Autorizado por ${jefeAutorizador.nombre_completo}`
+    });
+
+  } catch (error) {
+    console.error('Error en autorizarConfrontaPin:', error);
+    res.status(500).json({ error: 'Error al autorizar por PIN', details: error.message });
+  }
+};
+
 module.exports = {
   getIFs,
   submitData,
   diagnosticTest,
+  validarConfronta,
+  autorizarConfrontaPin,
   // Exportado para tests
   _filterIFsByUserLocation: filterIFsByUserLocation
 };
