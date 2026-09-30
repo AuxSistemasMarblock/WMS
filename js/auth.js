@@ -9,8 +9,8 @@
  */
 function resolveBackendURL() {
   const cfg = window.APP_CONFIG?.BACKEND_URL;
-  if (cfg && !cfg.includes('localhost')) return cfg;
-  return `http://${window.location.hostname}:3001`;
+  if (cfg) return cfg;
+  return `http://${window.location.hostname}:3005`;
 }
 
 const BACKEND_URL = resolveBackendURL();
