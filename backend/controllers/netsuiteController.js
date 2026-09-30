@@ -573,7 +573,7 @@ const autorizarConfrontaPin = async (req, res) => {
       .not('pin_hash', 'is', null);
 
     if (qError || !usuariosConPin || usuariosConPin.length === 0) {
-      return res.status(401).json({ error: 'No hay Jefes de Almacén con PIN configurado en el sistema' });
+      return res.status(403).json({ error: 'No hay Jefes de Almacén con PIN configurado en el sistema' });
     }
 
     // Filtrar candidatos por rol y alcance de sucursal
@@ -589,7 +589,7 @@ const autorizarConfrontaPin = async (req, res) => {
     });
 
     if (jefesCandidatos.length === 0) {
-      return res.status(401).json({ error: 'No se encontraron Jefes de Almacén asignados a esta sucursal' });
+      return res.status(403).json({ error: 'No se encontraron Jefes de Almacén asignados a esta sucursal' });
     }
 
     let jefeAutorizador = null;
@@ -602,7 +602,7 @@ const autorizarConfrontaPin = async (req, res) => {
     }
 
     if (!jefeAutorizador) {
-      return res.status(401).json({ error: 'PIN incorrecto o no pertenece a un Jefe de esta sucursal' });
+      return res.status(403).json({ error: 'PIN incorrecto o no pertenece a un Jefe de esta sucursal' });
     }
 
     // Registrar en auditoría en Supabase

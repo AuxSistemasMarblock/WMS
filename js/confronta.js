@@ -280,6 +280,7 @@ async function validarPinJefe() {
 
     const response = await authenticatedFetch('/netsuite/confronta-autorizar-pin', {
       method: 'POST',
+      skipAutoLogout: true,
       body: JSON.stringify({
         pin: pin,
         ifTranid: selectedIF.tranid,
