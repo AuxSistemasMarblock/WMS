@@ -213,13 +213,6 @@ function normalizarFechaNS(fecha) {
  * createdfrom/creado_desde; mientras tanto, el SO se completa en la confronta
  * a partir de los escaneos de Google Sheets (campo `so`).
  */
-function cleanSku(val) {
-  if (!val) return '';
-  const s = String(val).trim().replace(/^ART/i, '').trim();
-  const firstToken = s.split(/\s+/)[0];
-  return (firstToken || s).toUpperCase();
-}
-
 function normalizarLineaEsperada(fila) {
   const extract = (val) => {
     if (val === null || val === undefined) return null;
@@ -249,7 +242,7 @@ function normalizarLineaEsperada(fila) {
     location: extract(fila.location),
     sourceDoc: extract(fila.createdfrom) || extract(fila.createdFrom)
       || extract(fila.creado_desde) || extract(fila.so) || null,
-    sku: cleanSku(extract(fila.formulatext)), // En este saved search, formulatext = SKU
+    sku: extract(fila.formulatext), // En este saved search, formulatext = SKU
     lote: lotnumber,  // unificado: igual que el Sheets para match directo
     expectedLocation: null, // No incluido en customsearch3675
     quantity: parseFloat((fila.quantity ?? '0').toString()) || 0
