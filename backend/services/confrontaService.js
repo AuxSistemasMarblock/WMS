@@ -20,13 +20,47 @@
 const { parseLote, evaluarCantidad } = require('./loteParser');
 
 /**
- * Agrupa los escaneos por (if_tranid, sku, lote)
+ * Normaliza SKU: remueve prefijo "ART" y extrae el identificador primario (primer token),
+ * descartando descripciones concatenadas por NetSuite (ej. "087XPB CREMA MARFIL..." -> "087XPB").
+ */
+function normalizarSku(sku) {
+  if (!sku) return '';
+  const s = String(sku).trim().replace(/^ART/i, '').trim();
+  const firstToken = s.split(/\s+/)[0];
+  return (firstToken || s).toUpperCase();
+}
+
+/**
+ * Normaliza Lote a formato canónico {id}-{largo}X{ancho} mayúscula,
+ * tolerando variaciones de espaciado, minúscula 'x' o formato numérico.
+ */
+function normalizarLote(lote) {
+  if (!lote) return '';
+  const parsed = parseLote(lote);
+  if (parsed) {
+    return `${parsed.id}-${parsed.largo}X${parsed.ancho}`.toUpperCase();
+  }
+  return String(lote).trim().toUpperCase();
+}
+
+/**
+ * Clave canónica unificada para confrontar escaneos contra líneas esperadas
+ */
+function normalizarKey(ifTranid, sku, lote) {
+  const t = String(ifTranid || '').trim().toUpperCase();
+  const s = normalizarSku(sku);
+  const l = normalizarLote(lote);
+  return `${t}|${s}|${l}`;
+}
+
+/**
+ * Agrupa los escaneos por (if_tranid, sku, lote) normalizado
  */
 function agruparEscaneos(escaneos) {
   const grupos = new Map();
   for (const e of escaneos) {
     if (!e.if_tranid || !e.sku || !e.lote) continue;
-    const key = `${e.if_tranid}|${e.sku}|${e.lote}`;
+    const key = normalizarKey(e.if_tranid, e.sku, e.lote);
     if (!grupos.has(key)) grupos.set(key, []);
     grupos.get(key).push(e);
   }
@@ -41,7 +75,11 @@ function agruparEscaneos(escaneos) {
  * @param {string} ifLocation - ubicación de la IF
  * @param {string} ifFecha  - fecha de la IF (trandate)
  */
-function evaluarLinea(ifTranid, ifSo, ifLocation, ifFecha, lineaEsperada, escaneosDeEstaLinea) {
+function evaluarLinea(ifTranid, ifSo, ifLocation, ifFecha, lineaEsperadaRaw, escaneosDeEstaLinea) {
+  const lineaEsperada = {
+    ...lineaEsperadaRaw,
+    sku: normalizarSku(lineaEsperadaRaw.sku)
+  };
   const discrepancias = [];
   const cantEscaneada = escaneosDeEstaLinea.length;
 
@@ -203,18 +241,18 @@ function evaluarLinea(ifTranid, ifSo, ifLocation, ifFecha, lineaEsperada, escane
  */
 function detectarHuerfanos(ifTranid, ifSo, ifLocation, ifFecha, lineasEsperadas, escaneosDeEstaIF) {
   const esperadosKeys = new Set(
-    lineasEsperadas.map(l => `${ifTranid}|${l.sku}|${l.lote}`)
+    lineasEsperadas.map(l => normalizarKey(ifTranid, l.sku, l.lote))
   );
 
   const huerfanos = [];
   for (const esc of escaneosDeEstaIF) {
-    const key = `${ifTranid}|${esc.sku}|${esc.lote}`;
+    const key = normalizarKey(ifTranid, esc.sku, esc.lote);
     if (!esperadosKeys.has(key)) {
       const parsed = parseLote(esc.lote);
       const area = parsed ? parsed.area : 0;
       huerfanos.push({
         tipo: 'sku_lote_no_esperado',
-        sku: esc.sku,
+        sku: normalizarSku(esc.sku),
         lote: esc.lote,
         area_placa_m2: area,
         placas_escaneadas: 1,
@@ -412,7 +450,7 @@ function confrontar(ifsEsperadas, escaneos) {
     // Único cruce válido: Mismo SKU, diferente Lote.
     // SKUs distintos NO se cruzan: quedan como faltante + huérfana por separado.
     for (const f of faltantes) {
-      const matchIdx = huerfanosDisp.findIndex(h => h.sku === f.sku && !h._matched);
+      const matchIdx = huerfanosDisp.findIndex(h => normalizarSku(h.sku) === normalizarSku(f.sku) && !h._matched);
       if (matchIdx >= 0) {
         const h = huerfanosDisp[matchIdx];
         h._matched = true;
@@ -438,7 +476,7 @@ function confrontar(ifsEsperadas, escaneos) {
     const ifFecha = ifDoc.trandate || null;
 
     for (const lineaEsperada of ifDoc.lineas) {
-      const key = `${ifDoc.tranid}|${lineaEsperada.sku}|${lineaEsperada.lote}`;
+      const key = normalizarKey(ifDoc.tranid, lineaEsperada.sku, lineaEsperada.lote);
       const escaneosDeEstaLinea = escaneosAgrupados.get(key) || [];
       const lineaEvaluada = evaluarLinea(
         ifDoc.tranid,

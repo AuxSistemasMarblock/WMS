@@ -13,12 +13,14 @@ const config = require('../config/environments');
 const netsuiteRestletClient = require('../config/netsuiteRestlet');
 
 /**
- * Normaliza SKU removiendo el prefijo "ART" común en NetSuite si existe
- * Ej: "ART504XPB" -> "504XPB", "504XPB" -> "504XPB"
+ * Normaliza SKU: remueve prefijo "ART" y extrae el identificador primario (primer token),
+ * descartando descripciones concatenadas por NetSuite (ej. "087XPB CREMA MARFIL..." -> "087XPB").
  */
 function cleanSku(val) {
   if (!val) return '';
-  return String(val).trim().replace(/^ART/i, '');
+  const s = String(val).trim().replace(/^ART/i, '').trim();
+  const firstToken = s.split(/\s+/)[0];
+  return (firstToken || s).toUpperCase();
 }
 
 /**
