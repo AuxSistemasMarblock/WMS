@@ -502,9 +502,9 @@ const validarConfronta = async (req, res) => {
     // Ejecutar confronta
     const resultado = confrontaService.confrontar([ifEncontrada], escaneos);
 
-    // Filtrar discrepancias correspondientes a esta IF
+    // Filtrar discrepancias correspondientes a esta IF (excluyendo 'sin_medidas' que es solo informativo)
     const discrepancias = (resultado.todas_las_discrepancias || [])
-      .filter(d => String(d.if_tranid).trim() === String(ifTranid).trim())
+      .filter(d => String(d.if_tranid).trim() === String(ifTranid).trim() && d.tipo !== 'sin_medidas')
       .map(d => ({
         tipo: d.tipo,
         sku: d.sku,
