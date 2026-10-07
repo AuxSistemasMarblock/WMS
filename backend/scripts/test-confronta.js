@@ -116,6 +116,62 @@ async function main() {
     ok('Parser de lote OK');
   }
 
+  // 2. Test del cotejo de ubicaciones (OUTLET: "X: OUTLET X" ≡ "OUTLET X")
+  console.log('\n📍 Test del cotejo de ubicaciones (OUTLET):');
+  const canonicalizar = confrontaService._canonicalizarUbicacion;
+  // [escaneada, esperada, equivalentes]
+  const testsUbicacion = [
+    ['OUTLET 1', '1: OUTLET 1', true],          // etiqueta corta vs NetSuite
+    ['1: OUTLET 1', 'OUTLET 1', true],          // simétrico (etiqueta con formato completo)
+    ['OUTLET MEX', 'MEX : OUTLET MEX', true],   // código alfanumérico duplicado
+    ['outlet  1', '1:outlet 1', true],          // case + espacios
+    ['OUTLET 1', 'OUTLET 2', false],            // OUTLET distinto → bloquea
+    ['OUTLET 1', '2: OUTLET 1', false],         // esperado inconsistente → bloquea
+    ['OUTLET 1', '1: OUTLET 2', false],         // código/sufijo desalineados → bloquea
+    ['MTY:A-01-01', 'A-01-01', false],          // no OUTLET → estricto
+    ['MTY:A-01-01', 'MTY:A-01-01', true],       // estricto, idénticos
+    ['MTY:A-01-01', 'MTY:B-02-02', false]       // estricto, distintos
+  ];
+
+  let ubicOK = true;
+  for (const [escaneada, esperada, equiv] of testsUbicacion) {
+    const r = canonicalizar(escaneada) === canonicalizar(esperada);
+    const pass = r === equiv;
+    const etiqueta = r ? 'equivalentes' : 'distintas';
+    console.log(`     ${pass ? '\x1b[32m✓\x1b[0m' : '\x1b[31m✗\x1b[0m'} "${escaneada}" vs "${esperada}" → ${etiqueta} (esperado: ${equiv ? 'equivalentes' : 'distintas'})`);
+    if (!pass) ubicOK = false;
+  }
+
+  // Integración: evaluarLinea con expectedLocation OUTLET (1 placa 3.00x1.94 = 5.82 m²)
+  const lineaOutlet = {
+    sku: '030XPB', lote: '14362-3.00X1.94', expectedLocation: '1: OUTLET 1', quantity: 5.82
+  };
+  const evalsUbicacion = [
+    // [escaneada, esperada, discrepancias ubicacion_incorrecta esperadas]
+    ['OUTLET 1', '1: OUTLET 1', 0],   // etiqueta OUTLET corta → pasa
+    ['OUTLET 1', 'OUTLET 1', 0],      // ambos cortos → pasa
+    ['OUTLET 2', '1: OUTLET 1', 1],   // OUTLET distinto → bloquea
+    ['OUTLET 1', '2: OUTLET 1', 1]    // esperado inconsistente → bloquea
+  ];
+  for (const [escaneada, esperada, esp] of evalsUbicacion) {
+    const linea = { ...lineaOutlet, expectedLocation: esperada };
+    const escaneos = [{
+      if_tranid: 'IF2001', sku: linea.sku, lote: linea.lote,
+      ubicacion_escaneada: escaneada, operador: 'test', timestamp: '2026-10-06T10:00:00Z'
+    }];
+    const res = confrontaService._evaluarLinea('IF2001', 'SO20001', esperada, '2026-10-06', linea, escaneos);
+    const errs = res.discrepancias.filter(d => d.tipo === 'ubicacion_incorrecta').length;
+    const pass = errs === esp;
+    console.log(`     ${pass ? '\x1b[32m✓\x1b[0m' : '\x1b[31m✗\x1b[0m'} evaluarLinea "${escaneada}" vs "${esperada}" → ${errs} ubicacion_incorrecta (esperado: ${esp})`);
+    if (!pass) ubicOK = false;
+  }
+
+  if (!ubicOK) {
+    warn('Cotejo de ubicaciones tiene tests fallidos. Revisar antes de continuar.');
+  } else {
+    ok('Cotejo de ubicaciones OK');
+  }
+
   let ifsEsperadas, escaneos;
 
   if (SIMULATE) {

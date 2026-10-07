@@ -7,10 +7,16 @@
  *     Ver loteParser.js
  *   - Lote sin medidas: se omite validación de cantidad, se mantienen
  *     las validaciones de sku/lote/ubicación
+ *   - Cotejo de ubicación tolerante a nombres OUTLET: NetSuite (SuiteTalk)
+ *     nombra la ubicación "X: OUTLET X" ("1: OUTLET 1", "MEX : OUTLET MEX")
+ *     mientras la etiqueta física imprime el nombre corto "OUTLET X"
+ *     (existencias/IR). Ambas formas se canonicalizan a "OUTLET X" antes de
+ *     comparar. Ver canonicalizarUbicacion().
  *   - Tipos de discrepancia:
  *     * cantidad_faltante: escaneadas < esperadas
  *     * cantidad_sobrante:  escaneadas > esperadas
  *     * ubicacion_incorrecta: algún escaneo tiene ubicación distinta
+ *       (tras canonicalizarUbicacion)
  *     * sku_lote_no_esperado: se escaneó sku/lote que no estaba en la IF
  *     * linea_faltante: no se escaneó nada de esa línea
  *
@@ -18,6 +24,37 @@
  */
 
 const { parseLote, evaluarCantidad } = require('./loteParser');
+
+/**
+ * Canonicaliza una ubicación para el cotejo tolerante de nombres OUTLET.
+ *
+ * NetSuite (SuiteTalk, location.refName) nombra la ubicación con el patrón
+ * duplicado "X: OUTLET X" (p.ej. "1: OUTLET 1", "MEX : OUTLET MEX") mientras
+ * las etiquetas físicas imprimen el nombre corto "OUTLET X" (existencias/IR).
+ * Ambas formas se reducen a "OUTLET X"; todo lo demás se deja en formato
+ * estricto (trim, mayúsculas, espacios colapsados).
+ *
+ *   "OUTLET 1"    vs "1: OUTLET 1"    → equivalentes
+ *   "1: OUTLET 1" vs "OUTLET 1"       → equivalentes (simétrico)
+ *   "OUTLET MEX"  vs "MEX : OUTLET MEX" → equivalentes
+ *   "OUTLET 1"    vs "OUTLET 2"       → distintas (bloquea)
+ *   "OUTLET 1"    vs "2: OUTLET 1"    → distintas (esperado inconsistente)
+ *   "MTY:A-01-01" vs "A-01-01"        → distintas (no es OUTLET, estricto)
+ */
+function canonicalizarUbicacion(loc) {
+  const s = String(loc || '').trim().toUpperCase().replace(/\s+/g, ' ');
+  if (!s) return '';
+
+  const partes = s.split(':');
+  if (partes.length === 2) {
+    const codigo = partes[0].trim();
+    const nombre = partes[1].trim().replace(/\s+/g, ' ');
+    const m = nombre.match(/^OUTLET\s+(.+)$/);
+    // Solo si el código coincide con el sufijo ("X: OUTLET X"); si no, estricto
+    if (m && m[1] === codigo) return `OUTLET ${m[1]}`;
+  }
+  return s;
+}
 
 /**
  * Agrupa los escaneos por (if_tranid, sku, lote)
@@ -164,11 +201,11 @@ function evaluarLinea(ifTranid, ifSo, ifLocation, ifFecha, lineaEsperada, escane
     });
   }
 
-  // Validar ubicación de cada escaneo
+  // Validar ubicación de cada escaneo (cotejo tolerante OUTLET: "X: OUTLET X" ≡ "OUTLET X")
   const ubicacionEsperada = lineaEsperada.expectedLocation;
   for (const esc of escaneosDeEstaLinea) {
     if (ubicacionEsperada && esc.ubicacion_escaneada
-        && esc.ubicacion_escaneada !== ubicacionEsperada) {
+        && canonicalizarUbicacion(esc.ubicacion_escaneada) !== canonicalizarUbicacion(ubicacionEsperada)) {
       discrepancias.push({
         tipo: 'ubicacion_incorrecta',
         sku: esc.sku,
@@ -783,5 +820,6 @@ module.exports = {
   _evaluarLinea: evaluarLinea,
   _agruparEscaneos: agruparEscaneos,
   _detectarHuerfanos: detectarHuerfanos,
-  _agregarTopErrores: agregarTopErrores
+  _agregarTopErrores: agregarTopErrores,
+  _canonicalizarUbicacion: canonicalizarUbicacion
 };
