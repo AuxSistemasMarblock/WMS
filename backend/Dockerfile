@@ -15,4 +15,6 @@ COPY . .
 EXPOSE 3001
 
 # Comando de inicio
-CMD ["npm", "start"]
+# node directo (sin npm): las señales SIGTERM/SIGINT llegan sin intermediarios
+# y se evita el ruido "npm error signal SIGTERM" al detener el contenedor
+CMD ["node", "server.js"]

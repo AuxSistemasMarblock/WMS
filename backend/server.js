@@ -50,7 +50,40 @@ app.use((err, req, res, next) => {
   });
 });
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
+  const mem = process.memoryUsage();
   console.log(`🚀 WMS Backend running on port ${PORT}`);
   console.log(`📝 Environment: ${process.env.NODE_ENV}`);
+  console.log(`🕐 Started at: ${new Date().toISOString()} | RSS: ${Math.round(mem.rss / 1024 / 1024)}MB`);
+});
+
+// Apagado ordenado: cuando Docker/K8s detiene el contenedor envía SIGTERM/SIGINT.
+// Registrar la señal permite distinguir en los logs una parada externa de un crash.
+let shuttingDown = false;
+const gracefulShutdown = (signal) => {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`🛑 ${signal} recibido a las ${new Date().toISOString()} — apagado ordenado (parada externa del contenedor, no es un crash)`);
+  server.close(() => {
+    console.log('👋 Servidor HTTP cerrado correctamente');
+    process.exit(0);
+  });
+  // Forzar salida si hay conexiones colgadas (p. ej. requests largos a NetSuite)
+  setTimeout(() => {
+    console.warn('⏱️ Graceful shutdown: timeout de 25s alcanzado, forzando salida');
+    process.exit(1);
+  }, 25000).unref();
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+// Crash con log explícito (mismo comportamiento por defecto de Node, pero visible)
+process.on('uncaughtException', (err) => {
+  console.error(`💥 Uncaught Exception a las ${new Date().toISOString()}:`, err);
+  process.exit(1);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error(`💥 Unhandled Rejection a las ${new Date().toISOString()}:`, reason);
+  process.exit(1);
 });
