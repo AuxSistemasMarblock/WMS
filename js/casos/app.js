@@ -273,6 +273,14 @@ const PERIODO_PRESETS = [
 // Prefijo de inputs -> clave en state.filtros
 const PERIODO_STATE_KEY = { fDisc: 'disc', fCaso: 'caso', fRev: 'rev' };
 
+// Filtros instantáneos (WMS 2.0 · U1): loader de cada vista por prefijo,
+// para que los presets de período recarguen al hacer clic.
+const PERIODO_LOADERS = {
+  fDisc: () => cargarDiscrepancias(),
+  fCaso: () => cargarCasosJefe(),
+  fRev: () => cargarCasosRevision()
+};
+
 function ymd(d) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -319,17 +327,18 @@ function periodoPresetsHTML(prefix, periodo) {
 }
 
 // Fila de rango personalizado (se oculta salvo "personalizado").
+// Los inputs consultan al instante en cuanto ambas fechas quedan definidas.
 function periodoCustomRangeHTML(prefix, periodo, desde, hasta) {
   const custom = periodo === 'personalizado' ? 'flex' : 'none';
   return `
     <div class="filters-row custom-range" id="${prefix}CustomRange" style="display:${custom};">
       <div class="filter-group">
         <label for="${prefix}Desde">Desde</label>
-        <input type="date" id="${prefix}Desde" class="filter-select" value="${escapeHTML(desde || '')}" />
+        <input type="date" id="${prefix}Desde" class="filter-select" value="${escapeHTML(desde || '')}" onchange="aplicarRangoInstantaneo('${prefix}')" />
       </div>
       <div class="filter-group">
         <label for="${prefix}Hasta">Hasta</label>
-        <input type="date" id="${prefix}Hasta" class="filter-select" value="${escapeHTML(hasta || '')}" />
+        <input type="date" id="${prefix}Hasta" class="filter-select" value="${escapeHTML(hasta || '')}" onchange="aplicarRangoInstantaneo('${prefix}')" />
       </div>
     </div>`;
 }
@@ -353,6 +362,9 @@ function setPeriodo(prefix, preset) {
   f.hasta = r.hasta;
   const d = $(prefix + 'Desde'); if (d) d.value = r.desde;
   const h = $(prefix + 'Hasta'); if (h) h.value = r.hasta;
+
+  // Filtros instantáneos (U1): al elegir un preset se recarga la vista.
+  if (PERIODO_LOADERS[prefix]) PERIODO_LOADERS[prefix]();
 }
 
 // Vuelca a state el rango personalizado cuando aplica; deja intactos los presets.
@@ -365,6 +377,18 @@ function leerPeriodo(prefix) {
     if (h && h.value) f.hasta = h.value;
   }
   return f;
+}
+
+// Filtros instantáneos (WMS 2.0 · U1): el rango personalizado consulta al
+// instante en cuanto ambas fechas quedan definidas (se dispara al definir o
+// cambiar la fecha fin; mientras falte una fecha no se lanza la consulta).
+function aplicarRangoInstantaneo(prefix) {
+  const f = state.filtros[PERIODO_STATE_KEY[prefix]];
+  if (!f || f.periodo !== 'personalizado') return;
+  const d = $(prefix + 'Desde');
+  const h = $(prefix + 'Hasta');
+  if (!d || !h || !d.value || !h.value) return;
+  if (PERIODO_LOADERS[prefix]) PERIODO_LOADERS[prefix]();
 }
 
 // =================== TABS ===================
@@ -489,13 +513,10 @@ function renderErroresView() {
         ${periodoPresetsHTML('fDisc', f.periodo)}
         <div class="filter-group">
           <label for="fDiscTipo">Tipo</label>
-          <select id="fDiscTipo" class="filter-select">
+          <select id="fDiscTipo" class="filter-select" onchange="cargarDiscrepancias()">
             <option value="">Todos los tipos</option>
             ${tipoOpts}
           </select>
-        </div>
-        <div class="filter-group filters-actions">
-          <button class="btn btn-primary" type="button" onclick="cargarDiscrepancias()">Aplicar</button>
         </div>
       </div>
       ${periodoCustomRangeHTML('fDisc', f.periodo, f.desde, f.hasta)}
@@ -943,7 +964,7 @@ function renderMisCasosView() {
         ${periodoPresetsHTML('fCaso', f.periodo)}
         <div class="filter-group">
           <label for="fCasoEstado">Estado</label>
-          <select id="fCasoEstado" class="filter-select">
+          <select id="fCasoEstado" class="filter-select" onchange="cargarCasosJefe()">
             <option value="">Todos</option>
             <option value="pendiente_aprobacion"${f.estado === 'pendiente_aprobacion' ? ' selected' : ''}>Pendiente</option>
             <option value="aprobado"${f.estado === 'aprobado' ? ' selected' : ''}>Aprobado</option>
@@ -952,10 +973,7 @@ function renderMisCasosView() {
         </div>
         <div class="filter-group">
           <label for="fCasoIf">IF</label>
-          <input type="text" id="fCasoIf" class="filter-select" placeholder="IF-1234" value="${escapeHTML(f.if_tranid || '')}" />
-        </div>
-        <div class="filter-group filters-actions">
-          <button class="btn btn-primary" type="button" onclick="cargarCasosJefe()">Aplicar</button>
+          <input type="text" id="fCasoIf" class="filter-select" placeholder="IF-1234" value="${escapeHTML(f.if_tranid || '')}" onchange="cargarCasosJefe()" />
         </div>
       </div>
       ${periodoCustomRangeHTML('fCaso', f.periodo, f.desde, f.hasta)}
@@ -1086,21 +1104,18 @@ function renderRevisionView() {
         ${periodoPresetsHTML('fRev', f.periodo)}
         <div class="filter-group">
           <label for="fRevSucursal">Sucursal</label>
-          <select id="fRevSucursal" class="filter-select">${sucursalOptionsHTML(f.sucursal)}</select>
+          <select id="fRevSucursal" class="filter-select" onchange="cargarCasosRevision()">${sucursalOptionsHTML(f.sucursal)}</select>
         </div>
         ${esPorAprobar ? '' : `
         <div class="filter-group">
           <label for="fHistEstado">Estado</label>
-          <select id="fHistEstado" class="filter-select">
+          <select id="fHistEstado" class="filter-select" onchange="cargarCasosRevision()">
             <option value="">Todos</option>
             <option value="pendiente_aprobacion"${f.estado === 'pendiente_aprobacion' ? ' selected' : ''}>Pendiente</option>
             <option value="aprobado"${f.estado === 'aprobado' ? ' selected' : ''}>Aprobado</option>
             <option value="rechazado"${f.estado === 'rechazado' ? ' selected' : ''}>Rechazado</option>
           </select>
         </div>`}
-        <div class="filter-group filters-actions">
-          <button class="btn btn-primary" type="button" onclick="cargarCasosRevision()">Aplicar</button>
-        </div>
       </div>
       ${periodoCustomRangeHTML('fRev', f.periodo, f.desde, f.hasta)}
     </section>

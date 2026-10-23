@@ -16,7 +16,7 @@
 
   <link rel="stylesheet" href="css/variables.css?v=150" />
   <link rel="stylesheet" href="css/styles.css?v=150" />
-  <link rel="stylesheet" href="css/dashboard.css?v=151" />
+  <link rel="stylesheet" href="css/dashboard.css?v=152" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
 </head>
 <body>
@@ -74,20 +74,19 @@
       </div>
       <div class="filter-group">
         <label for="filtroSucursal">Sucursal</label>
-        <select id="filtroSucursal" class="filter-select">
+        <select id="filtroSucursal" class="filter-select" onchange="aplicarFiltros()">
           <option value="">Cargando...</option>
         </select>
       </div>
-      <button class="btn btn-primary" onclick="aplicarFiltros()">Aplicar</button>
     </div>
     <div class="filters-row custom-range" id="customRange" style="display: none;">
       <div class="filter-group">
         <label for="filtroDesde">Desde</label>
-        <input type="date" id="filtroDesde" class="filter-select" />
+        <input type="date" id="filtroDesde" class="filter-select" onchange="aplicarRangoPersonalizado()" />
       </div>
       <div class="filter-group">
         <label for="filtroHasta">Hasta</label>
-        <input type="date" id="filtroHasta" class="filter-select" />
+        <input type="date" id="filtroHasta" class="filter-select" onchange="aplicarRangoPersonalizado()" />
       </div>
     </div>
   </section>
@@ -313,6 +312,6 @@
 <script src="js/config.js?v=150"></script>
 <script src="js/nav.js?v=150"></script>
 <script src="js/footer.js?v=150"></script>
-<script src="js/dashboard/app.js?v=151"></script>
+<script src="js/dashboard/app.js?v=152"></script>
 </body>
 </html>

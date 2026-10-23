@@ -384,6 +384,17 @@ function aplicarFiltros() {
   cargarTodo();
 }
 
+// Filtros instantáneos (WMS 2.0 · U1): el rango personalizado consulta al
+// instante en cuanto ambas fechas quedan definidas (se dispara al definir o
+// cambiar la fecha fin; mientras falte una fecha no se lanza la consulta).
+function aplicarRangoPersonalizado() {
+  if (state.periodo !== 'personalizado') return;
+  const desde = $('filtroDesde').value;
+  const hasta = $('filtroHasta').value;
+  if (!desde || !hasta) return;
+  aplicarFiltros();
+}
+
 function cargarTodo() {
   cargarKPIs();
   cargarMalSacadas();
