@@ -17,6 +17,7 @@ services:
       args:
         BACKEND_URL: ${BACKEND_URL:-http://localhost:3001}
         ENVIRONMENT: production
+        TURNSTILE_SITEKEY: ${TURNSTILE_SITEKEY:-}
     container_name: wms-frontend
     restart: always
     ports:

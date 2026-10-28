@@ -49,6 +49,7 @@ services:
       - N8N_WEBHOOK_URL=${N8N_WEBHOOK_URL}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
       - LOG_LEVEL=${LOG_LEVEL}
+      - TURNSTILE_SECRET=${TURNSTILE_SECRET}
     volumes:
       # Service Account JSON de Google Sheets
       - ../files/spry-spanner-452018-s7-2e21e9a0fb5d.json:/app/backend/secrets/spry-spanner-452018-s7-2e21e9a0fb5d.json
@@ -61,6 +62,7 @@ services:
       args:
         BACKEND_URL: https://api.marblock.shop
         ENVIRONMENT: production
+        TURNSTILE_SITEKEY: ${TURNSTILE_SITEKEY}
     container_name: wms-frontend
     restart: always
     ports:

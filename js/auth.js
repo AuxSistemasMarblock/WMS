@@ -37,10 +37,18 @@ async function handleLogin(event) {
   try {
     showToast('Autenticando...', 'info');
 
+    // WMS 2.0 · S1: token de Cloudflare Turnstile (si hay sitekey configurado)
+    const sitekey = window.APP_CONFIG?.TURNSTILE_SITEKEY;
+    const turnstileToken = document.querySelector('#turnstileContainer [name="cf-turnstile-response"]')?.value || '';
+    if (sitekey && !turnstileToken) {
+      showToast('Completa la verificación de seguridad e intenta de nuevo', 'error');
+      return;
+    }
+
     const response = await fetch(`${BACKEND_URL}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
+      body: JSON.stringify({ email, password, turnstileToken })
     });
 
     if (!response.ok) {
@@ -230,4 +238,26 @@ async function authenticatedFetch(endpoint, options = {}) {
 }
 
 // Inicializar sesión al cargar página
+/**
+ * WMS 2.0 · S1: renderiza el widget de Cloudflare Turnstile en el login si hay
+ * sitekey configurado (js/config.js generado en build). El widget auto-render
+ * de la API de Cloudflare llena el campo oculto cf-turnstile-response.
+ */
+function initTurnstile() {
+  const sitekey = window.APP_CONFIG?.TURNSTILE_SITEKEY;
+  const cont = document.getElementById('turnstileContainer');
+  if (!sitekey || !cont) return;
+
+  cont.classList.add('cf-turnstile');
+  cont.dataset.sitekey = sitekey;
+  cont.dataset.size = 'flexible';
+  cont.style.display = 'block';
+
+  const script = document.createElement('script');
+  script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
+  script.async = true;
+  document.head.appendChild(script);
+}
+
 document.addEventListener('DOMContentLoaded', restoreSession);
+document.addEventListener('DOMContentLoaded', initTurnstile);

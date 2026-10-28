@@ -1059,6 +1059,8 @@ window.APP_CONFIG = {
 |---|:---:|---|---|
 | `NODE_ENV` | No | `production` | Entorno de ejecución (`production` activa validaciones estrictas y oculta endpoints `/validate` y `/diagnostic`) |
 | `ENV_FILE` | No | `backend/.env` | Archivo de variables que `docker-compose.yml` inyecta al backend vía `env_file` (usar `backend/.env.production` para deploys manuales con credenciales de producción) |
+| `TURNSTILE_SECRET` | **Sí (prod)** | `0x4AAAAA...` | Secret key de Cloudflare Turnstile (verificación server-side del captcha del login). Si no está definida, la verificación se omite con aviso (solo desarrollo) |
+| `TURNSTILE_SITEKEY` | **Sí (prod)** | `0x4AAAAA...` | Sitekey de Turnstile (pública) — build arg del frontend; se inyecta en `js/config.js` y renderiza el widget en el login |
 | `PORT` | No | `3001` | Puerto HTTP del backend |
 | `JWT_SECRET` | **Sí** | `secret_hex_64_chars` | Clave simétrica para firma y verificación de tokens de sesión |
 | `SUPABASE_URL` | **Sí** | `https://xxxx.supabase.co` | Endpoint del proyecto Supabase |
