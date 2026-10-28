@@ -20,6 +20,7 @@
 const crypto = require('crypto');
 const supabase = require('../config/supabase');
 const confrontaCacheService = require('./confrontaCacheService');
+const auditService = require('./auditService');
 
 /**
  * Normaliza un valor a string: null/undefined -> '' (evita "null"/"undefined").
@@ -723,6 +724,7 @@ async function actualizarDiscrepancias(ids, cambios, mensajeError) {
 
 /**
  * Inserta un evento de bitácora. Tolerante a errores (nunca lanza).
+ * WMS 2.0 · A2: cada evento se espeja en la bitácora central (audit_logs).
  */
 async function registrarEvento(evento) {
   if (!evento) return null;
@@ -731,6 +733,14 @@ async function registrarEvento(evento) {
     console.error('[casosService.registrarEvento] error:', error.message);
     return null;
   }
+  auditService.registrar({
+    usuarioId: evento.actor_id ?? null,
+    tipoEvento: auditService.TIPOS.CAMBIO,
+    accion: evento.evento,
+    entidad: 'casos',
+    entidadId: evento.caso_id,
+    detalle: evento.datos ?? null
+  });
   return true;
 }
 
@@ -756,6 +766,16 @@ async function crearCaso({ discrepanciaIds, tipoJustificacionId, justificacion, 
     if (error.code === '22023') throw httpError(400, error.message);
     throw httpError(500, 'No se pudo crear el caso', error.message);
   }
+  // WMS 2.0 · A2: bitácora central (la RPC escribe caso_creado en caso_eventos
+  // de forma atómica; aquí se espeja en audit_logs con actor e IP).
+  auditService.registrar({
+    usuarioId: creadoPor ?? null,
+    tipoEvento: auditService.TIPOS.CAMBIO,
+    accion: 'caso_creado',
+    entidad: 'casos',
+    entidadId: data?.id ?? data?.caso_id ?? null,
+    detalle: { folio: data?.folio ?? null, discrepancias: discrepanciaIds.length }
+  });
   return data;
 }
 

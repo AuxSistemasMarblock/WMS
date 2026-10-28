@@ -6,6 +6,10 @@ require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Detrás de Traefik/Dokploy: req.ip debe leer X-Forwarded-For para que la
+// bitácora de auditoría registre la IP real del cliente (WMS 2.0 · A1).
+app.set('trust proxy', true);
+
 // Middleware
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
   .split(',')
@@ -40,6 +44,7 @@ app.use('/webhook', require('./routes/webhook'));
 app.use('/api/dashboard', require('./routes/dashboard'));
 app.use('/api/etiquetas', require('./routes/etiquetas'));
 app.use('/api/casos', require('./routes/casos'));
+app.use('/api/auditoria', require('./routes/auditoria'));
 
 // Error handling
 app.use((err, req, res, next) => {

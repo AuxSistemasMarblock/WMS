@@ -6,6 +6,7 @@ const { esVisibleParaUbicacion } = require('../services/locationScope');
 const confrontaService = require('../services/confrontaService');
 const netsuiteSearchService = require('../services/netsuiteSearchService');
 const netsuiteFulfillmentService = require('../services/netsuiteFulfillmentService');
+const auditService = require('../services/auditService');
 
 function extractLocation(location) {
   if (typeof location === 'string') return location;
@@ -297,6 +298,24 @@ const submitData = async (req, res) => {
     console.log(`  - Location: ${ubicacion.nombre}`);
     console.log(`  - Items: ${items.length}`);
     console.log(`  - Signatures uploaded: ${uploadedFiles.length}/${uploadedFiles.length + failedFiles.length}\n`);
+
+    // WMS 2.0 · A2: bitácora de envíos (resultado por IF a NetSuite)
+    auditService.registrarDesdeReq(req, {
+      usuarioId: userId,
+      tipoEvento: auditService.TIPOS.ENVIO,
+      accion: 'submit_netsuite',
+      entidad: 'netsuite',
+      detalle: {
+        if_tranid: ifTranid,
+        if_internal_id: ifInternalId,
+        ubicacion: ubicacion.nombre,
+        items: items.length,
+        firmas_subidas: uploadedFiles.map(f => f.type),
+        firmas_fallidas: failedFiles.map(f => ({ type: f.type, error: f.error })),
+        resultado: allUploaded ? 'success' : 'partial_success',
+        if_status_updated: response.ifStatusUpdated ?? null
+      }
+    });
 
     const statusCode = allUploaded ? 200 : 207; // 207 Multi-Status para éxito parcial
     res.status(statusCode).json(response);
@@ -629,6 +648,20 @@ const autorizarConfrontaPin = async (req, res) => {
     } catch (e) {
       console.error('Excepción guardando autorizaciones_confronta:', e);
     }
+
+    // WMS 2.0 · A2: bitácora de cambios (autorización de discrepancias por PIN)
+    auditService.registrarDesdeReq(req, {
+      usuarioId: req.user.id,
+      tipoEvento: auditService.TIPOS.CAMBIO,
+      accion: 'confronta_autorizada_pin',
+      entidad: 'autorizaciones_confronta',
+      entidadId: auditRecord?.id,
+      detalle: {
+        if_tranid: ifTranid,
+        autorizado_por_id: jefeAutorizador.id,
+        autorizado_por: jefeAutorizador.nombre_completo
+      }
+    });
 
     return res.json({
       success: true,

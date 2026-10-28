@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WMS · Auditoría</title>
+  <link rel="icon" href="images/logo_ico.png" type="image/png" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600;700&display=swap"
+    rel="stylesheet"
+  />
+  <!-- Meta tema y Anti-FOUC -->
+  <meta name="theme-color" content="#004a99" />
+  <script>try{var t=localStorage.getItem("wms-theme");document.documentElement.setAttribute("data-theme",t==="dark"||t===null&&matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")}catch(e){}</script>
+  <script src="js/theme.js?v=150"></script>
+
+  <link rel="stylesheet" href="css/variables.css?v=150" />
+  <link rel="stylesheet" href="css/styles.css?v=150" />
+  <link rel="stylesheet" href="css/dashboard.css?v=152" />
+</head>
+<body>
+
+<div id="toast" class="toast"></div>
+
+<div id="mainApp" style="display: none;">
+
+<header>
+  <div class="logo">
+    <img src="images/logo.png" alt="Logo Empresa" style="height:30px; width:auto; border-radius:6px; padding:2px;"/>
+  </div>
+  <nav class="app-nav" id="appNav"></nav>
+  <div class="header-right">
+    <div class="user-info">
+      <div class="user-details">
+        <div class="user-name" id="currentUserName">Usuario</div>
+        <div class="user-meta">
+          <span id="currentUserLocation">Ubicación</span> ·
+          <span id="currentUserRole">Rol</span>
+        </div>
+      </div>
+    </div>
+    <button class="theme-toggle" id="themeToggle" type="button" role="switch" aria-checked="false" aria-label="Cambiar entre modo claro y oscuro" title="Cambiar tema">
+      <span class="theme-toggle-thumb"></span>
+      <span class="theme-toggle-icon icon-sun" aria-hidden="true">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+      </span>
+      <span class="theme-toggle-icon icon-moon" aria-hidden="true">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </span>
+    </button>
+    <button class="btn btn-logout" onclick="handleLogout()" title="Cerrar sesión">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 13l4 4m0-4l-4 4M16 3v8"/></svg>
+      Logout
+    </button>
+  </div>
+</header>
+
+<main>
+  <!-- FILTROS (instantáneos — WMS 2.0 · U1) -->
+  <section class="filters-card">
+    <div class="filters-row">
+      <div class="filter-group">
+        <label for="filtroTipo">Tipo de evento</label>
+        <select id="filtroTipo" class="filter-select" onchange="aplicarFiltros()">
+          <option value="">Todos</option>
+          <option value="login_exitoso">✅ Login exitoso</option>
+          <option value="login_fallido">🔴 Login fallido</option>
+          <option value="cambio">✏️ Cambio</option>
+          <option value="envio">📤 Envío</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label for="filtroTexto">Acción o email</label>
+        <input type="text" id="filtroTexto" class="filter-select" placeholder="ej. login, caso_aprobado, usuario@…" onchange="aplicarFiltros()" />
+      </div>
+      <div class="filter-group">
+        <label for="filtroDesde">Desde</label>
+        <input type="date" id="filtroDesde" class="filter-select" onchange="aplicarFiltros()" />
+      </div>
+      <div class="filter-group">
+        <label for="filtroHasta">Hasta</label>
+        <input type="date" id="filtroHasta" class="filter-select" onchange="aplicarFiltros()" />
+      </div>
+    </div>
+  </section>
+
+  <!-- BITÁCORA -->
+  <section class="table-card">
+    <div class="table-header">
+      <div class="table-title">
+        🛡️ Bitácora de Auditoría
+        <span class="count-badge" id="countEventos">0</span>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 13%;">Fecha / Hora</th>
+            <th style="width: 11%;">Tipo</th>
+            <th style="width: 15%;">Acción</th>
+            <th style="width: 17%;">Usuario</th>
+            <th style="width: 22%;">Detalle</th>
+            <th style="width: 11%;">IP</th>
+            <th style="width: 11%;">User-Agent</th>
+          </tr>
+        </thead>
+        <tbody id="tbodyAuditoria">
+          <tr><td colspan="7"><div class="empty-state">Cargando bitácora…</div></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="pagination" id="pagAuditoria"></div>
+  </section>
+</main>
+
+<footer class="app-footer" id="appFooter"></footer>
+</div>
+
+<script src="js/config.js?v=150"></script>
+<script src="js/nav.js?v=152"></script>
+<script src="js/footer.js?v=150"></script>
+<script src="js/auditoria/app.js?v=150"></script>
+</body>
+</html>
