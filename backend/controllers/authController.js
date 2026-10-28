@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const bcryptjs = require('bcryptjs');
 const supabase = require('../config/supabase');
 const auditService = require('../services/auditService');
+const mfaService = require('../services/mfaService');
 
 /**
  * Login: Autentica usuario con email y contraseña
@@ -78,49 +79,232 @@ const login = async (req, res) => {
       return res.status(403).json({ error: 'User has no assigned role' });
     }
 
-    // WMS 2.0 · A1: bitácora de login exitoso + ultimo_login (fire-and-forget)
-    const ahora = new Date().toISOString();
-    supabase.from('usuarios').update({ ultimo_login: ahora }).eq('id', usuario.id)
-      .then(({ error: upErr }) => {
-        if (upErr) console.error('[audit] error actualizando ultimo_login:', upErr.message);
-      });
-    auditService.registrarDesdeReq(req, {
-      usuarioId: usuario.id,
-      tipoEvento: auditService.TIPOS.LOGIN_EXITOSO,
-      accion: 'login',
-      entidad: 'usuarios',
-      entidadId: usuario.id,
-      detalle: { rol: rolClave }
-    });
+    // WMS 2.0 · S2: el 2FA es OBLIGATORIO para admin. El login queda pendiente:
+    //  - con totp_activo  -> verificar código TOTP (/auth/login/2fa)
+    //  - sin totp_activo  -> enrolamiento forzado (/auth/2fa/setup + verify-setup)
+    if (rolClave === 'admin') {
+      const paso = usuario.totp_activo ? '2fa_login' : '2fa_enrolamiento';
+      const respuesta = {
+        tempToken: mfaService.generarTempToken(usuario.id, paso),
+        user: { id: usuario.id, email: usuario.email, nombre: usuario.nombre_completo, rol: rolClave }
+      };
+      if (usuario.totp_activo) respuesta.requiere2FA = true;
+      else respuesta.requiereEnrolamiento2FA = true;
+      return res.json(respuesta);
+    }
 
-    // Generar JWT token
-    const token = jwt.sign(
-      {
-        id: usuario.id,
-        email: usuario.email,
-        nombre: usuario.nombre_completo,
-        cargo: usuario.cargo,
-        rol: rolClave,
-        ubicacion_id: usuario.ubicacion_id
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: '24h' }
-    );
-
-    res.json({
-      token,
-      user: {
-        id: usuario.id,
-        nombre: usuario.nombre_completo,
-        email: usuario.email,
-        cargo: usuario.cargo,
-        rol: rolClave,
-        ubicacion: ubicacion || { id: usuario.ubicacion_id, nombre: 'Unknown' }
-      }
-    });
+    await emitirSesion(req, res, usuario, rolClave, ubicacion);
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ error: 'Login failed' });
+  }
+};
+
+/**
+ * Emite la sesión definitiva: bitácora de login exitoso, ultimo_login y JWT.
+ * Usado por login (roles sin 2FA), login2FA y verifySetup2FA (admin).
+ */
+async function emitirSesion(req, res, usuario, rolClave, ubicacion = null) {
+  if (!ubicacion && usuario.ubicacion_id) {
+    const { data: ub } = await supabase
+      .from('ubicaciones')
+      .select('id, nombre')
+      .eq('id', usuario.ubicacion_id)
+      .single();
+    ubicacion = ub || null;
+  }
+
+  // WMS 2.0 · A1: bitácora de login exitoso + ultimo_login (fire-and-forget)
+  const ahora = new Date().toISOString();
+  supabase.from('usuarios').update({ ultimo_login: ahora }).eq('id', usuario.id)
+    .then(({ error: upErr }) => {
+      if (upErr) console.error('[audit] error actualizando ultimo_login:', upErr.message);
+    });
+  auditService.registrarDesdeReq(req, {
+    usuarioId: usuario.id,
+    tipoEvento: auditService.TIPOS.LOGIN_EXITOSO,
+    accion: 'login',
+    entidad: 'usuarios',
+    entidadId: usuario.id,
+    detalle: { rol: rolClave }
+  });
+
+  const token = jwt.sign(
+    {
+      id: usuario.id,
+      email: usuario.email,
+      nombre: usuario.nombre_completo,
+      cargo: usuario.cargo,
+      rol: rolClave,
+      ubicacion_id: usuario.ubicacion_id
+    },
+    process.env.JWT_SECRET,
+    { expiresIn: '24h' }
+  );
+
+  res.json({
+    token,
+    user: {
+      id: usuario.id,
+      nombre: usuario.nombre_completo,
+      email: usuario.email,
+      cargo: usuario.cargo,
+      rol: rolClave,
+      ubicacion: ubicacion || { id: usuario.ubicacion_id, nombre: 'Unknown' }
+    }
+  });
+}
+
+/**
+ * POST /auth/login/2fa — segundo paso del login de admin con TOTP.
+ * Body: { tempToken, code }
+ */
+const login2FA = async (req, res) => {
+  try {
+    const { tempToken, code } = req.body || {};
+    const decoded = mfaService.verificarTempToken(tempToken, '2fa_login');
+    if (!decoded) {
+      return res.status(401).json({ error: 'Sesión 2FA inválida o expirada. Vuelve a iniciar sesión.' });
+    }
+
+    const { data: usuario, error } = await supabase
+      .from('usuarios')
+      .select('*, roles(clave)')
+      .eq('id', decoded.id)
+      .single();
+
+    if (error || !usuario || !usuario.activo) {
+      return res.status(401).json({ error: 'Usuario no válido' });
+    }
+
+    const codigo = String(code || '').trim();
+    const esRespaldo = /^[A-Za-z0-9]{4,5}-?[A-Za-z0-9]{4,5}$/.test(codigo);
+
+    let ok = false;
+    if (esRespaldo && usuario.totp_backup_codes?.length) {
+      const resultado = await mfaService.verificarCodigoRespaldo(usuario.totp_backup_codes, codigo);
+      ok = resultado.ok;
+      if (ok) {
+        await supabase.from('usuarios')
+          .update({ totp_backup_codes: resultado.hashesRestantes })
+          .eq('id', usuario.id);
+      }
+    } else {
+      ok = await mfaService.verificarTOTP(usuario.totp_secret, codigo);
+    }
+
+    if (!ok) {
+      auditService.registrarDesdeReq(req, {
+        usuarioId: usuario.id,
+        tipoEvento: auditService.TIPOS.LOGIN_FALLIDO,
+        accion: 'login_2fa',
+        detalle: { motivo: esRespaldo ? 'codigo_respaldo_invalido' : 'totp_invalido' }
+      });
+      return res.status(403).json({ error: 'Código de verificación incorrecto' });
+    }
+
+    await emitirSesion(req, res, usuario, usuario.roles?.clave || 'admin');
+  } catch (error) {
+    console.error('Login 2FA error:', error);
+    res.status(500).json({ error: 'Error en la verificación 2FA' });
+  }
+};
+
+/**
+ * POST /auth/2fa/setup — inicia el enrolamiento forzado (solo tempToken de
+ * paso '2fa_enrolamiento'). Devuelve secreto, URI otpauth y códigos de respaldo.
+ * Body: { tempToken }
+ */
+const setup2FA = async (req, res) => {
+  try {
+    const { tempToken } = req.body || {};
+    const decoded = mfaService.verificarTempToken(tempToken, '2fa_enrolamiento');
+    if (!decoded) {
+      return res.status(401).json({ error: 'Sesión de enrolamiento inválida o expirada. Vuelve a iniciar sesión.' });
+    }
+
+    const { data: usuario, error } = await supabase
+      .from('usuarios')
+      .select('id, email, nombre_completo, activo, roles(clave)')
+      .eq('id', decoded.id)
+      .single();
+
+    if (error || !usuario || !usuario.activo) {
+      return res.status(401).json({ error: 'Usuario no válido' });
+    }
+
+    const enrolamiento = await mfaService.generarEnrolamiento(usuario.email);
+
+    const { error: upErr } = await supabase.from('usuarios')
+      .update({
+        totp_secret: enrolamiento.secretCifrado,
+        totp_backup_codes: enrolamiento.backupHashes,
+        totp_activo: false
+      })
+      .eq('id', usuario.id);
+
+    if (upErr) {
+      console.error('[2fa] error guardando secreto:', upErr.message);
+      return res.status(500).json({ error: 'No se pudo iniciar el enrolamiento' });
+    }
+
+    res.json({
+      secret: enrolamiento.secret,
+      otpauthURI: enrolamiento.uri,
+      backupCodes: enrolamiento.backupCodes
+    });
+  } catch (error) {
+    console.error('Setup 2FA error:', error);
+    res.status(500).json({ error: 'Error al configurar 2FA' });
+  }
+};
+
+/**
+ * POST /auth/2fa/verify-setup — confirma el primer código y activa el 2FA
+ * (enrolamiento forzado). Emite la sesión definitiva.
+ * Body: { tempToken, code }
+ */
+const verifySetup2FA = async (req, res) => {
+  try {
+    const { tempToken, code } = req.body || {};
+    const decoded = mfaService.verificarTempToken(tempToken, '2fa_enrolamiento');
+    if (!decoded) {
+      return res.status(401).json({ error: 'Sesión de enrolamiento inválida o expirada. Vuelve a iniciar sesión.' });
+    }
+
+    const { data: usuario, error } = await supabase
+      .from('usuarios')
+      .select('*, roles(clave)')
+      .eq('id', decoded.id)
+      .single();
+
+    if (error || !usuario || !usuario.activo || !usuario.totp_secret) {
+      return res.status(401).json({ error: 'Usuario no válido o enrolamiento no iniciado' });
+    }
+
+    const ok = await mfaService.verificarTOTP(usuario.totp_secret, code);
+    if (!ok) {
+      auditService.registrarDesdeReq(req, {
+        usuarioId: usuario.id,
+        tipoEvento: auditService.TIPOS.LOGIN_FALLIDO,
+        accion: 'login_2fa',
+        detalle: { motivo: 'totp_invalido_en_enrolamiento' }
+      });
+      return res.status(403).json({ error: 'Código incorrecto: revisa tu app autenticadora' });
+    }
+
+    const { error: upErr } = await supabase.from('usuarios')
+      .update({ totp_activo: true })
+      .eq('id', usuario.id);
+    if (upErr) {
+      console.error('[2fa] error activando 2FA:', upErr.message);
+      return res.status(500).json({ error: 'No se pudo activar el 2FA' });
+    }
+
+    await emitirSesion(req, res, usuario, usuario.roles?.clave || 'admin');
+  } catch (error) {
+    console.error('Verify setup 2FA error:', error);
+    res.status(500).json({ error: 'Error al confirmar el 2FA' });
   }
 };
 
@@ -348,4 +532,4 @@ const generateHash = async (req, res) => {
   }
 };
 
-module.exports = { login, register, getUser, setPin, logout, generateHash };
+module.exports = { login, login2FA, setup2FA, verifySetup2FA, register, getUser, setPin, logout, generateHash };
