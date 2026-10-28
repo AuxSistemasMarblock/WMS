@@ -539,7 +539,8 @@ const validarConfronta = async (req, res) => {
 };
 
 /**
- * Autorizar discrepancias de confronta con PIN del Jefe de Almacén
+ * Autorizar discrepancias de confronta con PIN de autorización
+ * (jefe de la sucursal, líder o admin — WMS 2.0 · R1).
  * POST /netsuite/confronta-autorizar-pin
  */
 const autorizarConfrontaPin = async (req, res) => {
@@ -573,23 +574,23 @@ const autorizarConfrontaPin = async (req, res) => {
       .not('pin_hash', 'is', null);
 
     if (qError || !usuariosConPin || usuariosConPin.length === 0) {
-      return res.status(403).json({ error: 'No hay Jefes de Almacén con PIN configurado en el sistema' });
+      return res.status(403).json({ error: 'No hay autorizadores (jefe, líder o admin) con PIN configurado en el sistema' });
     }
 
-    // Filtrar candidatos por rol y alcance de sucursal
+    // WMS 2.0 · R1: autorizan jefe (de la sucursal del auxiliar), líder y admin
+    // (globales). El gerente queda fuera del PIN: su única intervención es la
+    // firma >10 placas dentro del flujo del escáner.
     const jefesCandidatos = usuariosConPin.filter(u => {
-      const rol = (u.roles?.clave || u.cargo || '').toLowerCase();
-      const esRolJefe = rol.includes('jefe') || rol === 'admin' || rol === 'gerente';
-      if (!esRolJefe) return false;
-
-      if (rol === 'admin') return true;
+      const rol = String(u.roles?.clave ?? '').toLowerCase().trim();
+      if (rol === 'admin' || rol === 'lider') return true; // autoridad global
+      if (rol !== 'jefe_almacen') return false;
 
       const jefeLocName = u.ubicaciones?.nombre || '';
       return esVisibleParaUbicacion(jefeLocName, auxLocationName);
     });
 
     if (jefesCandidatos.length === 0) {
-      return res.status(403).json({ error: 'No se encontraron Jefes de Almacén asignados a esta sucursal' });
+      return res.status(403).json({ error: 'No se encontraron autorizadores (jefe de esta sucursal, líder o admin) con PIN' });
     }
 
     let jefeAutorizador = null;
@@ -602,7 +603,7 @@ const autorizarConfrontaPin = async (req, res) => {
     }
 
     if (!jefeAutorizador) {
-      return res.status(403).json({ error: 'PIN incorrecto o no pertenece a un Jefe de esta sucursal' });
+      return res.status(403).json({ error: 'PIN incorrecto o no pertenece a un autorizador válido (jefe de esta sucursal, líder o admin)' });
     }
 
     // Registrar en auditoría en Supabase

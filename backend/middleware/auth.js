@@ -19,7 +19,9 @@ const verifyToken = (req, res, next) => {
 /**
  * Requiere que el usuario autenticado tenga uno de los roles indicados.
  * Debe usarse DESPUÉS de verifyToken (necesita req.user).
- * Lee req.user.rol (nueva clave) con fallback a req.user.cargo (tokens viejos).
+ * Compara EXACTAMENTE la clave del rol (roles.clave) que el login graba en el
+ * JWT como `rol`. Sin substrings ni fallback a `cargo` legacy (WMS 2.0 · R1):
+ * un token sin `rol` válido queda denegado.
  *
  * @param {...string} roles - Claves de rol permitidas (ej. 'admin', 'jefe_almacen')
  */
@@ -27,13 +29,7 @@ const requireRole = (...roles) => (req, res, next) => {
   if (!req.user) {
     return res.status(401).json({ error: 'No token provided' });
   }
-  const rawRol = (req.user.rol ?? req.user.cargo ?? '').toLowerCase().trim();
-  let rol = rawRol;
-  if (rawRol === 'administrador') rol = 'admin';
-  else if (rawRol.includes('gerente')) rol = 'gerente';
-  else if (rawRol.includes('jefe')) rol = 'jefe_almacen';
-  else if (rawRol.includes('aux')) rol = 'aux_almacen';
-
+  const rol = String(req.user.rol ?? '').toLowerCase().trim();
   if (!roles.includes(rol)) {
     return res.status(403).json({ error: 'Forbidden' });
   }

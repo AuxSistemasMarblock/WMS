@@ -339,8 +339,9 @@ async function cargarSucursales() {
     const sel = $('filtroSucursal');
     sel.innerHTML = '';
 
-    const rawRol = (user?.rol || user?.cargo || '').toLowerCase().trim();
-    const isGlobal = rawRol === 'admin' || rawRol === 'administrador' || rawRol.includes('gerente');
+    const rawRol = (user?.rol || '').toLowerCase().trim();
+    // WMS 2.0 · R1: admin y lider ven todas las sucursales; el gerente solo la suya.
+    const isGlobal = rawRol === 'admin' || rawRol === 'lider';
 
     if (isGlobal) {
       const optTodas = el('option', { value: '' }, 'Todas las sucursales');
@@ -348,6 +349,7 @@ async function cargarSucursales() {
     }
 
     state.sucursales.forEach(s => {
+      if (!isGlobal && s.nombre !== state.sucursalUsuario) return;
       const opt = el('option', { value: s.nombre }, s.nombre);
       sel.appendChild(opt);
     });
@@ -382,6 +384,17 @@ function aplicarFiltros() {
   }
   state.sucursal = $('filtroSucursal').value || null;
   cargarTodo();
+}
+
+// Filtros instantáneos (WMS 2.0 · U1): el rango personalizado consulta al
+// instante en cuanto ambas fechas quedan definidas (se dispara al definir o
+// cambiar la fecha fin; mientras falte una fecha no se lanza la consulta).
+function aplicarRangoPersonalizado() {
+  if (state.periodo !== 'personalizado') return;
+  const desde = $('filtroDesde').value;
+  const hasta = $('filtroHasta').value;
+  if (!desde || !hasta) return;
+  aplicarFiltros();
 }
 
 function cargarTodo() {
@@ -1187,9 +1200,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   const user = getCurrentUser();
-  const rawRol = (user?.rol || user?.cargo || '').toLowerCase().trim();
-  const rol = rawRol === 'administrador' ? 'admin' : (rawRol.includes('gerente') ? 'gerente' : rawRol);
-  if (rol !== 'admin' && rol !== 'gerente') {
+  // Clave exacta del rol (WMS 2.0 · R1): admin y lider ven todo; gerente solo
+  // su ubicación (el backend además fuerza el scope).
+  const rol = (user?.rol || '').toLowerCase().trim();
+  if (rol !== 'admin' && rol !== 'lider' && rol !== 'gerente') {
     window.location.href = 'index.html';
     return;
   }
@@ -1200,7 +1214,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const roleEl = $('currentUserRole');
     if (nameEl) nameEl.textContent = user.nombre || user.email || 'Usuario';
     if (locEl) locEl.textContent = user.ubicacion?.nombre || 'N/A';
-    if (roleEl) roleEl.textContent = getRoleLabel(rawRol);
+    if (roleEl) roleEl.textContent = getRoleLabel(rol);
   }
 
   document.querySelectorAll('.preset-btn').forEach(btn => {
@@ -1224,6 +1238,7 @@ function getRoleLabel(cargo) {
   const roles = {
     'aux_almacen': 'Aux. Almacén',
     'jefe_almacen': 'Jefe de Almacén',
+    'lider': 'Líder de Almacén',
     'gerente': 'Gerente',
     'cliente': 'Cliente',
     'admin': 'Administrador'

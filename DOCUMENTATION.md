@@ -42,6 +42,7 @@
    - 6.1 Catálogo de Endpoints
    - 6.2 Middlewares de Seguridad y Control de Acceso
    - 6.3 Especificación Detallada de Contratos (Request / Response)
+   - 6.4 Alta de Usuarios con Token de Administrador
 7. [Arquitectura de Servicios del Backend (`backend/services/`)](#7-arquitectura-de-servicios-del-backend)
    - 7.1 `confrontaService.js`
    - 7.2 `googleSheetsService.js`
@@ -776,6 +777,66 @@ WebUSB de Chrome/Edge en **Windows** solo expone dispositivos cuyo driver sea **
 }
 ```
 
+### 6.4 Alta de Usuarios con Token de Administrador
+
+Para crear usuarios vía `POST /auth/register` se requiere el **JWT de una sesión con rol `admin`** (no existe endpoint público de registro). El token se obtiene con `POST /auth/login` y expira a las **24 horas** (`expiresIn: '24h'`).
+
+**Obtención del token desde la aplicación (flujo operativo)**:
+1. Iniciar sesión en la app con un usuario `admin`.
+2. Abrir DevTools → Console y ejecutar:
+   ```js
+   copy(sessionStorage.getItem('authToken'))
+   ```
+   El frontend persiste la sesión en `sessionStorage` bajo la llave `authToken` (ver [`js/auth.js`](file:///home/mrchilaquiles/Documents/Chamba/WMS/js/auth.js), líneas 56-57).
+
+**Catálogos requeridos** (no expuestos por la API; consultar en Supabase → Table Editor):
+
+| Campo | Tabla | Descripción |
+|---|---|---|
+| `ubicacion_id` | `ubicaciones` | ID de la sucursal asignada al usuario |
+| `rol` | `roles` | Clave del rol (`admin`, `jefe_almacen`, `aux_almacen`, `gerente`, …) |
+
+**Request**:
+```bash
+curl -X POST https://api.marblock.shop/auth/register \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <JWT_ADMIN>" \
+  -d '{
+    "email": "nuevo.usuario@marblock.com",
+    "password": "PasswordSeguro123!",
+    "nombre_completo": "Nombre Apellido",
+    "ubicacion_id": 5,
+    "rol": "aux_almacen"
+  }'
+```
+
+**Comportamiento**: el backend valida la ubicación y el rol, hashea la contraseña con bcrypt (cost 10) y resuelve `rol_id` desde la tabla `roles`; el campo `rol` acepta el fallback legacy `cargo`. En local, la URL base es `http://localhost:3001`.
+
+**Response 201 Created**:
+```json
+{
+  "message": "User created successfully",
+  "user": {
+    "id": 12,
+    "email": "nuevo.usuario@marblock.com",
+    "nombre_completo": "Nombre Apellido",
+    "cargo": "aux_almacen",
+    "rol_id": 3
+  }
+}
+```
+
+**Errores**:
+
+| Status | Error | Causa |
+|---|---|---|
+| 400 | `All fields are required` | Falta email/password/nombre_completo/ubicacion_id/rol |
+| 400 | `Invalid location ID` | `ubicacion_id` inexistente |
+| 400 | `Invalid role: <clave>` | Clave inexistente en la tabla `roles` |
+| 400 | `<mensaje de Supabase>` | Conflicto de inserción (ej. email duplicado) |
+| 401 | `No token provided` / `Invalid token` | Token ausente o expirado |
+| 403 | `Forbidden` | El token no pertenece a un usuario `admin` |
+
 ---
 
 ## 7. Arquitectura de Servicios del Backend (`backend/services/`)
@@ -971,6 +1032,15 @@ services:
       - wms-backend
 ```
 
+**Flujo de variables de entorno según cómo se despliegue**:
+
+| Compose | Uso | Cómo entran las variables |
+|---|---|---|
+| `docker-compose.yml` | Despliegue manual / VPS | `env_file: ${ENV_FILE:-backend/.env}` — por defecto carga `backend/.env` (desarrollo local). Para producción: `ENV_FILE=backend/.env.production` (más `BACKEND_URL=https://api.marblock.shop` como build arg) |
+| `docker-compose.dokploy.yml` | Producción (Dokploy + Traefik) | Cada variable se interpola `${VAR}` desde el panel **Environment** del proyecto en Dokploy (pegar el contenido de `backend/.env.production`, mismo formato dotenv). `NODE_ENV=production` y `BACKEND_URL` van fijos en el compose |
+
+> **Nota**: el backend solo lee `backend/.env` en runtime (`server.js` → dotenv); el nombre `.env.production` no tiene significado automático — es la fuente de valores que se inyecta vía `env_file` (manual) o vía el panel Environment de Dokploy.
+
 ### 10.2 Configuración Dinámica de Frontend (`config.template.js` + `envsubst`)
 
 Durante el build de la imagen de Nginx, el archivo [`Dockerfile`](file:///home/mrchilaquiles/Documents/Chamba/WMS/Dockerfile) toma [`js/config.template.js`](file:///home/mrchilaquiles/Documents/Chamba/WMS/js/config.template.js) y mediante `envsubst` genera `js/config.js` inyectando la variable `BACKEND_URL`:
@@ -988,6 +1058,7 @@ window.APP_CONFIG = {
 | Variable | Requerida | Ejemplo / Default | Descripción |
 |---|:---:|---|---|
 | `NODE_ENV` | No | `production` | Entorno de ejecución (`production` activa validaciones estrictas y oculta endpoints `/validate` y `/diagnostic`) |
+| `ENV_FILE` | No | `backend/.env` | Archivo de variables que `docker-compose.yml` inyecta al backend vía `env_file` (usar `backend/.env.production` para deploys manuales con credenciales de producción) |
 | `PORT` | No | `3001` | Puerto HTTP del backend |
 | `JWT_SECRET` | **Sí** | `secret_hex_64_chars` | Clave simétrica para firma y verificación de tokens de sesión |
 | `SUPABASE_URL` | **Sí** | `https://xxxx.supabase.co` | Endpoint del proyecto Supabase |
