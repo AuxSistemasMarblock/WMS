@@ -4,12 +4,12 @@
  * Sigue los patrones de js/dashboard/app.js:
  *  - resolveBackendURL() + apiFetch() con Bearer y manejo de 401 -> logout.
  *  - helpers $, el, showToast, escapeHTML y render con template strings.
- *  - Guard de rol al DOMContentLoaded (jefe_almacen, gerente, admin).
+ *  - Guard de rol al DOMContentLoaded (jefe_almacen, lider, admin).
  *
  * Vistas:
  *  - jefe_almacen: "Errores de mi almacén" (sync + discrepancias -> crear caso)
  *                  y "Mis casos" (seguimiento, reenviar, retirar).
- *  - gerente/admin: "Por aprobar" y "Historial" (aprobar/rechazar + timeline).
+ *  - lider/admin: "Por aprobar" y "Historial" (aprobar/rechazar + timeline).
  *
  * API (T1/T2, ya mergeada): /api/casos/*
  */
@@ -148,7 +148,9 @@ const state = {
 };
 
 // =================== CONSTANTES ===================
-const ROLES_PERMITIDOS = ['jefe_almacen', 'gerente', 'admin'];
+// WMS 2.0 · R1: el lider audita/aprueba casos; el gerente queda fuera
+// (solo ve la Confronta de su ubicación).
+const ROLES_PERMITIDOS = ['jefe_almacen', 'lider', 'admin'];
 const MIN_OTRO = 15;
 const PAGE_SIZE = 10;
 
@@ -180,20 +182,20 @@ const EVENTOS_LABEL = {
 };
 
 // =================== ROL ===================
+// Clave exacta del rol (sin substrings ni fallback `cargo` — WMS 2.0 · R1)
+const CLAVES_ROL = ['admin', 'jefe_almacen', 'aux_almacen', 'gerente', 'lider', 'cliente'];
 function normalizarRol(raw) {
-  let rol = String(raw || '').toLowerCase().trim();
-  if (rol === 'administrador') rol = 'admin';
-  if (rol.includes('gerente')) rol = 'gerente';
-  if (rol.includes('jefe')) rol = 'jefe_almacen';
-  if (rol.includes('aux')) rol = 'aux_almacen';
-  return rol;
+  const rol = String(raw || '').toLowerCase().trim();
+  return CLAVES_ROL.includes(rol) ? rol : '';
 }
-function esGerenteOAdmin() { return state.rol === 'gerente' || state.rol === 'admin'; }
+// WMS 2.0 · R1: el 'lider' audita y aprueba casos (antes el gerente).
+function esLiderOAdmin() { return state.rol === 'lider' || state.rol === 'admin'; }
 function esAdmin() { return state.rol === 'admin'; }
 function getRoleLabel(rol) {
   const roles = {
     'aux_almacen': 'Aux. Almacén',
     'jefe_almacen': 'Jefe de Almacén',
+    'lider': 'Líder de Almacén',
     'gerente': 'Gerente',
     'cliente': 'Cliente',
     'admin': 'Administrador'
@@ -393,7 +395,7 @@ function aplicarRangoInstantaneo(prefix) {
 
 // =================== TABS ===================
 function tabsPorRol() {
-  if (esGerenteOAdmin()) {
+  if (esLiderOAdmin()) {
     return [
       { id: 'por-aprobar', label: 'Por aprobar', count: 'tabCountPend' },
       { id: 'historial', label: 'Historial', count: 'tabCountHist' }
@@ -1079,7 +1081,7 @@ function renderCasosTable(tbodyId, casos) {
   renderPaginacion('pagCaso', state.pagina.caso, casos.length, 'cambiarPaginaCaso');
 }
 
-// =================== SUCURSALES (filtro gerente/admin) ===================
+// =================== SUCURSALES (filtro lider/admin) ===================
 async function cargarSucursales() {
   if (state.sucursales.length) return state.sucursales;
   const data = await apiFetch('/api/dashboard/sucursales');
@@ -1240,7 +1242,7 @@ function renderDetalleCaso(data) {
 
   const solicitante = c.creador?.nombre_completo || c.creador?.email || (c.creado_por ? 'Usuario #' + c.creado_por : '—');
   const revisor = c.revisor?.nombre_completo || c.revisor?.email || (c.revisado_por ? 'Usuario #' + c.revisado_por : '—');
-  const puedeRevisar = esGerenteOAdmin() && c.estado === 'pendiente_aprobacion';
+  const puedeRevisar = esLiderOAdmin() && c.estado === 'pendiente_aprobacion';
   const esCreadorOAdmin = esAdmin() || (state.user && c.creado_por != null && String(c.creado_por) === String(state.user.id));
   const puedeRetirar = esCreadorOAdmin && c.estado === 'rechazado';
   const puedeReenviar = esCreadorOAdmin && c.estado === 'rechazado';
@@ -1492,7 +1494,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (!token) { window.location.href = 'index.html'; return; }
 
   const user = getCurrentUser();
-  const rol = normalizarRol(user?.rol || user?.cargo);
+  const rol = normalizarRol(user?.rol);
   if (!ROLES_PERMITIDOS.includes(rol)) { window.location.href = 'index.html'; return; }
 
   state.rol = rol;
@@ -1509,7 +1511,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const params = new URLSearchParams(window.location.search);
   const casoId = params.get('caso');
-  state.tab = casoId ? (esGerenteOAdmin() ? 'historial' : 'mis-casos') : (tabsPorRol()[0].id);
+  state.tab = casoId ? (esLiderOAdmin() ? 'historial' : 'mis-casos') : (tabsPorRol()[0].id);
 
   renderTabs();
   $('mainApp').style.display = 'flex';

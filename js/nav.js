@@ -21,13 +21,13 @@
     },
     {
       url: 'dashboard.html',
-      roles: ['gerente', 'admin'],
+      roles: ['gerente', 'lider', 'admin'],
       label: 'Confronta',
       icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>'
     },
     {
       url: 'casos.html',
-      roles: ['jefe_almacen', 'gerente', 'admin'],
+      roles: ['jefe_almacen', 'lider', 'admin'],
       label: 'Casos',
       icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12l2 2 4-4"/></svg>'
     }
@@ -44,12 +44,10 @@
 
     let user = null;
     try { user = JSON.parse(sessionStorage.getItem('currentUser') || 'null'); } catch (e) { user = null; }
-    const rawRol = (user && (user.rol || user.cargo || '')) || '';
-    let rol = rawRol.toLowerCase().trim();
-    if (rol === 'administrador') rol = 'admin';
-    if (rol.includes('jefe')) rol = 'jefe_almacen';
-    if (rol.includes('aux')) rol = 'aux_almacen';
-    if (rol.includes('gerente')) rol = 'gerente';
+    // Clave exacta del rol (sin substrings ni fallback `cargo` — WMS 2.0 · R1)
+    const CLAVES_ROL = ['admin', 'jefe_almacen', 'aux_almacen', 'gerente', 'lider', 'cliente'];
+    const rawRol = (user && (user.rol || '')) || '';
+    const rol = CLAVES_ROL.includes(rawRol.toLowerCase().trim()) ? rawRol.toLowerCase().trim() : '';
 
     if (!rol) { nav.innerHTML = ''; return; }
 
