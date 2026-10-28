@@ -42,6 +42,7 @@
    - 6.1 Catálogo de Endpoints
    - 6.2 Middlewares de Seguridad y Control de Acceso
    - 6.3 Especificación Detallada de Contratos (Request / Response)
+   - 6.4 Alta de Usuarios con Token de Administrador
 7. [Arquitectura de Servicios del Backend (`backend/services/`)](#7-arquitectura-de-servicios-del-backend)
    - 7.1 `confrontaService.js`
    - 7.2 `googleSheetsService.js`
@@ -775,6 +776,66 @@ WebUSB de Chrome/Edge en **Windows** solo expone dispositivos cuyo driver sea **
   "totalLotes": 1
 }
 ```
+
+### 6.4 Alta de Usuarios con Token de Administrador
+
+Para crear usuarios vía `POST /auth/register` se requiere el **JWT de una sesión con rol `admin`** (no existe endpoint público de registro). El token se obtiene con `POST /auth/login` y expira a las **24 horas** (`expiresIn: '24h'`).
+
+**Obtención del token desde la aplicación (flujo operativo)**:
+1. Iniciar sesión en la app con un usuario `admin`.
+2. Abrir DevTools → Console y ejecutar:
+   ```js
+   copy(sessionStorage.getItem('authToken'))
+   ```
+   El frontend persiste la sesión en `sessionStorage` bajo la llave `authToken` (ver [`js/auth.js`](file:///home/mrchilaquiles/Documents/Chamba/WMS/js/auth.js), líneas 56-57).
+
+**Catálogos requeridos** (no expuestos por la API; consultar en Supabase → Table Editor):
+
+| Campo | Tabla | Descripción |
+|---|---|---|
+| `ubicacion_id` | `ubicaciones` | ID de la sucursal asignada al usuario |
+| `rol` | `roles` | Clave del rol (`admin`, `jefe_almacen`, `aux_almacen`, `gerente`, …) |
+
+**Request**:
+```bash
+curl -X POST https://api.marblock.shop/auth/register \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <JWT_ADMIN>" \
+  -d '{
+    "email": "nuevo.usuario@marblock.com",
+    "password": "PasswordSeguro123!",
+    "nombre_completo": "Nombre Apellido",
+    "ubicacion_id": 5,
+    "rol": "aux_almacen"
+  }'
+```
+
+**Comportamiento**: el backend valida la ubicación y el rol, hashea la contraseña con bcrypt (cost 10) y resuelve `rol_id` desde la tabla `roles`; el campo `rol` acepta el fallback legacy `cargo`. En local, la URL base es `http://localhost:3001`.
+
+**Response 201 Created**:
+```json
+{
+  "message": "User created successfully",
+  "user": {
+    "id": 12,
+    "email": "nuevo.usuario@marblock.com",
+    "nombre_completo": "Nombre Apellido",
+    "cargo": "aux_almacen",
+    "rol_id": 3
+  }
+}
+```
+
+**Errores**:
+
+| Status | Error | Causa |
+|---|---|---|
+| 400 | `All fields are required` | Falta email/password/nombre_completo/ubicacion_id/rol |
+| 400 | `Invalid location ID` | `ubicacion_id` inexistente |
+| 400 | `Invalid role: <clave>` | Clave inexistente en la tabla `roles` |
+| 400 | `<mensaje de Supabase>` | Conflicto de inserción (ej. email duplicado) |
+| 401 | `No token provided` / `Invalid token` | Token ausente o expirado |
+| 403 | `Forbidden` | El token no pertenece a un usuario `admin` |
 
 ---
 
