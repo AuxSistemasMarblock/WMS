@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WMS · Usuarios</title>
+  <link rel="icon" href="images/logo_ico.png" type="image/png" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600;700&display=swap"
+    rel="stylesheet"
+  />
+  <!-- Meta tema y Anti-FOUC -->
+  <meta name="theme-color" content="#004a99" />
+  <script>try{var t=localStorage.getItem("wms-theme");document.documentElement.setAttribute("data-theme",t==="dark"||t===null&&matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")}catch(e){}</script>
+  <script src="js/theme.js?v=150"></script>
+
+  <link rel="stylesheet" href="css/variables.css?v=150" />
+  <link rel="stylesheet" href="css/styles.css?v=150" />
+  <link rel="stylesheet" href="css/dashboard.css?v=152" />
+</head>
+<body>
+
+<div id="toast" class="toast"></div>
+
+<div id="mainApp" style="display: none;">
+
+<header>
+  <div class="logo">
+    <img src="images/logo.png" alt="Logo Empresa" style="height:30px; width:auto; border-radius:6px; padding:2px;"/>
+  </div>
+  <nav class="app-nav" id="appNav"></nav>
+  <div class="header-right">
+    <div class="user-info">
+      <div class="user-details">
+        <div class="user-name" id="currentUserName">Usuario</div>
+        <div class="user-meta">
+          <span id="currentUserLocation">Ubicación</span> ·
+          <span id="currentUserRole">Rol</span>
+        </div>
+      </div>
+    </div>
+    <button class="theme-toggle" id="themeToggle" type="button" role="switch" aria-checked="false" aria-label="Cambiar entre modo claro y oscuro" title="Cambiar tema">
+      <span class="theme-toggle-thumb"></span>
+      <span class="theme-toggle-icon icon-sun" aria-hidden="true">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+      </span>
+      <span class="theme-toggle-icon icon-moon" aria-hidden="true">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </span>
+    </button>
+    <button class="btn btn-logout" onclick="handleLogout()" title="Cerrar sesión">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 13l4 4m0-4l-4 4M16 3v8"/></svg>
+      Logout
+    </button>
+  </div>
+</header>
+
+<main>
+  <!-- FILTROS (instantáneos — WMS 2.0 · U1) -->
+  <section class="filters-card">
+    <div class="filters-row">
+      <div class="filter-group">
+        <label for="filtroQ">Buscar</label>
+        <input type="text" id="filtroQ" class="filter-select" placeholder="Nombre o email..." onchange="aplicarFiltros()" />
+      </div>
+      <div class="filter-group">
+        <label for="filtroRol">Rol</label>
+        <select id="filtroRol" class="filter-select" onchange="aplicarFiltros()">
+          <option value="">Todos los roles</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label for="filtroActivo">Estado</label>
+        <select id="filtroActivo" class="filter-select" onchange="aplicarFiltros()">
+          <option value="">Todos</option>
+          <option value="true">Activos</option>
+          <option value="false">Inactivos</option>
+        </select>
+      </div>
+      <div class="filter-group filters-actions" style="margin-left:auto;">
+        <button class="btn btn-primary" type="button" onclick="abrirModalUsuario()">➕ Nuevo usuario</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- LISTADO -->
+  <section class="table-card">
+    <div class="table-header">
+      <div class="table-title">
+        👥 Usuarios
+        <span class="count-badge" id="countUsuarios">0</span>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 18%;">Nombre</th>
+            <th style="width: 19%;">Email</th>
+            <th style="width: 12%;">Rol</th>
+            <th style="width: 10%;">Ubicación</th>
+            <th style="width: 8%;">Estado</th>
+            <th style="width: 13%;">Último login</th>
+            <th style="width: 8%;">Seguridad</th>
+            <th style="width: 12%;">Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="tbodyUsuarios">
+          <tr><td colspan="8"><div class="empty-state">Cargando usuarios…</div></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="pagination" id="pagUsuarios"></div>
+  </section>
+</main>
+
+<footer class="app-footer" id="appFooter"></footer>
+</div>
+
+<!-- MODAL: alta / edición de usuario -->
+<div class="confirm-modal" id="modalUsuario">
+  <div class="confirm-card" style="max-width: 440px; text-align: left;">
+    <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+      <div style="font-size:24px;">👤</div>
+      <h3 class="confirm-title" style="margin:0;" id="modalUsuarioTitle">Nuevo usuario</h3>
+    </div>
+    <div class="form-group" style="margin-bottom:12px;">
+      <label for="uNombre" style="font-size:12px; font-weight:600;">Nombre completo <span style="color:var(--danger);">*</span></label>
+      <input type="text" id="uNombre" style="width:100%;" placeholder="Nombre Apellido" />
+    </div>
+    <div class="form-group" style="margin-bottom:12px;">
+      <label for="uEmail" style="font-size:12px; font-weight:600;">Email <span style="color:var(--danger);">*</span></label>
+      <input type="email" id="uEmail" style="width:100%;" placeholder="usuario@marblock.com" />
+    </div>
+    <div class="form-group" style="margin-bottom:12px;" id="grupoPassword">
+      <label for="uPassword" style="font-size:12px; font-weight:600;">Contraseña inicial <span style="color:var(--danger);">*</span></label>
+      <input type="password" id="uPassword" style="width:100%;" placeholder="Mínimo 8 caracteres" />
+    </div>
+    <div class="form-group" style="margin-bottom:12px;">
+      <label for="uRol" style="font-size:12px; font-weight:600;">Rol <span style="color:var(--danger);">*</span></label>
+      <select id="uRol" style="width:100%;"></select>
+    </div>
+    <div class="form-group" style="margin-bottom:12px;">
+      <label for="uUbicacion" style="font-size:12px; font-weight:600;">Ubicación <span style="color:var(--danger);">*</span></label>
+      <select id="uUbicacion" style="width:100%;"></select>
+    </div>
+    <div class="form-group" style="margin-bottom:12px;" id="grupoActivo">
+      <label style="font-size:12px; font-weight:600;">
+        <input type="checkbox" id="uActivo" checked style="width:auto; margin-right:6px;" /> Usuario activo
+      </label>
+    </div>
+    <div id="errorUsuario" class="confronta-pin-error" style="display:none; margin-bottom:12px; text-align:left;"></div>
+    <div class="confirm-actions" style="justify-content: flex-end; gap:8px;">
+      <button type="button" class="btn btn-ghost" onclick="cerrarModalUsuario()">Cancelar</button>
+      <button type="button" class="btn btn-primary" id="btnGuardarUsuario" onclick="guardarUsuario()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: reset de contraseña -->
+<div class="confirm-modal" id="modalPassword">
+  <div class="confirm-card" style="max-width: 380px; text-align: left;">
+    <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+      <div style="font-size:24px;">🔑</div>
+      <h3 class="confirm-title" style="margin:0;">Resetear contraseña</h3>
+    </div>
+    <p style="font-size:13px; color:var(--muted); margin-bottom:12px;">
+      Usuario: <strong id="pwUsuario">—</strong>
+    </p>
+    <div class="form-group" style="margin-bottom:12px;">
+      <label for="pwNueva" style="font-size:12px; font-weight:600;">Nueva contraseña (mínimo 8 caracteres)</label>
+      <input type="password" id="pwNueva" style="width:100%;" />
+    </div>
+    <div class="form-group" style="margin-bottom:12px;">
+      <label for="pwConfirmar" style="font-size:12px; font-weight:600;">Confirmar contraseña</label>
+      <input type="password" id="pwConfirmar" style="width:100%;" />
+    </div>
+    <div id="errorPassword" class="confronta-pin-error" style="display:none; margin-bottom:12px; text-align:left;"></div>
+    <div class="confirm-actions" style="justify-content: flex-end; gap:8px;">
+      <button type="button" class="btn btn-ghost" onclick="cerrarModalPassword()">Cancelar</button>
+      <button type="button" class="btn btn-primary" id="btnGuardarPassword" onclick="guardarPassword()">Resetear</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/config.js?v=150"></script>
+<script src="js/nav.js?v=153"></script>
+<script src="js/footer.js?v=150"></script>
+<script src="js/usuarios/app.js?v=150"></script>
+</body>
+</html>
