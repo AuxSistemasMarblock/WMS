@@ -78,6 +78,37 @@ async function getUserLocationName(req) {
   return ubicacion.nombre;
 }
 
+/**
+ * GET /api/etiquetas/ubicaciones
+ * Catálogo REAL de ubicaciones (tabla `ubicaciones`) para el filtro del módulo.
+ * WMS 2.0 · R3: antes el dropdown se derivaba de las filas cargadas. Admin y
+ * lider ven todas; el resto su alcance (misma regla que filterByAllowedLocations).
+ */
+const getUbicacionesHandler = async (req, res) => {
+  try {
+    const rol = String(req.user?.rol ?? '').toLowerCase().trim();
+    const esGlobal = rol === 'admin' || rol === 'lider';
+    const userLocationName = esGlobal ? null : await getUserLocationName(req);
+
+    const { data, error } = await supabase
+      .from('ubicaciones')
+      .select('id, nombre')
+      .order('nombre');
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    const nombres = (data || []).map(u => u.nombre).filter(Boolean);
+    const permitidas = esGlobal
+      ? nombres
+      : filterByAllowedLocations(nombres.map(n => ({ ubicacion: n })), userLocationName).map(r => r.ubicacion);
+
+    res.json({ ubicaciones: [...new Set(permitidas)].sort() });
+  } catch (e) {
+    console.error('getUbicaciones error:', e);
+    res.status(500).json({ error: e.message });
+  }
+};
+
 function isAdmin(req) {
   // Clave exacta del rol, sin fallback `cargo` (WMS 2.0 · R1)
   const rol = String(req.user?.rol ?? '').toLowerCase().trim();
@@ -388,6 +419,7 @@ const postZplBulkHandler = async (req, res) => {
 module.exports = {
   getExistencias: getExistenciasHandler,
   getLotes: getLotesHandler,
+  getUbicaciones: getUbicacionesHandler,
   postPedimento: postPedimentoHandler,
   postZpl: postZplHandler,
   getIRs: getIRsHandler,

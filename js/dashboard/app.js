@@ -354,7 +354,11 @@ async function cargarSucursales() {
       sel.appendChild(opt);
     });
 
-    if (state.sucursalUsuario && state.sucursales.some(s => s.nombre === state.sucursalUsuario)) {
+    if (isGlobal) {
+      // WMS 2.0 · R3: admin/lider aterrizan en "Todas las sucursales"
+      sel.value = '';
+      state.sucursal = null;
+    } else if (state.sucursalUsuario && state.sucursales.some(s => s.nombre === state.sucursalUsuario)) {
       sel.value = state.sucursalUsuario;
       state.sucursal = state.sucursalUsuario;
     } else {

@@ -394,10 +394,14 @@ function aplicarRangoInstantaneo(prefix) {
 }
 
 // =================== TABS ===================
+// WMS 2.0 · R3: admin/lider gestionan con 3 vistas — "Por crear" (errores sin
+// caso), "Creados" (casos con folio por aprobar) e "Historial" (todos los
+// estados, filtro default "Todos"). El jefe conserva sus vistas de siempre.
 function tabsPorRol() {
   if (esLiderOAdmin()) {
     return [
-      { id: 'por-aprobar', label: 'Por aprobar', count: 'tabCountPend' },
+      { id: 'por-crear', label: 'Por crear', count: null },
+      { id: 'creados', label: 'Creados', count: 'tabCountPend' },
       { id: 'historial', label: 'Historial', count: 'tabCountHist' }
     ];
   }
@@ -465,16 +469,13 @@ function cambiarPaginaRev(delta) {
 
 // =================== RENDER PRINCIPAL ===================
 function renderMain() {
-  if (state.tab === 'errores') {
+  if (state.tab === 'errores' || state.tab === 'por-crear') {
     renderErroresView();
     cargarDiscrepancias();
   } else if (state.tab === 'mis-casos') {
     renderMisCasosView();
     cargarCasosJefe();
-  } else if (state.tab === 'por-aprobar') {
-    renderRevisionView();
-    cargarCasosRevision();
-  } else if (state.tab === 'historial') {
+  } else if (state.tab === 'creados' || state.tab === 'historial') {
     renderRevisionView();
     cargarCasosRevision();
   }
@@ -1098,7 +1099,7 @@ function sucursalOptionsHTML(actual) {
 
 // =================== VISTA GERENTE / ADMIN ===================
 function renderRevisionView() {
-  const esPorAprobar = state.tab === 'por-aprobar';
+  const esPorAprobar = state.tab === 'creados';
   const f = state.filtros.rev;
   $('viewContent').innerHTML = `
     <section class="filters-card">
@@ -1125,7 +1126,7 @@ function renderRevisionView() {
     <section class="table-card">
       <div class="table-header">
         <div class="table-title">
-          ${esPorAprobar ? '⏳ Casos por aprobar' : '🗂️ Historial de casos'}
+          ${esPorAprobar ? '📂 Casos creados (por aprobar)' : '🗂️ Historial de casos'}
           <span class="count-badge" id="countRev">0</span>
         </div>
       </div>
@@ -1172,7 +1173,7 @@ async function cargarCasosRevision() {
   if (!tbody) return;
   const f = leerPeriodo('fRev');
   f.sucursal = ($('fRevSucursal') || {}).value || '';
-  f.estado = state.tab === 'por-aprobar'
+  f.estado = state.tab === 'creados'
     ? 'pendiente_aprobacion'
     : ((($('fHistEstado') || {}).value) || '');
 
@@ -1188,7 +1189,7 @@ async function cargarCasosRevision() {
     state.pagina.rev = 1;
     renderRevisionTable(state.casos);
     const count = $('countRev'); if (count) count.textContent = String(state.casos.length);
-    if (state.tab === 'por-aprobar') actualizarTabCount('tabCountPend', state.casos.length);
+    if (state.tab === 'creados') actualizarTabCount('tabCountPend', state.casos.length);
     else actualizarTabCount('tabCountHist', state.casos.length);
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state">Error: ${escapeHTML(e.message)}</div></td></tr>`;
@@ -1393,7 +1394,7 @@ async function enviarRevision() {
     showToast(mode === 'aprobar' ? 'Caso aprobado' : 'Caso rechazado', 'success');
     cerrarModal('revisionModal');
     await abrirDetalleCaso(c.id);
-    if (state.tab === 'por-aprobar') cargarCasosRevision();
+    if (state.tab === 'creados') cargarCasosRevision();
   } catch (e) {
     errEl.textContent = 'Error: ' + e.message;
   } finally {

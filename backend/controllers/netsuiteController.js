@@ -40,18 +40,29 @@ function formatIFRecord(ifRecord) {
 /**
  * Obtener IFs disponibles para la ubicación del usuario
  * Ejecuta búsqueda guardada en NetSuite (customsearch3434)
+ *
+ * WMS 2.0 · R3: admin y lider pueden consultar TODAS las ubicaciones o
+ * filtrar por una concreta vía ?ubicacion=<nombre> (selector del escáner).
+ * El resto de roles sigue acotado a su ubicación.
  */
 const getIFs = async (req, res) => {
   try {
     const userUbicacionId = req.user.ubicacion_id;
+    const rol = String(req.user.rol ?? '').toLowerCase().trim();
+    const esGlobal = rol === 'admin' || rol === 'lider';
+    const ubicacionFiltro = req.query.ubicacion ? String(req.query.ubicacion) : '';
 
-    const { data: ubicacion, error: ubError } = await supabase
-      .from('ubicaciones')
-      .select('id, nombre')
-      .eq('id', userUbicacionId)
-      .single();
+    let nombreUbicacion = null;
+    if (userUbicacionId) {
+      const { data: ubicacion } = await supabase
+        .from('ubicaciones')
+        .select('id, nombre')
+        .eq('id', userUbicacionId)
+        .single();
+      nombreUbicacion = ubicacion?.nombre || null;
+    }
 
-    if (ubError || !ubicacion) {
+    if (!esGlobal && !nombreUbicacion) {
       return res.status(404).json({ error: 'Ubicación no encontrada' });
     }
 
@@ -71,12 +82,20 @@ const getIFs = async (req, res) => {
     }
 
     const allIFs = searchResponse.data.data || [];
-    const filteredIFs = filterIFsByUserLocation(allIFs, ubicacion.nombre);
+    let filteredIFs;
+    if (esGlobal) {
+      // Sin selector o "Todas": todas las IFs; con ubicación elegida: su alcance
+      filteredIFs = ubicacionFiltro
+        ? filterIFsByUserLocation(allIFs, ubicacionFiltro)
+        : allIFs;
+    } else {
+      filteredIFs = filterIFsByUserLocation(allIFs, nombreUbicacion);
+    }
     const formattedIFs = filteredIFs.map(formatIFRecord);
 
     res.json({
       ifs: formattedIFs,
-      ubicacion: ubicacion.nombre,
+      ubicacion: ubicacionFiltro || nombreUbicacion || 'Todas',
       total: formattedIFs.length
     });
 

@@ -71,7 +71,7 @@ async function handleLogin(event) {
       return;
     }
     if (rol === 'jefe_almacen') {
-      window.location.href = 'index.html';
+      window.location.href = 'casos.html';
       return;
     }
 
@@ -179,6 +179,10 @@ function showMainView() {
   if (btnPin) {
     btnPin.style.display = esJefeOAdmin ? 'inline-flex' : 'none';
   }
+
+  // WMS 2.0 · R3: selector de ubicación del escáner (solo admin/lider)
+  if (typeof initUbicacionEscaneo === 'function') initUbicacionEscaneo();
+
   // La pistola se auto-arranca desde scanner.js (DOMContentLoaded)
 }
 

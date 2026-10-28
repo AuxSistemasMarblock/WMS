@@ -157,19 +157,26 @@ function switchModo(modo) {
 }
 
 // =================== CARGA DE DATOS ===================
+// WMS 2.0 · R3: el dropdown de ubicaciones viene del catálogo real
+// (GET /api/etiquetas/ubicaciones), no de las filas cargadas.
+async function loadUbicacionesCatalogo() {
+  try {
+    const data = await apiFetch('/api/etiquetas/ubicaciones');
+    state.ubicaciones = data.ubicaciones || [];
+    const sel = $('filtroUbicacion');
+    const actual = sel.value;
+    sel.innerHTML = '<option value="">Todas las ubicaciones</option>' +
+      state.ubicaciones.map(u => `<option value="${escapeHTML(u)}">${escapeHTML(u)}</option>`).join('');
+    if (actual && state.ubicaciones.includes(actual)) sel.value = actual;
+  } catch (e) {
+    console.warn('No se pudo cargar el catálogo de ubicaciones:', e.message);
+  }
+}
+
 async function loadExistencias() {
   try {
     const data = await apiFetch('/api/etiquetas/existencias');
     state.existencias = data.existencias || [];
-
-    const set = new Set();
-    state.existencias.forEach(e => { if (e.ubicacion) set.add(e.ubicacion); });
-    state.ubicaciones = Array.from(set).sort();
-
-    const sel = $('filtroUbicacion');
-    sel.innerHTML = '<option value="">Todas las ubicaciones</option>' +
-      state.ubicaciones.map(u => `<option value="${escapeHTML(u)}">${escapeHTML(u)}</option>`).join('');
-
     buscar();
     showToast(`Existencias cargadas (${state.existencias.length})`, 'success');
   } catch (e) {
@@ -846,5 +853,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (state.modo === 'stock') renderResultados();
   });
 
+  loadUbicacionesCatalogo();
   loadExistencias();
 });
