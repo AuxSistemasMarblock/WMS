@@ -98,10 +98,13 @@ function initSignaturePad() {
 }
 
 /**
- * Determinar firmas requeridas según cantidad de placas
+ * Determinar firmas requeridas según cantidad de placas.
+ * WMS 2.0 · U3: en Multi-IF los umbrales se agregan sobre el TOTAL del grupo.
  */
 function getRequiredSignatures() {
-  const placaCount = records.length;
+  const placaCount = (typeof esModoMulti === 'function' && esModoMulti())
+    ? (typeof getActiveRecords === 'function' ? getActiveRecords().length : 0)
+    : records.length;
 
   const required = {
     auxAlmacen: {
@@ -142,11 +145,18 @@ function getRequiredSignatures() {
 function askExitConfirmation(count, selectedIF) {
   return new Promise((resolve) => {
     document.getElementById('confirmPlacaCount').textContent = count;
-    const ifDisplay = selectedIF
-      ? (selectedIF.sourceDoc
-          ? `${selectedIF.tranid} (${selectedIF.sourceDoc})`
-          : selectedIF.tranid)
-      : '—';
+    let ifDisplay;
+    if (typeof esModoMulti === 'function' && esModoMulti()) {
+      // WMS 2.0 · U3: resumen del grupo en la confirmación
+      const tranids = typeof grupoTranids === 'function' ? grupoTranids() : [];
+      ifDisplay = `grupo: ${tranids.join(', ')} (${tranids.length} IFs)`;
+    } else {
+      ifDisplay = selectedIF
+        ? (selectedIF.sourceDoc
+            ? `${selectedIF.tranid} (${selectedIF.sourceDoc})`
+            : selectedIF.tranid)
+        : '—';
+    }
     document.getElementById('confirmIFText').textContent = ifDisplay;
     const modal = document.getElementById('confirmExitModal');
     const btnConfirm = document.getElementById('btnConfirmExit');
@@ -177,12 +187,21 @@ async function startSignatureCapture() {
     return;
   }
 
-  if (!selectedIF) {
+  // WMS 2.0 · U3: en Multi-IF no hay una única IF seleccionada; el grupo manda
+  const enMulti = typeof esModoMulti === 'function' && esModoMulti();
+  if (!enMulti && !selectedIF) {
     showToast('Selecciona una IF antes de completar el registro', 'error');
     return;
   }
+  if (enMulti && !(typeof multiState !== 'undefined' && multiState.grupo.length)) {
+    showToast('Selecciona al menos una IF del grupo', 'error');
+    return;
+  }
 
-  const confirmed = await askExitConfirmation(records.length, selectedIF);
+  const placas = enMulti
+    ? (typeof getActiveRecords === 'function' ? getActiveRecords().length : 0)
+    : records.length;
+  const confirmed = await askExitConfirmation(placas, selectedIF);
   if (!confirmed) return;
 
   // Asegurar que SignaturePad esté listo
@@ -300,6 +319,11 @@ async function submitSignature() {
  * Enviar todos los datos (escaneos + firmas) a NetSuite
  */
 async function submitWithSignatures() {
+  // WMS 2.0 · U3: envío del grupo IF por IF con resumen y reintentos
+  if (typeof esModoMulti === 'function' && esModoMulti()) {
+    return submitGrupoConSignatures();
+  }
+
   try {
     const success = await submitToNetSuite(collectedSignatures);
 
@@ -334,3 +358,128 @@ async function submitWithSignatures() {
 document.addEventListener('DOMContentLoaded', () => {
   setTimeout(initSignaturePad, 100);
 });
+
+// ────────────────────────────────────────────────────────────
+// WMS 2.0 · U3 · Multi-IF: envío del grupo con resumen por IF
+// ────────────────────────────────────────────────────────────
+
+// Firmas del grupo + fallidas pendientes de reintento individual
+let multiEnvioPendiente = { signatures: null, fallidas: [] };
+
+async function submitGrupoConSignatures() {
+  try {
+    multiEnvioPendiente = { signatures: collectedSignatures, fallidas: [] };
+    const resultado = await submitToNetSuiteMulti(collectedSignatures);
+    multiEnvioPendiente.fallidas = resultado.fallidas;
+
+    // Respaldo por placa (Google Sheets) — igual que el flujo simple
+    if (typeof exportJSON === 'function') {
+      await exportJSON();
+    }
+
+    // Las IFs enviadas con éxito salen de la tabla; las fallidas permanecen
+    for (const exitosa of resultado.exitosas) {
+      for (const r of (typeof getActiveRecords === 'function' ? getActiveRecords() : [])) {
+        if (r.ifTranid === exitosa.tranid) {
+          records[records.indexOf(r)] = null;
+        }
+      }
+    }
+
+    if (resultado.fallidas.length === 0) {
+      showToast(`✓ Grupo enviado: ${resultado.exitosas.length} IF(s) en NetSuite`, 'success');
+      limpiarTrasEnvioGrupo();
+      return;
+    }
+
+    showToast(`${resultado.exitosas.length} IF(s) enviadas · ${resultado.fallidas.length} fallaron`, 'warning');
+    if (typeof renderTableMulti === 'function') renderTableMulti();
+    mostrarResumenEnvioMulti(resultado);
+  } catch (error) {
+    console.error('Submit grupo error:', error);
+    showToast('Error al enviar el grupo: ' + error.message, 'error');
+  }
+}
+
+function limpiarTrasEnvioGrupo() {
+  records = [];
+  collectedSignatures = {};
+  signatureQueue = [];
+  currentSignatureType = null;
+  if (typeof updateLastScanPreview === 'function') updateLastScanPreview({});
+  if (typeof resetearMulti === 'function') resetearMulti();
+  if (typeof renderEmpty === 'function') renderEmpty();
+  const rowCount = document.getElementById('rowCount');
+  if (rowCount) rowCount.textContent = '0';
+  if (typeof clearIF === 'function') clearIF();
+}
+
+/**
+ * Modal de resumen por IF con reintento INDIVIDUAL de las fallidas.
+ */
+function mostrarResumenEnvioMulti(resultado) {
+  const modal = document.getElementById('multiSubmitModal');
+  const lista = document.getElementById('multiSubmitList');
+  if (!modal || !lista) return;
+
+  const filas = [];
+  for (const e of resultado.exitosas) {
+    filas.push(`<div class="multi-submit-row ok"><span>✅</span><strong>${esc(e.tranid)}</strong><span>${e.items} placa(s) enviadas</span></div>`);
+  }
+  resultado.fallidas.forEach((f, i) => {
+    filas.push(`
+      <div class="multi-submit-row fail" id="multiFailRow${i}">
+        <span>❌</span>
+        <strong>${esc(f.tranid)}</strong>
+        <span>${esc(f.message || 'Error al enviar')}</span>
+        <button class="btn btn-ghost" style="padding:4px 10px; font-size:12px;" onclick="reintentarIFMulti(${i})">Reintentar</button>
+      </div>`);
+  });
+  lista.innerHTML = filas.join('');
+  modal.classList.add('active');
+}
+
+function cerrarResumenEnvioMulti() {
+  const modal = document.getElementById('multiSubmitModal');
+  if (modal) modal.classList.remove('active');
+}
+
+/**
+ * Reintento individual de una IF fallida (conserva sus placas y firmas).
+ */
+async function reintentarIFMulti(idx) {
+  const fallida = multiEnvioPendiente.fallidas[idx];
+  if (!fallida) return;
+  const btn = document.querySelector(`#multiFailRow${idx} button`);
+  if (btn) { btn.disabled = true; btn.textContent = 'Enviando...'; }
+
+  try {
+    const resultado = await enviarUnaIF(fallida, multiEnvioPendiente.signatures);
+    if (resultado.ok) {
+      multiEnvioPendiente.fallidas = multiEnvioPendiente.fallidas.filter((_, i) => i !== idx);
+      // Quitar sus registros de la tabla
+      for (const r of (typeof getActiveRecords === 'function' ? getActiveRecords() : [])) {
+        if (r.ifTranid === fallida.tranid) records[records.indexOf(r)] = null;
+      }
+      showToast(`✓ ${fallida.tranid} enviada`, 'success');
+      if (multiEnvioPendiente.fallidas.length === 0) {
+        cerrarResumenEnvioMulti();
+        limpiarTrasEnvioGrupo();
+        return;
+      }
+      mostrarResumenEnvioMulti({ exitosas: [], fallidas: multiEnvioPendiente.fallidas });
+      if (typeof renderTableMulti === 'function') renderTableMulti();
+    } else {
+      if (btn) { btn.disabled = false; btn.textContent = 'Reintentar'; }
+      showToast(`⚠️ ${fallida.tranid}: ${resultado.message}`, 'error');
+    }
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Reintentar'; }
+    showToast('Error al reintentar: ' + e.message, 'error');
+  }
+}
+
+window.submitGrupoConSignatures = submitGrupoConSignatures;
+window.mostrarResumenEnvioMulti = mostrarResumenEnvioMulti;
+window.cerrarResumenEnvioMulti = cerrarResumenEnvioMulti;
+window.reintentarIFMulti = reintentarIFMulti;

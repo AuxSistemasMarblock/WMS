@@ -9,6 +9,9 @@ router.get('/diagnostic', devOnly, netsuiteController.diagnosticTest);
 // Obtener IFs disponibles (protegido)
 router.get('/ifs', verifyToken, netsuiteController.getIFs);
 
+// WMS 2.0 · U3: líneas esperadas de un grupo de IFs (matching Multi-IF)
+router.post('/ifs/lineas', verifyToken, netsuiteController.getIFsLineas);
+
 // Enviar datos y firmas (protegido)
 router.post('/submit', verifyToken, netsuiteController.submitData);
 
