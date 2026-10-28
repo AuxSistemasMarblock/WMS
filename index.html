@@ -124,6 +124,13 @@
 
       <!-- FOLIO BAR - Dinámico desde NetSuite -->
       <div class="folio-bar">
+        <!-- WMS 2.0 · R3: selector de ubicación para admin/lider (default Todas) -->
+        <div id="grupoUbicacionEscaneo" style="display:none; width:100%;">
+          <label for="filtroUbicacionEscaneo">Ubicación</label>
+          <select id="filtroUbicacionEscaneo" onchange="onCambiarUbicacionEscaneo()" style="width:100%;">
+            <option value="">Todas las ubicaciones</option>
+          </select>
+        </div>
         <label>Instrucción de Fabricación (IF)</label>
         <div class="folio-input-wrap">
           <select id="ifSelect" onchange="handleIFSelect(event)" style="width: 100%;">
@@ -393,8 +400,8 @@
   <script src="js/utils.js?v=8"></script>
   <script src="js/nav.js?v=152"></script>
   <script src="js/footer.js?v=8"></script>
-  <script src="js/auth.js?v=9"></script>
-  <script src="js/netsuite-client.js?v=7"></script>
+  <script src="js/auth.js?v=10"></script>
+  <script src="js/netsuite-client.js?v=8"></script>
   <script src="js/signatures.js?v=7"></script>
   <script src="js/qr-parser.js?v=7"></script>
   <script src="js/webhook.js?v=7"></script>

@@ -15,7 +15,9 @@ const { verifyToken, requireRole } = require('../middleware/auth');
 // gerente). El gerente queda fuera del gestor de casos (solo ve Confronta).
 const ROLES_LECTURA = ['jefe_almacen', 'lider', 'admin'];
 const ROLES_APROBAR = ['lider', 'admin'];
-const ROLES_CREAR = ['jefe_almacen', 'admin'];
+// WMS 2.0 · R3: el lider "gestiona los casos" — puede crearlos desde la vista
+// "Por crear" (además del jefe que detecta el error y el admin).
+const ROLES_CREAR = ['jefe_almacen', 'lider', 'admin'];
 const ROLES_JEFE_ADMIN = ['jefe_almacen', 'admin'];
 
 // Rutas literales primero (evitan que ':id' capture 'resumen'/'tipos-justificacion').

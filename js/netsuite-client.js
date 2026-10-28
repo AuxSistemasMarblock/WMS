@@ -15,8 +15,14 @@ async function loadIFs() {
   try {
     showToast('Cargando Instrucciones de Fabricación...', 'info');
 
+    // WMS 2.0 · R3: admin/lider pueden filtrar por ubicación desde el selector
+    const selUbicacion = document.getElementById('filtroUbicacionEscaneo');
+    const ubicacionParam = (selUbicacion && selUbicacion.value)
+      ? `&ubicacion=${encodeURIComponent(selUbicacion.value)}`
+      : '';
+
     const response = await authenticatedFetch(
-      `/netsuite/ifs?ubicacion_id=${currentUser.ubicacion.id}`
+      `/netsuite/ifs?ubicacion_id=${currentUser.ubicacion.id}${ubicacionParam}`
     );
 
     if (!response.ok) {
@@ -34,6 +40,57 @@ async function loadIFs() {
     console.error('Load IFs error:', error);
     showToast('Error al cargar IFs: ' + error.message, 'error');
   }
+}
+
+/**
+ * WMS 2.0 · R3: inicializa el selector de ubicación del escáner.
+ * Solo se muestra para admin y lider (default: Todas las ubicaciones).
+ */
+async function initUbicacionEscaneo() {
+  const grupo = document.getElementById('grupoUbicacionEscaneo');
+  const sel = document.getElementById('filtroUbicacionEscaneo');
+  if (!grupo || !sel) return;
+
+  const rol = String(currentUser?.rol || '').toLowerCase().trim();
+  if (rol !== 'admin' && rol !== 'lider') return;
+
+  try {
+    const response = await authenticatedFetch('/api/dashboard/sucursales');
+    if (!response.ok) throw new Error('No se pudieron cargar las ubicaciones');
+    const data = await response.json();
+    (data.sucursales || []).forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s.nombre;
+      opt.textContent = s.nombre;
+      sel.appendChild(opt);
+    });
+    grupo.style.display = 'block';
+  } catch (e) {
+    console.error('initUbicacionEscaneo error:', e);
+  }
+}
+
+/**
+ * WMS 2.0 · R3: al cambiar la ubicación se recargan las IFs (con confirmación
+ * si ya hay placas escaneadas para la IF actual).
+ */
+function onCambiarUbicacionEscaneo() {
+  const activeRecords = typeof getActiveRecords === 'function' ? getActiveRecords() : [];
+  if (activeRecords.length > 0) {
+    const ok = confirm(
+      `Tienes ${activeRecords.length} placa(s) escaneada(s)${selectedIF ? ' para ' + selectedIF.tranid : ''}.\n\n` +
+      `Si cambias de ubicación, esas placas NO se enviarán con la nueva selección. ¿Continuar?`
+    );
+    if (!ok) {
+      // Revertir al valor anterior no es trivial sin estado previo: se mantiene
+      // la selección y simplemente no se recarga.
+      return;
+    }
+  }
+  selectedIF = null;
+  const badge = document.getElementById('ifBadge');
+  if (badge) badge.style.display = 'none';
+  loadIFs();
 }
 
 /**
