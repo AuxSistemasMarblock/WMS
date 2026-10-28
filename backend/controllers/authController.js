@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const bcryptjs = require('bcryptjs');
 const supabase = require('../config/supabase');
+const auditService = require('../services/auditService');
 
 /**
  * Login: Autentica usuario con email y contraseña
@@ -21,16 +22,38 @@ const login = async (req, res) => {
       .single();
 
     if (queryError || !usuario) {
+      // WMS 2.0 · A1: bitácora de logins fallidos (IP + user-agent)
+      auditService.registrarDesdeReq(req, {
+        usuarioId: null,
+        emailIntento: email.toLowerCase(),
+        tipoEvento: auditService.TIPOS.LOGIN_FALLIDO,
+        accion: 'login',
+        detalle: { motivo: 'usuario_no_encontrado' }
+      });
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
     // Validar contraseña contra hash bcrypt
     const passwordMatch = await bcryptjs.compare(password, usuario.password_hash);
     if (!passwordMatch) {
+      auditService.registrarDesdeReq(req, {
+        usuarioId: usuario.id,
+        emailIntento: email.toLowerCase(),
+        tipoEvento: auditService.TIPOS.LOGIN_FALLIDO,
+        accion: 'login',
+        detalle: { motivo: 'password_incorrecto' }
+      });
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
     if (!usuario.activo) {
+      auditService.registrarDesdeReq(req, {
+        usuarioId: usuario.id,
+        emailIntento: email.toLowerCase(),
+        tipoEvento: auditService.TIPOS.LOGIN_FALLIDO,
+        accion: 'login',
+        detalle: { motivo: 'usuario_inactivo' }
+      });
       return res.status(403).json({ error: 'User is inactive' });
     }
 
@@ -45,8 +68,30 @@ const login = async (req, res) => {
     // legacy). Un usuario sin rol asignado no debe operar el sistema.
     const rolClave = usuario.roles?.clave || null;
     if (!rolClave) {
+      auditService.registrarDesdeReq(req, {
+        usuarioId: usuario.id,
+        emailIntento: email.toLowerCase(),
+        tipoEvento: auditService.TIPOS.LOGIN_FALLIDO,
+        accion: 'login',
+        detalle: { motivo: 'sin_rol_asignado' }
+      });
       return res.status(403).json({ error: 'User has no assigned role' });
     }
+
+    // WMS 2.0 · A1: bitácora de login exitoso + ultimo_login (fire-and-forget)
+    const ahora = new Date().toISOString();
+    supabase.from('usuarios').update({ ultimo_login: ahora }).eq('id', usuario.id)
+      .then(({ error: upErr }) => {
+        if (upErr) console.error('[audit] error actualizando ultimo_login:', upErr.message);
+      });
+    auditService.registrarDesdeReq(req, {
+      usuarioId: usuario.id,
+      tipoEvento: auditService.TIPOS.LOGIN_EXITOSO,
+      accion: 'login',
+      entidad: 'usuarios',
+      entidadId: usuario.id,
+      detalle: { rol: rolClave }
+    });
 
     // Generar JWT token
     const token = jwt.sign(
