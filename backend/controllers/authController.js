@@ -186,6 +186,16 @@ const register = async (req, res) => {
       return res.status(400).json({ error: insertError.message });
     }
 
+    // WMS 2.0 · A2: bitácora de cambios (alta de usuarios)
+    auditService.registrarDesdeReq(req, {
+      usuarioId: newUser.id,
+      tipoEvento: auditService.TIPOS.CAMBIO,
+      accion: 'usuario_creado',
+      entidad: 'usuarios',
+      entidadId: newUser.id,
+      detalle: { email: newUser.email, rol: rolClave, ubicacion_id }
+    });
+
     res.status(201).json({
       message: 'User created successfully',
       user: newUser
@@ -291,6 +301,15 @@ const setPin = async (req, res) => {
     if (updateError) {
       throw updateError;
     }
+
+    // WMS 2.0 · A2: bitácora de cambios (el PIN es una credencial de autorización)
+    auditService.registrarDesdeReq(req, {
+      usuarioId: userId,
+      tipoEvento: auditService.TIPOS.CAMBIO,
+      accion: 'pin_configurado',
+      entidad: 'usuarios',
+      entidadId: userId
+    });
 
     res.json({
       success: true,
