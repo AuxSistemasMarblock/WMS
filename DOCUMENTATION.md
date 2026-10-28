@@ -779,6 +779,8 @@ WebUSB de Chrome/Edge en **Windows** solo expone dispositivos cuyo driver sea **
 
 ### 6.4 Alta de Usuarios con Token de Administrador
 
+> **⚠️ Deprecado (WMS 2.0 · R2)**: el flujo manual con `curl` fue reemplazado por la sección **Usuarios** de la interfaz (solo rol admin), que ofrece alta, edición de nombre/rol/ubicación/estado y reset de contraseña. Los endpoints equivalen a `GET/POST /api/usuarios`, `PATCH /api/usuarios/:id` y `POST /api/usuarios/:id/password` (todos con `requireAdmin`). El registro vía `POST /auth/register` sigue funcionando como API, pero ya no es el camino operativo.
+
 Para crear usuarios vía `POST /auth/register` se requiere el **JWT de una sesión con rol `admin`** (no existe endpoint público de registro). El token se obtiene con `POST /auth/login` y expira a las **24 horas** (`expiresIn: '24h'`).
 
 **Obtención del token desde la aplicación (flujo operativo)**:
