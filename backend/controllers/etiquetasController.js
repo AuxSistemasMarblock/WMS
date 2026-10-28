@@ -79,7 +79,8 @@ async function getUserLocationName(req) {
 }
 
 function isAdmin(req) {
-  const rol = req.user.rol ?? req.user.cargo;
+  // Clave exacta del rol, sin fallback `cargo` (WMS 2.0 · R1)
+  const rol = String(req.user?.rol ?? '').toLowerCase().trim();
   return rol === 'admin';
 }
 

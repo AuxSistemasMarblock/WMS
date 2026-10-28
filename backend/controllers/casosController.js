@@ -13,7 +13,7 @@
  *  - jefe_almacen ve/opera solo su ubicación (por prefijo de sucursal, con el
  *    mismo criterio de tokens que filterIFsByUserLocation en netsuiteController)
  *    y respetando las ubicaciones compartidas.
- *  - gerente y admin ven todo.
+ *  - lider y admin ven todo.
  *
  * Todas las respuestas de error siguen el estilo del dashboard:
  * 400 validación, 401/403 los emite el middleware, 404 no encontrado, 500 error
@@ -47,36 +47,34 @@ function responderError(res, e) {
 }
 
 /**
- * Rol efectivo del usuario (normaliza igual que requireRole).
+ * Rol efectivo del usuario (clave exacta de roles; sin substrings ni fallback
+ * `cargo` legacy — WMS 2.0 · R1).
  */
 function rolDe(req) {
-  const rawRol = String(req.user?.rol ?? req.user?.cargo ?? '').toLowerCase().trim();
-  if (rawRol === 'administrador') return 'admin';
-  if (rawRol.includes('gerente')) return 'gerente';
-  if (rawRol.includes('jefe')) return 'jefe_almacen';
-  if (rawRol.includes('aux')) return 'aux_almacen';
-  return rawRol;
+  return String(req.user?.rol ?? '').toLowerCase().trim();
 }
 
 function esAdmin(req) {
   return rolDe(req) === 'admin';
 }
 
-function esGerenteOAdmin(req) {
+// WMS 2.0 · R1: el 'lider' audita y aprueba casos (antes el gerente).
+function esLiderOAdmin(req) {
   const rol = rolDe(req);
-  return rol === 'gerente' || rol === 'admin';
+  return rol === 'lider' || rol === 'admin';
 }
 
 /**
  * Indica si una fila (caso o discrepancia) es visible para el usuario.
- * - gerente/admin: todo.
+ * - lider/admin: todo.
  * - jefe: su ubicación/sucursal (incluido su outlet) o la whitelist compartida.
+ *   (el gerente ya no entra al gestor de casos: solo ve Confronta).
  *
  * Usa el helper compartido backend/services/locationScope.js (mismo criterio que
  * el escáner).
  */
 function esVisibleParaUsuario(req, sucursal, userLocationName) {
-  if (esGerenteOAdmin(req)) return true;
+  if (esLiderOAdmin(req)) return true;
   return esVisibleParaUbicacion(sucursal, userLocationName);
 }
 
@@ -156,7 +154,7 @@ const getDiscrepancias = async (req, res) => {
     let discrepancias = await casosService.listarDiscrepancias({ estado, tipo, sucursal, desde, hasta, if_tranid });
 
     // Scope de ubicación para jefe_almacen.
-    if (!esGerenteOAdmin(req)) {
+    if (!esLiderOAdmin(req)) {
       const ubicacionNombre = await ubicacionDelUsuario(req);
       if (!ubicacionNombre) {
         return res.status(403).json({ error: 'Ubicación no encontrada para el usuario' });
@@ -211,7 +209,7 @@ const postCaso = async (req, res) => {
 
     // Scope de ubicación (jefe limitado a su sucursal; admin puede todo).
     let ubicacionNombre = null;
-    if (!esGerenteOAdmin(req)) {
+    if (!esLiderOAdmin(req)) {
       ubicacionNombre = await ubicacionDelUsuario(req);
       if (!ubicacionNombre) {
         return res.status(403).json({ error: 'Ubicación no encontrada para el usuario' });
@@ -280,7 +278,7 @@ const getCasos = async (req, res) => {
 
     let casos = await casosService.listarCasos({ estado, sucursal, desde, hasta, if_tranid });
 
-    if (!esGerenteOAdmin(req)) {
+    if (!esLiderOAdmin(req)) {
       const ubicacionNombre = await ubicacionDelUsuario(req);
       if (!ubicacionNombre) {
         return res.status(403).json({ error: 'Ubicación no encontrada para el usuario' });
@@ -306,7 +304,7 @@ const getResumen = async (req, res) => {
   try {
     let casos = await casosService.resumenCasos();
 
-    if (!esGerenteOAdmin(req)) {
+    if (!esLiderOAdmin(req)) {
       const ubicacionNombre = await ubicacionDelUsuario(req);
       if (!ubicacionNombre) {
         return res.status(403).json({ error: 'Ubicación no encontrada para el usuario' });
@@ -338,8 +336,8 @@ const getCasoDetalle = async (req, res) => {
     const caso = await casosService.obtenerCaso(casoId);
     if (!caso) return res.status(404).json({ error: 'Caso no encontrado' });
 
-    // Scope: jefe solo su ubicación o creador; gerente/admin todo.
-    if (!esGerenteOAdmin(req)) {
+    // Scope: jefe solo su ubicación o creador; lider/admin todo.
+    if (!esLiderOAdmin(req)) {
       const ubicacionNombre = await ubicacionDelUsuario(req);
       const esCreador = caso.creado_por === req.user?.id;
       const visible = ubicacionNombre && esVisibleParaUsuario(req, caso.sucursal, ubicacionNombre);
@@ -494,7 +492,7 @@ const putReenviar = async (req, res) => {
 
       // Scope de ubicación del jefe (creador): validar las nuevas.
       let ubicacionNombre = null;
-      if (!esGerenteOAdmin(req)) {
+      if (!esLiderOAdmin(req)) {
         ubicacionNombre = await ubicacionDelUsuario(req);
       }
       if (ubicacionNombre) {
@@ -589,8 +587,8 @@ const postComentario = async (req, res) => {
     const caso = await cargarCaso(req, res, 'postComentario');
     if (!caso) return;
 
-    // Participantes: jefe dueño, gerente, admin.
-    if (!esGerenteOAdmin(req) && caso.creado_por !== req.user?.id) {
+    // Participantes: jefe dueño, lider, admin.
+    if (!esLiderOAdmin(req) && caso.creado_por !== req.user?.id) {
       return res.status(403).json({ error: 'Forbidden' });
     }
 

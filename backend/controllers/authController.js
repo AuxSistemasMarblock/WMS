@@ -41,6 +41,13 @@ const login = async (req, res) => {
       .eq('id', usuario.ubicacion_id)
       .single();
 
+    // WMS 2.0 · R1: el rol se toma SOLO de roles.clave (sin fallback `cargo`
+    // legacy). Un usuario sin rol asignado no debe operar el sistema.
+    const rolClave = usuario.roles?.clave || null;
+    if (!rolClave) {
+      return res.status(403).json({ error: 'User has no assigned role' });
+    }
+
     // Generar JWT token
     const token = jwt.sign(
       {
@@ -48,7 +55,7 @@ const login = async (req, res) => {
         email: usuario.email,
         nombre: usuario.nombre_completo,
         cargo: usuario.cargo,
-        rol: usuario.roles?.clave ?? usuario.cargo,
+        rol: rolClave,
         ubicacion_id: usuario.ubicacion_id
       },
       process.env.JWT_SECRET,
@@ -62,7 +69,7 @@ const login = async (req, res) => {
         nombre: usuario.nombre_completo,
         email: usuario.email,
         cargo: usuario.cargo,
-        rol: usuario.roles?.clave ?? usuario.cargo,
+        rol: rolClave,
         ubicacion: ubicacion || { id: usuario.ubicacion_id, nombre: 'Unknown' }
       }
     });
@@ -174,7 +181,7 @@ const getUser = async (req, res) => {
         nombre: usuario.nombre_completo,
         email: usuario.email,
         cargo: usuario.cargo,
-        rol: usuario.roles?.clave ?? usuario.cargo,
+        rol: usuario.roles?.clave || null,
         hasPin: Boolean(usuario.pin_hash),
         ubicacion: ubicacion || { id: usuario.ubicacion_id, nombre: 'Unknown' }
       }
@@ -216,10 +223,11 @@ const setPin = async (req, res) => {
       return res.status(404).json({ error: 'Usuario no encontrado' });
     }
 
-    const rol = (usuario.roles?.clave || usuario.cargo || '').toLowerCase();
-    const esJefeOAdmin = rol.includes('jefe') || rol === 'admin' || rol === 'gerente';
-    if (!esJefeOAdmin) {
-      return res.status(403).json({ error: 'Solo los Jefes de Almacén o Administradores pueden configurar un PIN' });
+    // WMS 2.0 · R1: el PIN lo configuran jefe_almacen, lider y admin.
+    const rol = String(usuario.roles?.clave ?? '').toLowerCase().trim();
+    const puedePin = rol === 'jefe_almacen' || rol === 'lider' || rol === 'admin';
+    if (!puedePin) {
+      return res.status(403).json({ error: 'Solo Jefes de Almacén, Líderes o Administradores pueden configurar un PIN' });
     }
 
     const passwordMatch = await bcryptjs.compare(password, usuario.password_hash);

@@ -60,10 +60,14 @@ async function handleLogin(event) {
     if (typeof window.renderAppNav === 'function') window.renderAppNav();
 
     showToast(`¡Bienvenido ${currentUser.nombre}!`, 'success');
-    // Redirigir por rol (clave) con fallback a cargo (legacy)
-    const rol = currentUser.rol || currentUser.cargo;
+    // Redirigir por rol (clave exacta — WMS 2.0 · R1)
+    const rol = (currentUser.rol || '').toLowerCase().trim();
     if (rol === 'admin' || rol === 'gerente') {
       window.location.href = 'dashboard.html';
+      return;
+    }
+    if (rol === 'lider') {
+      window.location.href = 'casos.html';
       return;
     }
     if (rol === 'jefe_almacen') {
@@ -120,10 +124,11 @@ function restoreSession() {
       authToken = token;
       currentUser = JSON.parse(userStr);
 
-      const rawRol = (currentUser.rol || currentUser.cargo || '').toLowerCase().trim();
-      const isGerente = rawRol === 'gerente' || rawRol.includes('gerente');
-      if (isGerente) {
-        window.location.href = 'dashboard.html';
+      const rawRol = (currentUser.rol || '').toLowerCase().trim();
+      // WMS 2.0 · R1: sin acceso al escáner — gerente va a Confronta y
+      // lider a Casos.
+      if (rawRol === 'gerente' || rawRol === 'lider') {
+        window.location.href = rawRol === 'gerente' ? 'dashboard.html' : 'casos.html';
         return;
       }
 
@@ -149,9 +154,15 @@ function showLoginView() {
  * Mostrar vista principal
  */
 function showMainView() {
-  const rawRol = (currentUser?.rol || currentUser?.cargo || '').toLowerCase().trim();
-  if (rawRol === 'gerente' || rawRol.includes('gerente')) {
+  const rawRol = (currentUser?.rol || '').toLowerCase().trim();
+  // Roles sin acceso al escáner (WMS 2.0 · R1): gerente solo ve Confronta y
+  // el lider aterriza en Casos.
+  if (rawRol === 'gerente') {
     window.location.href = 'dashboard.html';
+    return;
+  }
+  if (rawRol === 'lider') {
+    window.location.href = 'casos.html';
     return;
   }
 
@@ -159,9 +170,11 @@ function showMainView() {
   document.getElementById('mainApp').style.display = 'flex';
   document.getElementById('currentUserName').textContent = currentUser.nombre;
   document.getElementById('currentUserLocation').textContent = currentUser.ubicacion.nombre;
-  document.getElementById('currentUserRole').textContent = getRoleLabel(currentUser.cargo);
+  document.getElementById('currentUserRole').textContent = getRoleLabel(currentUser.rol);
 
-  const esJefeOAdmin = rawRol.includes('jefe') || rawRol === 'admin' || rawRol === 'gerente';
+  // El PIN de autorización lo configuran jefe y admin desde el escáner
+  // (el lider lo hace desde Dashboard/Casos — módulo js/pin.js).
+  const esJefeOAdmin = rawRol === 'jefe_almacen' || rawRol === 'admin';
   const btnPin = document.getElementById('btnConfigurarPin');
   if (btnPin) {
     btnPin.style.display = esJefeOAdmin ? 'inline-flex' : 'none';
@@ -176,6 +189,7 @@ function getRoleLabel(cargo) {
   const roles = {
     'aux_almacen': 'Aux. Almacén',
     'jefe_almacen': 'Jefe de Almacén',
+    'lider': 'Líder de Almacén',
     'gerente': 'Gerente',
     'cliente': 'Cliente',
     'admin': 'Administrador'

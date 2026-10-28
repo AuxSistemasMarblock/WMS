@@ -70,6 +70,7 @@ function getRoleLabel(rol) {
   const roles = {
     'aux_almacen': 'Aux. Almacén',
     'jefe_almacen': 'Jefe de Almacén',
+    'lider': 'Líder de Almacén',
     'gerente': 'Gerente',
     'cliente': 'Cliente',
     'admin': 'Administrador'
@@ -820,10 +821,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (!token) { window.location.href = 'index.html'; return; }
 
   const user = getCurrentUser();
-  const rawRol = (user?.rol || user?.cargo || '').toLowerCase().trim();
-  const rol = rawRol === 'administrador' ? 'admin' : (rawRol.includes('jefe') ? 'jefe_almacen' : (rawRol.includes('gerente') ? 'gerente' : rawRol));
+  // Clave exacta del rol (WMS 2.0 · R1)
+  const rol = (user?.rol || '').toLowerCase().trim();
   if (rol !== 'jefe_almacen' && rol !== 'admin') {
-    window.location.href = rol === 'gerente' ? 'dashboard.html' : 'index.html';
+    window.location.href = rol === 'gerente' ? 'dashboard.html' : (rol === 'lider' ? 'casos.html' : 'index.html');
     return;
   }
 
