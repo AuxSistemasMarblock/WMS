@@ -37,11 +37,17 @@ function escapeHTML(s) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 }
 
+// Formato de fecha/hora SIEMPRE en hora de Ciudad de México (America/Mexico_City).
+// Los valores llegan como ISO con zona (timestamptz); si vinieran "naive"
+// (sin zona) se interpretan como UTC, que es lo que realmente representan.
 function fmtFechaHora(v) {
   if (!v) return '—';
-  const d = new Date(v);
+  let s = String(v);
+  if (!/(Z|[+-]\d{2}:?\d{2})$/.test(s)) s += 'Z';
+  const d = new Date(s);
   if (isNaN(d.getTime())) return String(v);
   return d.toLocaleString('es-MX', {
+    timeZone: 'America/Mexico_City',
     day: '2-digit', month: '2-digit', year: 'numeric',
     hour: '2-digit', minute: '2-digit'
   });
