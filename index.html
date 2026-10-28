@@ -396,6 +396,63 @@
 
 </div><!-- cierre de mainApp -->
 
+<!-- MODAL 2FA: verificación en el login (WMS 2.0 · S2) -->
+<div class="confirm-modal" id="modal2FA">
+  <div class="confirm-card" style="max-width: 380px; text-align: left;">
+    <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+      <div style="font-size:24px;">🔐</div>
+      <h3 class="confirm-title" style="margin:0;">Verificación en dos pasos</h3>
+    </div>
+    <p style="font-size:13px; color:var(--muted); margin-bottom:16px;">
+      Ingresa el código de 6 dígitos de tu app autenticadora (o un código de respaldo).
+    </p>
+    <div class="form-group" style="margin-bottom:12px;">
+      <input type="text" id="codigo2FA" inputmode="numeric" maxlength="11" autocomplete="one-time-code"
+        placeholder="123456" style="width:100%; text-align:center; font-size:20px; letter-spacing:4px;" />
+    </div>
+    <div id="error2FA" class="confronta-pin-error" style="display:none; margin-bottom:12px; text-align:left;"></div>
+    <div class="confirm-actions" style="justify-content: flex-end; gap:8px;">
+      <button type="button" class="btn btn-ghost" onclick="cerrarModal2FA()">Cancelar</button>
+      <button type="button" class="btn btn-primary" id="btnVerificar2FA" onclick="enviarCodigo2FA()">Verificar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL 2FA: enrolamiento forzado del admin (WMS 2.0 · S2) -->
+<div class="confirm-modal" id="modal2FAEnroll">
+  <div class="confirm-card" style="max-width: 440px; text-align: left;">
+    <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+      <div style="font-size:24px;">📱</div>
+      <h3 class="confirm-title" style="margin:0;">Activa la verificación en dos pasos</h3>
+    </div>
+    <p style="font-size:13px; color:var(--muted); margin-bottom:12px;">
+      1) Escanea este QR con tu app autenticadora (Google Authenticator, Authy, etc.)<br>
+      2) Guarda tus <strong>códigos de respaldo</strong> en un lugar seguro<br>
+      3) Confirma el código de 6 dígitos para activar
+    </p>
+    <div id="qr2FA" style="display:flex; justify-content:center; margin:12px 0;"></div>
+    <div style="font-size:12px; color:var(--muted); margin-bottom:8px;">
+      Secreto (alta manual): <code id="secreto2FA" style="user-select:all; word-break:break-all;">—</code>
+    </div>
+    <div style="background:var(--gray-1); border:1px solid var(--border); border-radius:8px; padding:10px 12px; margin-bottom:12px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+        <strong style="font-size:12px;">Códigos de respaldo</strong>
+        <button type="button" class="btn btn-ghost" style="padding:4px 10px; font-size:12px;" onclick="copiarCodigosRespaldo()">Copiar</button>
+      </div>
+      <div id="codigosRespaldo2FA" style="font-family:'IBM Plex Mono',monospace; font-size:12px; line-height:1.8; user-select:all;"></div>
+    </div>
+    <div class="form-group" style="margin-bottom:12px;">
+      <label for="codigoEnroll2FA" style="font-size:12px; font-weight:600;">Código de confirmación (6 dígitos)</label>
+      <input type="text" id="codigoEnroll2FA" inputmode="numeric" maxlength="6" autocomplete="one-time-code"
+        placeholder="123456" style="width:100%; text-align:center; font-size:20px; letter-spacing:4px;" />
+    </div>
+    <div id="errorEnroll2FA" class="confronta-pin-error" style="display:none; margin-bottom:12px; text-align:left;"></div>
+    <div class="confirm-actions" style="justify-content: flex-end; gap:8px;">
+      <button type="button" class="btn btn-primary" id="btnConfirmarEnroll2FA" onclick="confirmarEnrolamiento2FA()">Activar 2FA e ingresar</button>
+    </div>
+  </div>
+</div>
+
 <!-- Configuración de la aplicación (inyectada en build) -->
 <script src="js/config.js?v=7"></script>
 
@@ -403,7 +460,8 @@
   <script src="js/utils.js?v=8"></script>
   <script src="js/nav.js?v=152"></script>
   <script src="js/footer.js?v=8"></script>
-  <script src="js/auth.js?v=11"></script>
+  <script src="js/auth.js?v=12"></script>
+  <script src="js/2fa.js?v=150"></script>
   <script src="js/netsuite-client.js?v=8"></script>
   <script src="js/signatures.js?v=7"></script>
   <script src="js/qr-parser.js?v=7"></script>

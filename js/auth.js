@@ -58,40 +58,53 @@ async function handleLogin(event) {
 
     const data = await response.json();
 
-    authToken = data.token;
-    currentUser = data.user;
-
-    sessionStorage.setItem('authToken', authToken);
-    sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
-
-    // Re-renderizar nav de módulos según rol
-    if (typeof window.renderAppNav === 'function') window.renderAppNav();
-
-    showToast(`¡Bienvenido ${currentUser.nombre}!`, 'success');
-    // Redirigir por rol (clave exacta — WMS 2.0 · R1)
-    const rol = (currentUser.rol || '').toLowerCase().trim();
-    if (rol === 'admin' || rol === 'gerente') {
-      window.location.href = 'dashboard.html';
+    // WMS 2.0 · S2: el admin pasa por 2FA (o enrolamiento forzado) antes de
+    // recibir la sesión definitiva.
+    if (data.requiere2FA) {
+      mostrarModal2FA(data.tempToken);
       return;
     }
-    if (rol === 'lider') {
-      window.location.href = 'casos.html';
-      return;
-    }
-    if (rol === 'jefe_almacen') {
-      window.location.href = 'casos.html';
+    if (data.requiereEnrolamiento2FA) {
+      mostrarModalEnrolamiento(data.tempToken);
       return;
     }
 
-
-    showMainView();
-
-    await loadIFs();
+    await completarLogin(data);
 
   } catch (error) {
     console.error('Login error:', error);
     showToast(error.message || 'Error en login', 'error');
   }
+}
+
+/**
+ * Completa el login con la sesión emitida por el backend (login directo,
+ * 2FA verificado o enrolamiento confirmado — WMS 2.0 · S2).
+ */
+async function completarLogin(data) {
+  authToken = data.token;
+  currentUser = data.user;
+
+  sessionStorage.setItem('authToken', authToken);
+  sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+
+  // Re-renderizar nav de módulos según rol
+  if (typeof window.renderAppNav === 'function') window.renderAppNav();
+
+  showToast(`¡Bienvenido ${currentUser.nombre}!`, 'success');
+  // Redirigir por rol (clave exacta — WMS 2.0 · R1/R3)
+  const rol = (currentUser.rol || '').toLowerCase().trim();
+  if (rol === 'admin' || rol === 'gerente') {
+    window.location.href = 'dashboard.html';
+    return;
+  }
+  if (rol === 'lider' || rol === 'jefe_almacen') {
+    window.location.href = 'casos.html';
+    return;
+  }
+
+  showMainView();
+  await loadIFs();
 }
 
 /**
