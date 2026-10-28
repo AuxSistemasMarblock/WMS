@@ -1032,6 +1032,15 @@ services:
       - wms-backend
 ```
 
+**Flujo de variables de entorno según cómo se despliegue**:
+
+| Compose | Uso | Cómo entran las variables |
+|---|---|---|
+| `docker-compose.yml` | Despliegue manual / VPS | `env_file: ${ENV_FILE:-backend/.env}` — por defecto carga `backend/.env` (desarrollo local). Para producción: `ENV_FILE=backend/.env.production` (más `BACKEND_URL=https://api.marblock.shop` como build arg) |
+| `docker-compose.dokploy.yml` | Producción (Dokploy + Traefik) | Cada variable se interpola `${VAR}` desde el panel **Environment** del proyecto en Dokploy (pegar el contenido de `backend/.env.production`, mismo formato dotenv). `NODE_ENV=production` y `BACKEND_URL` van fijos en el compose |
+
+> **Nota**: el backend solo lee `backend/.env` en runtime (`server.js` → dotenv); el nombre `.env.production` no tiene significado automático — es la fuente de valores que se inyecta vía `env_file` (manual) o vía el panel Environment de Dokploy.
+
 ### 10.2 Configuración Dinámica de Frontend (`config.template.js` + `envsubst`)
 
 Durante el build de la imagen de Nginx, el archivo [`Dockerfile`](file:///home/mrchilaquiles/Documents/Chamba/WMS/Dockerfile) toma [`js/config.template.js`](file:///home/mrchilaquiles/Documents/Chamba/WMS/js/config.template.js) y mediante `envsubst` genera `js/config.js` inyectando la variable `BACKEND_URL`:
@@ -1049,6 +1058,7 @@ window.APP_CONFIG = {
 | Variable | Requerida | Ejemplo / Default | Descripción |
 |---|:---:|---|---|
 | `NODE_ENV` | No | `production` | Entorno de ejecución (`production` activa validaciones estrictas y oculta endpoints `/validate` y `/diagnostic`) |
+| `ENV_FILE` | No | `backend/.env` | Archivo de variables que `docker-compose.yml` inyecta al backend vía `env_file` (usar `backend/.env.production` para deploys manuales con credenciales de producción) |
 | `PORT` | No | `3001` | Puerto HTTP del backend |
 | `JWT_SECRET` | **Sí** | `secret_hex_64_chars` | Clave simétrica para firma y verificación de tokens de sesión |
 | `SUPABASE_URL` | **Sí** | `https://xxxx.supabase.co` | Endpoint del proyecto Supabase |
