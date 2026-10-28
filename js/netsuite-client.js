@@ -214,3 +214,56 @@ const payload = {
     return false;
   }
 }
+
+/**
+ * WMS 2.0 · U3 · Multi-IF: envía el grupo IF por IF con las MISMAS firmas
+ * (cada IF recibe sus PNGs de firma). 200/207 cuentan como éxito.
+ * @returns {Object} { exitosas: [{tranid, items}], fallidas: [{tranid, internalId, items, message}] }
+ */
+async function submitToNetSuiteMulti(signatures) {
+  const registros = typeof getActiveRecords === 'function' ? getActiveRecords() : [];
+  const exitosas = [];
+  const fallidas = [];
+
+  showToast('Enviando grupo a NetSuite...', 'info');
+
+  for (const g of multiState.grupo) {
+    const items = registros.filter(r => r.ifTranid === g.tranid);
+    if (!items.length) continue;
+    const resultado = await enviarUnaIF({ tranid: g.tranid, internalId: g.internalId, items }, signatures);
+    if (resultado.ok) {
+      exitosas.push({ tranid: g.tranid, items: items.length, message: resultado.message });
+    } else {
+      fallidas.push({ tranid: g.tranid, internalId: g.internalId, items, message: resultado.message });
+    }
+  }
+
+  return { exitosas, fallidas };
+}
+
+/**
+ * Envío de UNA IF (reutilizado por el loop multi y por los reintentos).
+ */
+async function enviarUnaIF({ tranid, internalId, items }, signatures) {
+  try {
+    const payload = {
+      ifTranid: tranid,
+      ifInternalId: internalId,
+      ubicacion_id: currentUser.ubicacion.id,
+      items,
+      signatures
+    };
+    const response = await authenticatedFetch('/netsuite/submit', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+    const data = await response.json().catch(() => ({}));
+    if (response.ok || response.status === 207) {
+      return { ok: true, message: data.message || 'Enviada' };
+    }
+    return { ok: false, message: data.error || data.message || `HTTP ${response.status}` };
+  } catch (e) {
+    console.error(`Submit error (${tranid}):`, e);
+    return { ok: false, message: e.message };
+  }
+}

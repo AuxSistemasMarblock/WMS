@@ -11,6 +11,9 @@
 
 let ultimasDiscrepancias = [];
 
+// WMS 2.0 · U3: cola del flujo Multi-IF (IFs con discrepancias por autorizar)
+let multiFlujo = { cola: [], idx: 0, itemsPorIF: {}, resultados: [] };
+
 /**
  * Quita la clase de resalte de error a todas las filas
  */
@@ -23,9 +26,10 @@ function limpiarResaltadoErrores() {
 }
 
 /**
- * Resalta en rojo en la tabla las filas cuyo lote esté en la lista de discrepancias
+ * Resalta en rojo en la tabla las filas cuyo lote esté en la lista de discrepancias.
+ * En modo Multi-IF se puede acotar a las filas de una IF concreta (data-if).
  */
-function resaltarLotesConError(discrepancias) {
+function resaltarLotesConError(discrepancias, tranidScope) {
   if (!discrepancias || !discrepancias.length) return;
   const lotesErroneos = new Set(
     discrepancias
@@ -38,6 +42,7 @@ function resaltarLotesConError(discrepancias) {
 
   const rows = tableBody.querySelectorAll('tr');
   rows.forEach(tr => {
+    if (tranidScope && tr.dataset.if !== tranidScope) return;
     const loteTd = tr.querySelector('.td-lote');
     if (loteTd) {
       const loteTexto = loteTd.textContent.trim().toUpperCase();
@@ -50,8 +55,13 @@ function resaltarLotesConError(discrepancias) {
 
 /**
  * Valida confronta antes de abrir la captura de firmas
+ * (en modo Multi-IF valida IF por IF — WMS 2.0 · U3)
  */
 async function validarYCompletarEnvio() {
+  if (typeof esModoMulti === 'function' && esModoMulti()) {
+    return validarYCompletarEnvioMulti();
+  }
+
   const activeRecords = typeof getActiveRecords === 'function' ? getActiveRecords() : records.filter(r => r);
   if (!activeRecords || activeRecords.length === 0) {
     if (typeof showToast === 'function') {
@@ -133,6 +143,104 @@ async function validarYCompletarEnvio() {
 }
 
 /**
+ * WMS 2.0 · U3 · Multi-IF: valida la confronta IF por IF.
+ * Cada IF limpia avanza; las que tengan discrepancias entran a una cola que
+ * se resuelve con PIN por IF (autorización registra la IF que corresponde).
+ */
+async function validarYCompletarEnvioMulti() {
+  const activos = typeof getActiveRecords === 'function' ? getActiveRecords() : records.filter(r => r);
+  if (!activos || activos.length === 0) {
+    showToast('Escanea al menos una placa antes de completar el registro', 'error');
+    return;
+  }
+
+  const grupo = (typeof multiState !== 'undefined' ? multiState.grupo : []);
+  if (!grupo.length) {
+    showToast('Selecciona al menos una IF del grupo', 'error');
+    return;
+  }
+
+  const pendientes = activos.filter(r => !r.ifTranid);
+  if (pendientes.length > 0) {
+    showToast(`Hay ${pendientes.length} placa(s) pendientes de asignar a una IF`, 'error');
+    return;
+  }
+
+  limpiarResaltadoErrores();
+
+  const btn = document.getElementById('btnCompletar');
+  const originalHTML = btn ? btn.innerHTML : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `<span class="spinner-sm"></span> Validando confronta (${grupo.length} IFs)...`;
+  }
+
+  multiFlujo = { cola: [], idx: 0, itemsPorIF: {}, resultados: [] };
+
+  try {
+    for (const g of grupo) {
+      const items = activos.filter(r => r.ifTranid === g.tranid);
+      if (!items.length) {
+        multiFlujo.resultados.push({ tranid: g.tranid, estado: 'sin_placas' });
+        continue;
+      }
+      multiFlujo.itemsPorIF[g.tranid] = items;
+
+      showToast(`Validando confronta de ${g.tranid}...`, 'info');
+      const response = await authenticatedFetch('/netsuite/confronta-validar', {
+        method: 'POST',
+        body: JSON.stringify({
+          ifTranid: g.tranid,
+          ifInternalId: g.internalId,
+          items
+        })
+      });
+      const data = await response.json();
+
+      if (response.ok && data.ok) {
+        multiFlujo.resultados.push({ tranid: g.tranid, estado: 'ok' });
+      } else if (data.discrepancias && data.discrepancias.length > 0) {
+        multiFlujo.cola.push({ tranid: g.tranid, internalId: g.internalId, discrepancias: data.discrepancias });
+      } else {
+        // Error NetSuite (IF no encontrada, red): abortar el flujo
+        if (btn) { btn.innerHTML = originalHTML; btn.disabled = false; }
+        showToast('⚠️ ' + (data.message || data.error || `Error validando ${g.tranid}`), 'error');
+        return;
+      }
+    }
+
+    if (btn) { btn.innerHTML = originalHTML; btn.disabled = false; }
+
+    if (multiFlujo.cola.length === 0) {
+      showToast('✓ Confronta validada en todas las IFs', 'success');
+      if (typeof startSignatureCapture === 'function') {
+        await startSignatureCapture();
+      }
+      return;
+    }
+
+    // Mostrar el modal para la primera IF con discrepancias
+    multiFlujo.idx = 0;
+    mostrarSiguienteDiscrepanciaMulti();
+
+  } catch (error) {
+    console.error('Error al validar confronta multi:', error);
+    if (btn) { btn.innerHTML = originalHTML; btn.disabled = false; }
+    showToast('Error de conexión al validar confronta. Verifica tu red e intenta de nuevo.', 'error');
+  }
+}
+
+/**
+ * Abre (o repuebla) el modal de advertencia para la IF actual de la cola.
+ */
+function mostrarSiguienteDiscrepanciaMulti() {
+  const actual = multiFlujo.cola[multiFlujo.idx];
+  if (!actual) return;
+  ultimasDiscrepancias = actual.discrepancias;
+  mostrarModalAdvertenciaConfronta(actual.discrepancias, actual.tranid);
+}
+
+/**
  * Traduce el tipo de discrepancia a un texto legible para el auxiliar y jefe
  */
 function formatoTextoDiscrepancia(d) {
@@ -151,15 +259,20 @@ function formatoTextoDiscrepancia(d) {
 }
 
 /**
- * Abre el modal de advertencia mostrando el detalle de cada lote erróneo
+ * Abre el modal de advertencia mostrando el detalle de cada lote erróneo.
+ * En Multi-IF recibe el tranid de la IF actual de la cola (WMS 2.0 · U3).
  */
-function mostrarModalAdvertenciaConfronta(discrepancias) {
+function mostrarModalAdvertenciaConfronta(discrepancias, tranidOverride) {
   const modal = document.getElementById('confrontaWarningModal');
   if (!modal) return;
 
   const ifText = document.getElementById('confrontaWarnIF');
   if (ifText) {
-    ifText.textContent = selectedIF ? selectedIF.tranid : '—';
+    const tranid = tranidOverride || (selectedIF ? selectedIF.tranid : '—');
+    const enMulti = tranidOverride && multiFlujo.cola.length > 1;
+    ifText.textContent = enMulti
+      ? `${tranid} (IF ${multiFlujo.idx + 1} de ${multiFlujo.cola.length})`
+      : tranid;
   }
 
   const listContainer = document.getElementById('confrontaList');
@@ -208,10 +321,13 @@ function cerrarConfrontaModal() {
 /**
  * Opción 1: Cancelar
  * Cierra modal y resalta las filas erróneas en rojo
+ * (en Multi-IF solo las filas de la IF actual — WMS 2.0 · U3)
  */
 function cancelarConfrontaModal() {
+  const enMulti = typeof esModoMulti === 'function' && esModoMulti() && multiFlujo.cola.length > 0;
+  const tranidScope = enMulti ? multiFlujo.cola[multiFlujo.idx]?.tranid : undefined;
   cerrarConfrontaModal();
-  resaltarLotesConError(ultimasDiscrepancias);
+  resaltarLotesConError(ultimasDiscrepancias, tranidScope);
   if (typeof showToast === 'function') {
     showToast('Placas con error resaltadas en rojo. Corrige o elimina antes de reintentar.', 'warning');
   }
@@ -278,14 +394,21 @@ async function validarPinJefe() {
   try {
     const activeRecords = typeof getActiveRecords === 'function' ? getActiveRecords() : records.filter(r => r);
 
+    // WMS 2.0 · U3: en Multi-IF el PIN autoriza la IF ACTUAL de la cola
+    const enMulti = typeof esModoMulti === 'function' && esModoMulti() && multiFlujo.cola.length > 0;
+    const actual = enMulti ? multiFlujo.cola[multiFlujo.idx] : null;
+    const ifTranid = enMulti ? actual.tranid : selectedIF.tranid;
+    const items = enMulti ? multiFlujo.itemsPorIF[actual.tranid] : activeRecords;
+    const discrepancias = enMulti ? actual.discrepancias : ultimasDiscrepancias;
+
     const response = await authenticatedFetch('/netsuite/confronta-autorizar-pin', {
       method: 'POST',
       skipAutoLogout: true,
       body: JSON.stringify({
         pin: pin,
-        ifTranid: selectedIF.tranid,
-        items: activeRecords,
-        discrepancias: ultimasDiscrepancias
+        ifTranid,
+        items,
+        discrepancias
       })
     });
 
@@ -297,10 +420,29 @@ async function validarPinJefe() {
     }
 
     if (response.ok && data.success) {
-      cerrarConfrontaModal();
       if (typeof showToast === 'function') {
-        showToast(`✓ Autorizado por ${data.authorizedBy}`, 'success');
+        showToast(`✓ ${ifTranid} autorizado por ${data.authorizedBy}`, 'success');
       }
+
+      if (enMulti) {
+        // Avanzar a la siguiente IF con discrepancias de la cola
+        multiFlujo.idx++;
+        const siguiente = multiFlujo.cola[multiFlujo.idx];
+        if (siguiente) {
+          mostrarSiguienteDiscrepanciaMulti();
+          volverAAccionesConfronta();
+          if (typeof clearScanBuffer === 'function') clearScanBuffer();
+        } else {
+          cerrarConfrontaModal();
+          // Todas las IFs del grupo resueltas (ok o autorizadas) → firmas
+          if (typeof startSignatureCapture === 'function') {
+            await startSignatureCapture();
+          }
+        }
+        return;
+      }
+
+      cerrarConfrontaModal();
       // Pasar a captura de firmas
       if (typeof startSignatureCapture === 'function') {
         await startSignatureCapture();

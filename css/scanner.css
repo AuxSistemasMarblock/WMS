@@ -170,3 +170,163 @@
     overflow-y: auto;
   }
 }
+
+/* ─────────────────────────────────────────────
+   MODO MULTI-IF (WMS 2.0 · U3)
+   ───────────────────────────────────────────── */
+
+.multi-if-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.multi-if-row label {
+  font-size: 0.78rem;
+  color: var(--muted);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+#btnMultiIF {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  font-size: 0.72rem;
+}
+
+.multi-if-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+  max-height: 180px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px;
+}
+
+.multi-if-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.82rem;
+}
+
+.multi-if-item:hover {
+  background: var(--row-hover);
+}
+
+.multi-if-item input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent2);
+}
+
+.multi-if-tranid {
+  font-family: 'IBM Plex Mono', monospace;
+  font-weight: 700;
+  color: var(--accent2);
+  min-width: 80px;
+}
+
+.multi-if-meta {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+/* Tabla agrupada */
+.multi-group-row {
+  background: var(--gray-1);
+}
+
+.multi-group-row:hover {
+  background: var(--gray-1) !important;
+}
+
+.multi-group-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 2px 0;
+}
+
+.multi-group-loc {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.multi-group-count {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--accent2);
+}
+
+.multi-line-chips {
+  display: inline-flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.line-chip {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.66rem;
+  padding: 2px 7px;
+  border-radius: 10px;
+  background: var(--badge-warn-bg);
+  color: var(--badge-warn-text);
+  white-space: nowrap;
+}
+
+.line-chip.line-ok {
+  background: var(--badge-ok-bg);
+  color: var(--badge-ok-text);
+}
+
+.multi-pendientes-row {
+  background: rgba(255, 77, 106, 0.12);
+}
+
+.multi-move {
+  white-space: nowrap;
+}
+
+.multi-move-select {
+  max-width: 92px;
+  padding: 3px 4px;
+  font-size: 0.72rem;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  margin-right: 4px;
+}
+
+/* Resumen de envío multi */
+.multi-submit-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.85rem;
+}
+
+.multi-submit-row.ok {
+  background: var(--badge-ok-bg);
+  border-color: var(--badge-ok-text);
+}
+
+.multi-submit-row.fail {
+  background: var(--badge-error-bg);
+  border-color: var(--badge-error-text);
+}
