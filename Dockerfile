@@ -4,6 +4,7 @@ RUN apk add --no-cache gettext
 
 ARG BACKEND_URL
 ARG ENVIRONMENT=production
+ARG TURNSTILE_SITEKEY=
 
 # Validar que BACKEND_URL fue pasado como build arg
 # Sin esto, el ENV queda con string vacío y el frontend no funciona
