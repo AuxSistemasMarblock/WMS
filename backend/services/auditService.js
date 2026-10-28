@@ -28,30 +28,33 @@ function userAgentDe(req) {
 }
 
 /**
- * Registra un evento de auditoría.
+ * Registra un evento de auditoría en la tabla `audit_logs`.
+ * Mapea al esquema existente: accion, tabla, registro_id, cambios,
+ * ip_address, user_agent + las columnas nuevas tipo_evento/email_intento.
  *
  * @param {Object} ev
  * @param {number|null} ev.usuarioId    - Usuario afectado (null en login fallido)
  * @param {string|null} ev.emailIntento - Email intentado (login fallido)
  * @param {string} ev.tipoEvento        - Uno de TIPOS
  * @param {string} ev.accion            - Descripción corta (ej. 'login', 'caso_aprobado')
- * @param {string|null} ev.entidad      - Entidad afectada (ej. 'usuarios', 'casos', 'netsuite')
- * @param {string|null} ev.entidadId    - Id de la entidad (como texto)
- * @param {Object|null} ev.detalle      - Contexto libre (jsonb)
+ * @param {string|null} ev.entidad      - Tabla/entidad afectada (ej. 'usuarios', 'casos')
+ * @param {string|number|null} ev.entidadId - Id de la entidad (numérico; otros van en detalle)
+ * @param {Object|null} ev.detalle      - Contexto libre (jsonb `cambios`)
  * @param {string|null} ev.ip
  * @param {string|null} ev.userAgent
  */
 async function registrar(ev) {
   try {
+    const registroId = Number(ev.entidadId);
     const { error } = await supabase.from('audit_logs').insert({
       usuario_id: ev.usuarioId ?? null,
       email_intento: ev.emailIntento ?? null,
       tipo_evento: ev.tipoEvento,
       accion: ev.accion,
-      entidad: ev.entidad ?? null,
-      entidad_id: ev.entidadId != null ? String(ev.entidadId) : null,
-      detalle: ev.detalle ?? null,
-      ip: ev.ip ?? null,
+      tabla: ev.entidad || 'sistema',
+      registro_id: Number.isInteger(registroId) && registroId > 0 ? registroId : null,
+      cambios: ev.detalle ?? null,
+      ip_address: ev.ip ?? null,
       user_agent: ev.userAgent ?? null
     });
     if (error) {
