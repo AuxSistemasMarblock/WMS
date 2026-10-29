@@ -1,6 +1,6 @@
 /**
- * Rutas del proxy de webhook (n8n).
- * El frontend envía el escaneo aquí; el backend lo reenvía a n8n.
+ * Rutas del respaldo de escaneos.
+ * El frontend envía el escaneo aquí; el backend lo agrega a Google Sheets.
  */
 
 const express = require('express');

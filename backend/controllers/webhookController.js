@@ -1,36 +1,26 @@
 /**
- * Controller del proxy de webhook.
+ * Respaldo de escaneos en Google Sheets.
  *
- * El frontend ya no conoce la URL del webhook de n8n (evita exponerla en el
- * JS estático público). En su lugar, POSTea a /webhook/scan (protegido con
- * JWT) y este controller reenvía el payload al webhook real, cuya URL vive
- * solo en el backend (env N8N_WEBHOOK_URL).
+ * POST /webhook/scan recibe las placas de una salida (js/webhook.js) y las
+ * agrega a la hoja de escaneos con la Service Account. values.append es
+ * atómico: envíos simultáneos (ej. las IFs de un grupo Multi-IF) no se pisan.
  */
 
-const axios = require('axios');
-const config = require('../config/environments');
+const googleSheetsService = require('../services/googleSheetsService');
 
-/**
- * POST /webhook/scan
- * Reenvía el payload del escaneo a n8n tal cual llega (sin transformar).
- * Si n8n falla, responde con error para que el frontend use su fallback local.
- */
 const forwardScan = async (req, res) => {
+  const { ifTranid, items } = req.body || {};
+  if (!ifTranid || !Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ error: 'ifTranid e items (no vacío) son requeridos' });
+  }
+
   try {
-    const n8nUrl = config.n8n.webhookUrl;
-    if (!n8nUrl) {
-      return res.status(500).json({ error: 'N8N_WEBHOOK_URL not configured' });
-    }
-
-    const response = await axios.post(n8nUrl, req.body, {
-      timeout: 10000,
-      headers: { 'Content-Type': 'application/json' }
-    });
-
-    res.status(response.status).json(response.data || { success: true });
+    const filas = await googleSheetsService.appendEscaneos(req.body);
+    console.log(`[sheets] ${ifTranid}: ${filas} fila(s) agregadas`);
+    res.json({ success: true, filas });
   } catch (e) {
-    console.error('Webhook forward error:', e.message);
-    res.status(e.response?.status || 502).json({ error: 'Failed to forward to webhook' });
+    console.error(`[sheets] Error agregando ${ifTranid}:`, e.message);
+    res.status(502).json({ error: 'No se pudo registrar en Google Sheets' });
   }
 };
 
