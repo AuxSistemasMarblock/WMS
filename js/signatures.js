@@ -372,9 +372,9 @@ async function submitGrupoConSignatures() {
     const resultado = await submitToNetSuiteMulti(collectedSignatures);
     multiEnvioPendiente.fallidas = resultado.fallidas;
 
-    // Respaldo por placa (Google Sheets) — igual que el flujo simple
-    if (typeof exportJSON === 'function') {
-      await exportJSON();
+    // Respaldo por placa (Google Sheets), una IF a la vez: solo las enviadas
+    for (const exitosa of resultado.exitosas) {
+      await respaldarIFMulti(exitosa.tranid);
     }
 
     // Las IFs enviadas con éxito salen de la tabla; las fallidas permanecen
@@ -398,6 +398,15 @@ async function submitGrupoConSignatures() {
   } catch (error) {
     console.error('Submit grupo error:', error);
     showToast('Error al enviar el grupo: ' + error.message, 'error');
+  }
+}
+
+// Respaldo en Sheets de una IF del grupo ya enviada a NetSuite
+async function respaldarIFMulti(tranid) {
+  const IF = multiState.grupo.find(g => g.tranid === tranid);
+  const items = (typeof getActiveRecords === 'function' ? getActiveRecords() : []).filter(r => r.ifTranid === tranid);
+  if (IF && items.length && typeof respaldarIFEnSheets === 'function') {
+    await respaldarIFEnSheets(IF, items);
   }
 }
 
@@ -457,6 +466,7 @@ async function reintentarIFMulti(idx) {
     const resultado = await enviarUnaIF(fallida, multiEnvioPendiente.signatures);
     if (resultado.ok) {
       multiEnvioPendiente.fallidas = multiEnvioPendiente.fallidas.filter((_, i) => i !== idx);
+      await respaldarIFMulti(fallida.tranid);
       // Quitar sus registros de la tabla
       for (const r of (typeof getActiveRecords === 'function' ? getActiveRecords() : [])) {
         if (r.ifTranid === fallida.tranid) records[records.indexOf(r)] = null;
