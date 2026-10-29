@@ -1,7 +1,7 @@
 /**
  * Servicio de Google Sheets (Service Account)
  *
- * Lee y agrega los escaneos de placas en la hoja (antes los escribía n8n).
+ * Lee y agrega los escaneos de placas en la hoja.
  * Headers esperados (primera fila):
  *   Fecha | Ubicacion | Creado desde | IF | Responsable | SKU |
  *   Lote | Ubicacion lote | Hora de salida
@@ -282,7 +282,7 @@ async function getHeaders() {
 
 /**
  * Agrega los escaneos de una salida al final de la hoja, una fila por placa,
- * en el orden de los headers (mismo formato que dejaba n8n).
+ * en el orden de los headers.
  * values.append es atómico: envíos simultáneos no se pisan entre sí.
  *
  * @param {Object} payload - Body de POST /webhook/scan (js/webhook.js buildPayload)

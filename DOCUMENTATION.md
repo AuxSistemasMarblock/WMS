@@ -1144,7 +1144,7 @@ window.APP_CONFIG = {
 
 ### Historial de Versiones
 
-- **v1.0.0**: Prototipo inicial de escaneo por cámara y envío directo a webhook de n8n.
+- **v1.0.0**: Prototipo inicial de escaneo por cámara y envío de escaneos a Google Sheets.
 - **v2.0.0**: Implementación de pistola lectora HID USB como fuente primaria, captura de 4 firmas en canvas responsivo y subida directa a File Cabinet de NetSuite vía RESTlet 2860.
 - **v3.0.0 (Versión Actual)**:
   - **Módulo de Etiquetas Zebra**: Búsqueda de existencias, consulta de Recepciones IR, cruce de pedimento aduanal, motor geométrico ZPL II y driver WebUSB nativo.

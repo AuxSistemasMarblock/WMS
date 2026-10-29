@@ -2,9 +2,8 @@
  * Respaldo de escaneos en Google Sheets.
  *
  * POST /webhook/scan recibe las placas de una salida (js/webhook.js) y las
- * agrega a la hoja de escaneos con la Service Account. Antes se reenviaban a
- * n8n, que calculaba la fila libre leyendo la hoja: envíos simultáneos (ej. un
- * grupo Multi-IF) se escribían en la misma fila y solo quedaba el último.
+ * agrega a la hoja de escaneos con la Service Account. values.append es
+ * atómico: envíos simultáneos (ej. las IFs de un grupo Multi-IF) no se pisan.
  */
 
 const googleSheetsService = require('../services/googleSheetsService');
