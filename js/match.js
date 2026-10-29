@@ -85,8 +85,15 @@ function asignarPlacaMulti(registro, grupoIFs, registros) {
   if (candidatas.length === 0) {
     return { tranid: null, motivo: 'sin_candidatas' };
   }
+  // Una IF solo recibe la placa si aún le falta de esa línea: una placa de más
+  // va siempre a Pendientes, aunque el lote exista en una sola IF del grupo
+  const pendientes = pendientesPorLinea(grupoIFs, registros);
+  const conPendiente = g => (pendientes[g.tranid]?.[clave]?.pendiente || 0) > 0;
+
   if (candidatas.length === 1) {
-    return { tranid: candidatas[0].tranid, motivo: 'sku_lote' };
+    return conPendiente(candidatas[0])
+      ? { tranid: candidatas[0].tranid, motivo: 'sku_lote' }
+      : { tranid: null, motivo: 'sin_pendientes' };
   }
 
   // 2) Desempate por ubicación (exacta primero, contención después)
@@ -97,7 +104,9 @@ function asignarPlacaMulti(registro, grupoIFs, registros) {
     )
   );
   if (conUbicacionExacta.length === 1) {
-    return { tranid: conUbicacionExacta[0].tranid, motivo: 'ubicacion' };
+    return conPendiente(conUbicacionExacta[0])
+      ? { tranid: conUbicacionExacta[0].tranid, motivo: 'ubicacion' }
+      : { tranid: null, motivo: 'sin_pendientes' };
   }
   const conUbicacionCompatible = candidatas.filter(g =>
     (g.lineas || []).some(l =>
@@ -106,14 +115,14 @@ function asignarPlacaMulti(registro, grupoIFs, registros) {
     )
   );
   if (conUbicacionCompatible.length === 1) {
-    return { tranid: conUbicacionCompatible[0].tranid, motivo: 'ubicacion' };
+    return conPendiente(conUbicacionCompatible[0])
+      ? { tranid: conUbicacionCompatible[0].tranid, motivo: 'ubicacion' }
+      : { tranid: null, motivo: 'sin_pendientes' };
   }
 
   // 3) Auto-fill por cantidad pendiente, en orden de selección
-  const pendientes = pendientesPorLinea(grupoIFs, registros);
   for (const g of (conUbicacionCompatible.length ? conUbicacionCompatible : candidatas)) {
-    const estado = pendientes[g.tranid]?.[clave];
-    if (estado && estado.pendiente > 0) {
+    if (conPendiente(g)) {
       return { tranid: g.tranid, motivo: 'cantidad' };
     }
   }
