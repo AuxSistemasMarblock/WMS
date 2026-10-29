@@ -126,8 +126,10 @@
     padding: 12px 12px 0;
   }
 
+  /* minmax(0, 1fr): sin esto la columna crece al ancho de la tabla y en
+     celular la columna de acciones (✕ / mover de IF) queda fuera de pantalla */
   .scan-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     height: auto;
     gap: 12px;
   }
@@ -289,6 +291,11 @@
 .line-chip.line-ok {
   background: var(--badge-ok-bg);
   color: var(--badge-ok-text);
+}
+
+.line-chip.line-over {
+  background: var(--badge-error-bg);
+  color: var(--badge-error-text);
 }
 
 .multi-pendientes-row {
