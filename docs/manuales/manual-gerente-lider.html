@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Manual Gerente y Líder</title>
+<link rel="icon" href="img/logo.png">
+<link rel="stylesheet" href="marblock.css">
+</head>
+<body>
+
+<header class="portada">
+  <div class="portada-inner">
+    <img class="logo" src="img/logo.png" alt="Marblock">
+    <span class="etiqueta">Manual de usuario · WMS 2.0</span>
+    <h1>Gerente y Líder</h1>
+    <p>Tablero de Confronta (indicadores de exactitud de surtido) y, para el Líder, revisión y aprobación de casos de justificación.</p>
+    <div class="meta">Versión: octubre 2026 · Uso en computadora</div>
+  </div>
+</header>
+
+<main>
+
+<nav class="indice">
+  <strong>Contenido</strong>
+  <ol>
+    <li><a href="#roles">Qué puede hacer cada rol</a></li>
+    <li><a href="#confronta">Tablero de Confronta</a></li>
+    <li><a href="#kpis">Indicadores (KPIs) y qué significan</a></li>
+    <li><a href="#incidencias">Tabla de incidencias y detalle de IF</a></li>
+    <li><a href="#lider-casos">Líder: Gestor de Casos</a></li>
+    <li><a href="#lider-revisar">Líder: aprobar o rechazar un caso</a></li>
+    <li><a href="#lider-pin">Líder: PIN y firmas</a></li>
+    <li><a href="#errores">Mensajes y errores</a></li>
+    <li><a href="#glosario">Glosario</a></li>
+  </ol>
+</nav>
+
+<!-- ───────────────────────────── -->
+<h2 id="roles"><span class="num">1</span>Qué puede hacer cada rol</h2>
+<div class="tabla-wrap"><table>
+<tr><th></th><th>Gerente</th><th>Líder</th></tr>
+<tr><td>Pantalla al entrar</td><td>Confronta</td><td>Casos</td></tr>
+<tr><td>Confronta (tablero)</td><td>Solo <b>su sucursal</b>, solo lectura</td><td><b>Todas las sucursales</b></td></tr>
+<tr><td>Casos</td><td>—</td><td>Revisar, aprobar, rechazar, comentar y crear casos</td></tr>
+<tr><td>PIN de autorización</td><td>—</td><td>Sí, válido en cualquier sucursal</td></tr>
+<tr><td>Firma en salidas</td><td>Firma presencial en salidas de 11 o más placas</td><td>—</td></tr>
+</table></div>
+
+<!-- ───────────────────────────── -->
+<h2 id="confronta"><span class="num">2</span>Tablero de Confronta</h2>
+<p>La Confronta compara lo que <b>se escaneó</b> en cada salida contra lo que <b>pedía la IF</b> en NetSuite, y resume la exactitud del surtido.</p>
+<div class="par">
+  <figure><img src="img/ger/01-gerente-confronta.png" alt="Tablero de Confronta"><figcaption>Tablero del gerente (sucursal GDL fija).</figcaption></figure>
+</div>
+<h3>2.1 Filtros</h3>
+<ul>
+  <li><b>Período</b>: Hoy, Esta semana, Este mes, Mes pasado o Personalizado (rango de fechas).</li>
+  <li><b>Sucursal</b>: el gerente solo ve la suya; el líder puede elegir cualquiera o todas.</li>
+</ul>
+
+<div class="par">
+  <figure><img src="img/ger/18-lider-confronta-todas.png" alt="Confronta todas las sucursales"><figcaption>Vista del líder con todas las sucursales.</figcaption></figure>
+</div>
+<!-- ───────────────────────────── -->
+<h2 id="kpis" class="salto"><span class="num">3</span>Indicadores (KPIs) y qué significan</h2>
+<div class="tabla-wrap"><table>
+<tr><th>Indicador</th><th>Qué mide</th><th>Cómo leerlo</th></tr>
+<tr><td>🎯 Tasa exactitud (Perfect Order)</td><td>% de IFs surtidas sin ningún error.</td><td>“75% · 6 de 8” = 2 IFs tuvieron algún error. Meta: lo más cerca de 100%.</td></tr>
+<tr><td>📦 Volumen despachado</td><td>Placas escaneadas / placas esperadas.</td><td>Clic para ver la <b>conciliación</b> (desglose matemático por IF).</td></tr>
+<tr><td>📐 Desviación total (área)</td><td>m² de diferencia: sobrantes y faltantes.</td><td>Clic para ver su conciliación. Rojo = hay diferencia.</td></tr>
+<tr><td>🚨 Fugas / Canceladas ERP</td><td>IFs surtidas físicamente pero canceladas o no encontradas en NetSuite.</td><td>Material que salió sin respaldo en el ERP. Requiere atención inmediata.</td></tr>
+</table></div>
+<div class="par">
+  <figure><img src="img/ger/02-conciliacion-volumen.png" alt="Conciliación del volumen"><figcaption>Conciliación del volumen despachado.</figcaption></figure>
+</div>
+<h3>3.1 Gráficas</h3>
+<ul>
+  <li><b>Tasa de exactitud de surtido</b>: IFs OK (verde) contra IFs con error (rojo).</li>
+  <li><b>Top 5 artículos con más salidas</b>: SKUs con más placas despachadas en el período.</li>
+</ul>
+<h3>3.2 Diagnóstico rápido de errores</h3>
+<p>Cuatro tarjetas cuentan los errores por categoría. <b>Dar clic en una tarjeta filtra la tabla de incidencias</b>:</p>
+<ul>
+  <li>🖨️ <b>Medias placas (etiquetado)</b> – la IF pedía fracción y se escaneó placa completa.</li>
+  <li>🔀 <b>Lotes cruzados</b> – mismo material, lote distinto.</li>
+  <li>📦 <b>Placas de más (sobrantes)</b>.</li>
+  <li>🔻 <b>Faltantes / omitidas</b>.</li>
+</ul>
+
+<!-- ───────────────────────────── -->
+<h2 id="incidencias" class="salto"><span class="num">4</span>Tabla de incidencias y detalle de IF</h2>
+<p><b>IFs con discrepancias y alertas de surtido</b> lista cada IF con problemas: folio, fecha, SO, ubicación, número de incidencias, semáforo, causas y el botón <b>Ver detalle</b>.</p>
+<div class="tabla-wrap"><table>
+<tr><th>Semáforo</th><th>Significa</th></tr>
+<tr><td><span class="chip rojo">🚨 Alerta ERP</span></td><td>IF cancelada o inexistente en NetSuite (posible fuga).</td></tr>
+<tr><td><span class="chip ambar">🟡 Discrepancia Lote</span></td><td>Solo hubo lotes cruzados (material correcto, lote distinto).</td></tr>
+<tr><td><span class="chip rojo">🔴 Error Surtido</span></td><td>Faltantes, sobrantes, huérfanas, línea omitida u otros.</td></tr>
+</table></div>
+<p>En <b>Causas</b> también aparece el estado de la justificación:</p>
+<ul>
+  <li><span class="chip azul">Justificado · folio</span> – el caso fue aprobado por el líder.</li>
+  <li><span class="chip ambar">En revisión · folio</span> – el jefe ya lo justificó y espera aprobación.</li>
+  <li>Sin etiqueta – el jefe aún no lo justifica.</li>
+</ul>
+<p>Dar clic en la etiqueta con folio abre el caso en el Gestor de Casos (solo líder).</p>
+<p>El selector <b>Todas las incidencias</b> filtra por tipo, incluidos <b>🔵 Justificados</b> y <b>🟡 En revisión</b>.</p>
+<div class="par">
+  <figure><img src="img/ger/03-gerente-incidencias.png" alt="Tabla de incidencias"><figcaption>Incidencias del período.</figcaption></figure>
+  <figure><img src="img/ger/06-filtro-justificados.png" alt="Filtro de justificados"><figcaption>Filtro “Justificados”.</figcaption></figure>
+</div>
+<h3>4.1 Ver detalle</h3>
+<p>Muestra las líneas esperadas contra las escaneadas, las diferencias, quién surtió y autorizó, la justificación (si existe) y un <b>plan de acción</b> sugerido.</p>
+<p>Al final del tablero, <b>IFs bien sacadas</b> lista las salidas sin ningún error.</p>
+
+<div class="par">
+  <figure><img src="img/ger/04-detalle-if-error.png" alt="Detalle de IF con error"><figcaption>IF con error sin justificar.</figcaption></figure>
+  <figure><img src="img/ger/05-detalle-if-justificado.png" alt="Detalle IF justificada"><figcaption>IF con caso justificado.</figcaption></figure>
+</div>
+<!-- ───────────────────────────── -->
+<h2 id="lider-casos" class="salto"><span class="num">5</span>Líder: Gestor de Casos</h2>
+<p>El líder entra directo a <strong>Casos</strong>, que tiene tres pestañas:</p>
+<div class="tabla-wrap"><table>
+<tr><th>Pestaña</th><th>Contenido</th></tr>
+<tr><td>Por crear</td><td>Errores de todas las sucursales que aún no tienen caso. El líder también puede seleccionarlos y crear un caso (igual que el jefe).</td></tr>
+<tr><td>Creados</td><td>Casos <b>pendientes de aprobación</b>. Aquí está el trabajo diario del líder.</td></tr>
+<tr><td>Historial</td><td>Casos ya aprobados o rechazados.</td></tr>
+</table></div>
+
+<div class="par">
+  <figure><img src="img/ger/10-lider-por-crear.png" alt="Por crear"><figcaption>Pestaña “Por crear”.</figcaption></figure>
+  <figure><img src="img/ger/11-lider-creados.png" alt="Creados"><figcaption>Pestaña “Creados”: casos pendientes con botón Revisar.</figcaption></figure>
+</div>
+<!-- ───────────────────────────── -->
+<h2 id="lider-revisar"><span class="num">6</span>Líder: aprobar o rechazar un caso</h2>
+<ol class="pasos">
+  <li>En <b>Creados</b>, toca <strong>Revisar</strong>.</li>
+  <li>Lee el tipo de justificación, el texto, el solicitante y <b>cada error</b> del caso (IF, tipo, lote, esperadas/escaneadas).</li>
+  <li>Revisa la <b>Actividad del caso</b> (creación, reenvíos, comentarios). Si necesitas información, escribe un comentario y toca <strong>Comentar</strong>.</li>
+  <li>Decide: <strong>✅ Aprobar</strong> o <strong>⛔ Rechazar</strong>.</li>
+  <li>Opcionalmente agrega un comentario al aprobar; <b>al rechazar el comentario es obligatorio</b> (explica qué falta para que el jefe corrija).</li>
+  <li>Confirma. Verás “Caso aprobado” o “Caso rechazado”.</li>
+</ol>
+<div class="par">
+  <figure><img src="img/ger/12-lider-revisar-caso.png" alt="Revisar caso"><figcaption>Detalle del caso con errores y actividad.</figcaption></figure>
+  <figure><img src="img/ger/13-lider-revisar-acciones.png" alt="Acciones"><figcaption>Botones Aprobar / Rechazar.</figcaption></figure>
+  <figure><img src="img/ger/14-lider-rechazo-sin-comentario.png" alt="Rechazo sin comentario"><figcaption>Rechazo sin comentario: no se permite.</figcaption></figure>
+  <figure><img src="img/ger/15-lider-aprobar.png" alt="Aprobar"><figcaption>Aprobación con comentario opcional.</figcaption></figure>
+  <figure><img src="img/ger/16-lider-aprobado.png" alt="Caso aprobado"><figcaption>Caso aprobado: sale de “Creados”.</figcaption></figure>
+</div>
+<h3>6.1 Qué pasa después</h3>
+<ul>
+  <li><b>Aprobado</b>: los errores quedan <b>Justificados</b> y en la Confronta se ven con la etiqueta azul “Justificado · folio”.</li>
+  <li><b>Rechazado</b>: regresa al jefe con tu comentario; él puede editar y reenviar o retirar errores. Si reenvía, vuelve a aparecer en <b>Creados</b>.</li>
+</ul>
+<div class="tip"><strong>Criterio de revisión</strong>Aprueba solo si la justificación explica <b>todos</b> los errores del caso. Si alguno no corresponde, recházalo indicando cuál, para que el jefe lo retire y lo justifique por separado.</div>
+
+<div class="par">
+  <figure><img src="img/ger/17-lider-historial.png" alt="Historial"><figcaption>Historial de casos resueltos.</figcaption></figure>
+</div>
+<!-- ───────────────────────────── -->
+<h2 id="lider-pin"><span class="num">7</span>Líder: PIN y firmas</h2>
+<p>El líder tiene botón <strong>🔒 PIN</strong> en el encabezado y su PIN autoriza diferencias de confronta <b>en cualquier sucursal</b>. Para configurarlo: contraseña actual, nuevo PIN (4 a 6 números), confirmación y <b>Guardar PIN</b> (detalle en el Manual del Jefe de Almacén, sección 2).</p>
+<p><b>Gerente</b>: en salidas de <b>11 o más placas</b> (o grupos Multi-IF que sumen 11 o más) el escáner pide tu firma presencial en el celular del auxiliar, después de la del jefe de almacén.</p>
+
+<!-- ───────────────────────────── -->
+<h2 id="errores"><span class="num">8</span>Mensajes y errores</h2>
+<div class="tabla-wrap"><table>
+<tr><th>Mensaje</th><th>Significa / qué hacer</th></tr>
+<tr><td>✅ Sin incidencias ni alertas en este período</td><td>Todo se surtió bien en las fechas elegidas.</td></tr>
+<tr><td>El comentario es obligatorio para rechazar.</td><td>Escribe el motivo del rechazo.</td></tr>
+<tr><td>Escribe un comentario antes de enviarlo</td><td>Comentario vacío.</td></tr>
+<tr><td>Error cargando sucursales</td><td>Problema de conexión; recarga la página.</td></tr>
+<tr><td>Error: …</td><td>El servidor rechazó la acción (por ejemplo, el caso ya fue resuelto por otra persona). Recarga y revisa.</td></tr>
+<tr><td>Sesión expirada</td><td>La sesión dura 24 horas; vuelve a iniciar sesión.</td></tr>
+</table></div>
+
+<!-- ───────────────────────────── -->
+<h2 id="glosario"><span class="num">9</span>Glosario</h2>
+<dl class="glosario">
+  <dt>IF</dt><dd>Item Fulfillment de NetSuite: la orden de salida de placas.</dd>
+  <dt>Confronta</dt><dd>Comparación entre lo escaneado y lo esperado por la IF.</dd>
+  <dt>Perfect Order</dt><dd>IF surtida sin ningún error.</dd>
+  <dt>Fuga</dt><dd>Material que salió físicamente pero cuya IF está cancelada o no existe en NetSuite.</dd>
+  <dt>Lote cruzado</dt><dd>Mismo SKU entregado con un lote distinto al pedido.</dd>
+  <dt>Huérfana pura</dt><dd>Placa escaneada cuyo SKU/lote no estaba en la IF.</dd>
+  <dt>Línea omitida</dt><dd>Línea de la IF sin ninguna placa escaneada.</dd>
+  <dt>Caso</dt><dd>Agrupación de errores con una justificación, creada por el jefe y aprobada/rechazada por el líder.</dd>
+  <dt>Estados del caso</dt><dd>Pendiente de aprobación → Aprobado / Rechazado.</dd>
+  <dt>Estados del error</dt><dd>Abierta → En revisión → Justificada.</dd>
+  <dt>Multi-IF</dt><dd>Salida de varias IFs juntas con una sola ronda de firmas; los umbrales de firma se calculan con el total del grupo.</dd>
+</dl>
+
+</main>
+
+<footer class="pie"><img src="img/logo.png" alt="Marblock">Sistema WMS · Manual de Gerente y Líder · Uso interno</footer>
+</body>
+</html>

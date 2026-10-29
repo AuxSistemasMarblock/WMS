@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Manual Jefe de Almacén</title>
+<link rel="icon" href="img/logo.png">
+<link rel="stylesheet" href="marblock.css">
+</head>
+<body>
+
+<header class="portada">
+  <div class="portada-inner">
+    <img class="logo" src="img/logo.png" alt="Marblock">
+    <span class="etiqueta">Manual de usuario · WMS 2.0</span>
+    <h1>Jefe de Almacén</h1>
+    <p>Gestor de Casos (justificar errores de surtido), configuración y uso del PIN de autorización, impresión de etiquetas y supervisión del Escáner.</p>
+    <div class="meta">Versión: octubre 2026 · Uso en computadora</div>
+  </div>
+</header>
+
+<main>
+
+<nav class="indice">
+  <strong>Contenido</strong>
+  <ol>
+    <li><a href="#rol">Tu rol y tus módulos</a></li>
+    <li><a href="#pin">Tu PIN de autorización</a></li>
+    <li><a href="#casos">Gestor de Casos: errores de mi almacén</a></li>
+    <li><a href="#justificar">Justificar errores (crear un caso)</a></li>
+    <li><a href="#mis-casos">Mis casos: seguimiento, rechazos y reenvío</a></li>
+    <li><a href="#etiquetas">Etiquetas: imprimir en la Zebra</a></li>
+    <li><a href="#escaner">El Escáner y tus firmas</a></li>
+    <li><a href="#errores">Mensajes y errores</a></li>
+    <li><a href="#glosario">Glosario de tipos de error</a></li>
+  </ol>
+</nav>
+
+<!-- ───────────────────────────── -->
+<h2 id="rol"><span class="num">1</span>Tu rol y tus módulos</h2>
+<p>Como Jefe de Almacén eres responsable de las salidas de <strong>tu sucursal</strong>. Al iniciar sesión entras directo al <strong>Gestor de Casos</strong>. En el menú superior tienes:</p>
+<div class="tabla-wrap"><table>
+<tr><th>Módulo</th><th>Para qué lo usas</th></tr>
+<tr><td>Escáner</td><td>El mismo que usan los auxiliares para registrar salidas. Puedes hacer salidas tú mismo (ver el Manual del Auxiliar).</td></tr>
+<tr><td>Etiquetas</td><td>Imprimir etiquetas QR de placas desde el stock o desde una recepción (IR).</td></tr>
+<tr><td>Casos</td><td>Ver los errores de surtido de tu almacén, justificarlos en casos y dar seguimiento a su aprobación.</td></tr>
+<tr><td>🔒 PIN</td><td>Configurar o cambiar tu PIN de autorización.</td></tr>
+</table></div>
+<p>Responsabilidades clave:</p>
+<ul>
+  <li><b>Autorizar con tu PIN</b> las salidas con diferencias cuando sea correcto hacerlo.</li>
+  <li><b>Firmar</b> las salidas de más de 3 placas.</li>
+  <li><b>Justificar</b> cada error de surtido de tu almacén antes de que el líder lo revise.</li>
+</ul>
+
+<!-- ───────────────────────────── -->
+<h2 id="pin"><span class="num">2</span>Tu PIN de autorización</h2>
+<p>El PIN es una clave numérica <b>personal</b> de 4 a 6 dígitos. Lo usas cuando un auxiliar de tu sucursal encuentra diferencias en la confronta y toca <em>Solicitar autorización</em>: tú escribes el PIN en su celular y la salida continúa. Cada uso queda registrado con tu nombre.</p>
+<h3>2.1 Configurar o cambiar el PIN</h3>
+<ol class="pasos">
+  <li>Toca el botón <strong>🔒 PIN</strong> del encabezado.</li>
+  <li>Escribe tu <strong>contraseña actual</strong> del WMS (confirma que eres tú).</li>
+  <li>Escribe el <strong>nuevo PIN</strong> (solo números, 4 a 6) y repítelo en <strong>Confirmar PIN</strong>.</li>
+  <li>Toca <strong>Guardar PIN</strong>. Verás “✓ PIN configurado correctamente”.</li>
+</ol>
+<div class="alerta"><strong>Nunca compartas tu PIN</strong>Escríbelo tú mismo en el celular del auxiliar. Si crees que alguien lo conoce, cámbialo de inmediato. Toda salida autorizada con tu PIN genera errores que tú tendrás que justificar.</div>
+<div class="nota"><strong>¿Quién puede autorizar en tu sucursal?</strong>El jefe de almacén <b>de esa sucursal</b>, cualquier líder o un administrador. Un jefe de otra sucursal no puede autorizar tus salidas (verá “PIN incorrecto o no pertenece a un autorizador válido”).</div>
+
+<div class="par">
+  <figure><img src="img/jefe/12-pin-config-error.png" alt="Error al configurar PIN"><figcaption>Error de validación al configurar el PIN.</figcaption></figure>
+  <figure><img src="img/jefe/13-pin-config-ok.png" alt="PIN configurado"><figcaption>PIN guardado correctamente.</figcaption></figure>
+</div>
+<!-- ───────────────────────────── -->
+<h2 id="casos" class="salto"><span class="num">3</span>Gestor de Casos: errores de mi almacén</h2>
+<p>Cada vez que una salida se completa con diferencias (autorizadas con PIN) o una IF se cancela en NetSuite después de surtirse, se genera un <strong>error de surtido</strong>. La pestaña <strong>Errores de mi almacén</strong> muestra los <b>errores sin caso</b>: los que todavía no justificas.</p>
+<div class="par">
+  <figure><img src="img/jefe/01-casos-errores.png" alt="Errores de mi almacén"><figcaption>Errores sin caso de la sucursal (contador rojo) y botón “Justificar selección”.</figcaption></figure>
+</div>
+<h3>3.1 Filtros</h3>
+<ul>
+  <li><b>Período</b>: Hoy, Esta semana, Este mes, Mes pasado o Personalizado (elige fechas desde/hasta).</li>
+  <li><b>Tipo</b>: muestra solo un tipo de error (ver <a href="#glosario">glosario</a>).</li>
+</ul>
+<h3>3.2 Columnas</h3>
+<p><b>IF</b>, fecha, sucursal, <b>SKU</b>, <b>lote</b>, <b>tipo</b> de error y <b>Placas (esp / esc)</b>: cuántas pedía la IF contra cuántas se escanearon, con la diferencia (ej. <i>Dif. -1</i> = faltó una placa).</p>
+<h3>3.3 Ver detalle</h3>
+<p><strong>Ver detalle</strong> abre la auditoría del error: quién surtió, quién autorizó con PIN, las placas esperadas y escaneadas y el historial.</p>
+
+<div class="par">
+  <figure><img src="img/jefe/02-detalle-error.png" alt="Detalle del error"><figcaption>Auditoría y detalle de un error.</figcaption></figure>
+</div>
+<!-- ───────────────────────────── -->
+<h2 id="justificar"><span class="num">4</span>Justificar errores (crear un caso)</h2>
+<p>Un <strong>caso</strong> agrupa uno o varios errores con <b>una misma explicación</b>. El líder lo revisa y lo aprueba o rechaza.</p>
+<ol class="pasos">
+  <li>Marca la casilla de cada error que tenga la misma causa. El botón cambia a <strong>Justificar selección (N)</strong>.</li>
+  <li>Toca <strong>Justificar selección</strong>.</li>
+  <li>Elige el <strong>Tipo de justificación</strong>.</li>
+  <li>Escribe la <strong>justificación</strong>: qué pasó, por qué y qué se hizo. Sé concreto (folios, personas, fechas).</li>
+  <li>Toca <strong>Crear caso</strong>. Verás “Caso CASO-… creado y enviado a revisión”. Los errores salen de la lista de pendientes.</li>
+</ol>
+<div class="par">
+  <figure><img src="img/jefe/03-errores-seleccionados.png" alt="Errores seleccionados"><figcaption>Dos errores seleccionados.</figcaption></figure>
+  <figure><img src="img/jefe/04-justificar-modal.png" alt="Ventana de justificación"><figcaption>Ventana para justificar.</figcaption></figure>
+</div>
+<h3>4.1 Tipos de justificación</h3>
+<div class="tabla-wrap"><table>
+<tr><th>Tipo</th><th>Cuándo usarlo</th></tr>
+<tr><td>Error de captura en Sheets/escaneo</td><td>Se escaneó mal o se capturó mal el dato, pero el material salió correcto.</td></tr>
+<tr><td>IF cancelada o reabierta en NetSuite</td><td>La IF cambió en el ERP después de surtirse (típico de “Cancelada en ERP”).</td></tr>
+<tr><td>Material no localizado físicamente</td><td>La placa no se encontró en almacén (faltante real).</td></tr>
+<tr><td>Cambio de ubicación autorizado</td><td>El material salió de otra ubicación con autorización.</td></tr>
+<tr><td>Falla de escáner/red/sistema</td><td>La pistola, la red o el sistema fallaron durante el surtido.</td></tr>
+<tr><td>Ajuste de inventario en curso</td><td>Hay un ajuste pendiente que explica la diferencia.</td></tr>
+<tr><td>Otro</td><td>Ninguno de los anteriores. <b>Requiere mínimo 15 caracteres</b> de explicación.</td></tr>
+</table></div>
+
+<div class="par">
+  <figure><img src="img/jefe/05-justificar-error-otro.png" alt="Error tipo Otro"><figcaption>“Otro” con justificación demasiado corta.</figcaption></figure>
+  <figure><img src="img/jefe/06-caso-creado.png" alt="Caso creado"><figcaption>Caso creado y enviado a revisión.</figcaption></figure>
+</div>
+<!-- ───────────────────────────── -->
+<h2 id="mis-casos" class="salto"><span class="num">5</span>Mis casos: seguimiento, rechazos y reenvío</h2>
+<p>La pestaña <strong>Mis casos</strong> lista los casos que creaste con su folio, número de errores y estado:</p>
+<div class="tabla-wrap"><table>
+<tr><th>Estado del caso</th><th>Significa</th></tr>
+<tr><td><span class="chip ambar">Pendiente de aprobación</span></td><td>Esperando que el líder lo revise.</td></tr>
+<tr><td><span class="chip verde">Aprobado</span></td><td>El líder aceptó la justificación. Sus errores quedan como <b>Justificados</b>.</td></tr>
+<tr><td><span class="chip rojo">Rechazado</span></td><td>El líder no aceptó la justificación. Lee su comentario y corrige.</td></tr>
+</table></div>
+
+<div class="par">
+  <figure><img src="img/jefe/07-mis-casos.png" alt="Mis casos"><figcaption>Listado de casos propios.</figcaption></figure>
+</div>
+<h3>5.1 Caso rechazado</h3>
+<p>Abre el caso para ver el <b>comentario del líder</b>. Tienes dos acciones:</p>
+<ul>
+  <li><strong>Editar y reenviar</strong>: cambia el tipo y/o la justificación y vuelve a enviarlo a revisión (“Caso reenviado a revisión”).</li>
+  <li><strong>Retirar errores</strong>: selecciona errores que no corresponden al caso y sácalos; vuelven a <em>Errores de mi almacén</em> como <b>abiertos</b> para justificarlos en otro caso. Pide confirmación: “¿Retirar N error(es) del caso? Volverán a estado abierto.”</li>
+</ul>
+<p>También puedes escribir un <b>comentario</b> en el caso para responder al líder.</p>
+
+<div class="par">
+  <figure><img src="img/jefe/08-caso-rechazado.png" alt="Caso rechazado"><figcaption>Caso rechazado con comentario del líder.</figcaption></figure>
+  <figure><img src="img/jefe/09-caso-rechazado-acciones.png" alt="Acciones de caso rechazado"><figcaption>Acciones: Editar y reenviar / Retirar errores.</figcaption></figure>
+  <figure><img src="img/jefe/10-reenviar.png" alt="Reenviar"><figcaption>Editar la justificación antes de reenviar.</figcaption></figure>
+  <figure><img src="img/jefe/11-reenviado.png" alt="Reenviado"><figcaption>El caso vuelve a “Pendiente de aprobación”.</figcaption></figure>
+</div>
+<!-- ───────────────────────────── -->
+<h2 id="etiquetas" class="salto"><span class="num">6</span>Etiquetas: imprimir en la Zebra</h2>
+<p>Desde <strong>Etiquetas</strong> imprimes las etiquetas QR que después escanean los auxiliares. Hay dos orígenes: <b>Stock</b> (placas que ya están en almacén) y <b>Recepción IR</b> (placas que acaban de llegar).</p>
+
+<h3>6.1 Desde Stock</h3>
+<ol class="pasos">
+  <li>Escribe un SKU, lote o descripción en el buscador, elige ubicación si quieres y toca <strong>Buscar</strong>.</li>
+  <li>Toca <strong>+ Agregar</strong> en cada placa. Aparece en <b>Etiquetas seleccionadas</b> (derecha).</li>
+  <li>El sistema consulta el <b>pedimento</b> de cada placa: si hay uno, lo toma; si hay varios, elige el correcto en <b>Selecciona pedimento</b>; si no hay, se marca <b>Sin pedimento</b>.</li>
+  <li>Ajusta cuántas etiquetas quieres por placa y revisa el <b>Total a imprimir</b>.</li>
+  <li>Toca <strong>Imprimir a Zebra</strong>.</li>
+</ol>
+
+<div class="par">
+  <figure><img src="img/jefe/14-etiquetas-stock.png" alt="Stock disponible"><figcaption>Stock disponible con botón “+ Agregar”.</figcaption></figure>
+  <figure><img src="img/jefe/16-etiquetas-busqueda.png" alt="Búsqueda"><figcaption>Búsqueda por SKU.</figcaption></figure>
+  <figure><img src="img/jefe/15-etiquetas-carrito.png" alt="Carrito"><figcaption>Etiquetas seleccionadas con pedimento.</figcaption></figure>
+</div>
+<h3>6.2 Desde Recepción IR</h3>
+<ol class="pasos">
+  <li>Cambia a la pestaña <strong>Recepción IR</strong>. Busca por folio IR, embarque o pedimento.</li>
+  <li>Toca <strong>Ver / Imprimir</strong> en la recepción.</li>
+  <li>Marca las líneas a etiquetar y ajusta cantidades.</li>
+  <li>Toca <strong>Cargar al Carrito</strong> y después <strong>Imprimir N etiquetas</strong> / <strong>Imprimir a Zebra</strong>.</li>
+</ol>
+
+<div class="par">
+  <figure><img src="img/jefe/17-etiquetas-ir-lista.png" alt="Lista de IR"><figcaption>Recepciones disponibles.</figcaption></figure>
+  <figure><img src="img/jefe/18-etiquetas-ir-detalle.png" alt="Detalle IR"><figcaption>Líneas de la recepción.</figcaption></figure>
+  <figure><img src="img/jefe/19-etiquetas-ir-carrito.png" alt="Carrito IR"><figcaption>Líneas cargadas al carrito.</figcaption></figure>
+</div>
+<h3>6.3 Conectar la impresora Zebra</h3>
+<ol class="pasos">
+  <li>Conecta la Zebra por USB a la computadora y enciéndela.</li>
+  <li>Usa <b>Chrome o Edge</b> con la dirección segura (https).</li>
+  <li>Al tocar Imprimir aparece “Solicitando acceso al puerto USB…” y la ventana del navegador: elige la Zebra y toca <b>Conectar</b>.</li>
+</ol>
+<div class="nota"><strong>Si no imprime</strong>
+<b>No se seleccionó ninguna impresora</b>: cerraste la ventana sin elegir; vuelve a tocar Imprimir.<br>
+<b>Firefox o sin https</b>: el navegador no permite USB; se descarga un archivo <code>etiquetas.zpl</code> para enviarlo a la impresora por otro medio.<br>
+<b>Windows no ve la impresora</b>: hay que instalar una sola vez el controlador WinUSB con Zadig (pídelo a sistemas).</div>
+
+<div class="par">
+  <figure><img src="img/jefe/20-etiquetas-imprimir.png" alt="Imprimir"><figcaption>Impresión en curso.</figcaption></figure>
+</div>
+<!-- ───────────────────────────── -->
+<h2 id="escaner"><span class="num">7</span>El Escáner y tus firmas</h2>
+<p>El Escáner funciona igual que para el auxiliar (incluido el modo Multi-IF); consulta el <em>Manual del Auxiliar de Almacén</em> para el paso a paso.</p>
+<div class="tabla-wrap"><table>
+<tr><th>Situación</th><th>Lo que se espera de ti</th></tr>
+<tr><td>Salida de 4 o más placas</td><td>Firmar como Jefe de Almacén (y el gerente firma a partir de 11).</td></tr>
+<tr><td>Multi-IF</td><td>Las firmas son una sola ronda; el número se calcula con el <b>total del grupo</b>. Tu PIN autoriza una IF a la vez.</td></tr>
+<tr><td>Diferencias en confronta</td><td>Revisar físicamente antes de autorizar. Si autorizas, el error aparecerá en tus Casos.</td></tr>
+<tr><td>Envío fallido en Multi-IF</td><td>Que el auxiliar use <b>Reintentar</b> en el resumen; si persiste, reporta a sistemas con el folio de la IF.</td></tr>
+</table></div>
+
+<div class="par">
+  <figure><img src="img/jefe/21-escaner-jefe.png" alt="Escáner del jefe"><figcaption>Escáner en computadora: lector a la izquierda y registros a la derecha.</figcaption></figure>
+</div>
+<!-- ───────────────────────────── -->
+<h2 id="errores"><span class="num">8</span>Mensajes y errores</h2>
+<div class="tabla-wrap"><table>
+<tr><th>Mensaje</th><th>Significa / qué hacer</th></tr>
+<tr><td>Ingresa tu contraseña actual</td><td>Falta la contraseña al configurar el PIN.</td></tr>
+<tr><td>El PIN debe ser numérico de 4 a 6 dígitos</td><td>El PIN tiene letras o longitud incorrecta.</td></tr>
+<tr><td>Los PINs no coinciden</td><td>PIN y confirmación distintos.</td></tr>
+<tr><td>Sesión expirada: cierra sesión y vuelve a entrar</td><td>Tu sesión venció o la contraseña es incorrecta. Sal y vuelve a entrar.</td></tr>
+<tr><td>Error de conexión al configurar el PIN</td><td>Sin internet; reintenta.</td></tr>
+<tr><td>Selecciona al menos un error.</td><td>Marca errores antes de justificar.</td></tr>
+<tr><td>Selecciona un tipo de justificación.</td><td>Elige el tipo.</td></tr>
+<tr><td>La justificación es obligatoria.</td><td>Escribe la explicación.</td></tr>
+<tr><td>Para “Otro” la justificación debe tener al menos 15 caracteres.</td><td>Amplía la explicación.</td></tr>
+<tr><td>Selecciona al menos un error para retirar</td><td>Marca errores del caso antes de “Retirar errores”.</td></tr>
+<tr><td>Escribe un comentario antes de enviarlo</td><td>Comentario vacío.</td></tr>
+<tr><td>Error cargando tipos de justificación / sucursales</td><td>Problema de conexión; recarga la página.</td></tr>
+<tr><td>Error al consultar pedimento</td><td>No se pudo consultar NetSuite para esa placa; quítala y agrégala de nuevo.</td></tr>
+<tr><td>No se seleccionó ninguna impresora</td><td>Repite Imprimir y elige la Zebra.</td></tr>
+</table></div>
+
+<!-- ───────────────────────────── -->
+<h2 id="glosario"><span class="num">9</span>Glosario de tipos de error</h2>
+<dl class="glosario">
+  <dt>🔻 Faltante físico</dt><dd>Se escanearon menos placas de un lote de las que pedía la IF.</dd>
+  <dt>📦 Placas de más</dt><dd>Se escanearon más placas de un lote de las que pedía la IF.</dd>
+  <dt>📋 Línea omitida</dt><dd>Una línea de la IF no tuvo ninguna placa escaneada.</dd>
+  <dt>🔄 Huérfana pura</dt><dd>Se escaneó un SKU/lote que no está en la IF.</dd>
+  <dt>🔀 Lote cruzado</dt><dd>Mismo SKU, pero de un lote distinto al pedido.</dd>
+  <dt>🖨️ Media placa (etiquetado)</dt><dd>La IF pedía fracción de placa y se escaneó la etiqueta de placa completa.</dd>
+  <dt>📍 Ubicación</dt><dd>La placa salió de una ubicación distinta a la de la IF.</dd>
+  <dt>🚨 Cancelada en ERP</dt><dd>La IF se surtió pero después se canceló o desapareció en NetSuite (posible fuga).</dd>
+  <dt>Estados del error</dt><dd><b>Abierta</b> (sin caso) → <b>En revisión</b> (en un caso pendiente) → <b>Justificada</b> (caso aprobado).</dd>
+</dl>
+
+</main>
+
+<footer class="pie"><img src="img/logo.png" alt="Marblock">Sistema WMS · Manual del Jefe de Almacén · Uso interno</footer>
+</body>
+</html>

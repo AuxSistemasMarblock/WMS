@@ -1,0 +1,218 @@
+/* Manuales WMS · Identidad Marblock (mismos tokens que css/variables.css) */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;600;700&display=swap');
+
+:root {
+  --azul: #004a99;
+  --azul-osc: #00336b;
+  --amarillo: #ffb800;
+  --amarillo-claro: #fff6dc;
+  --texto: #222;
+  --muted: #666;
+  --borde: #e0e0e0;
+  --superficie: #f5f5f5;
+  --fila: #e6f0ff;
+  --exito: #10b981;
+  --exito-bg: #d1fae5;
+  --peligro: #ef4444;
+  --peligro-bg: #fee2e2;
+  --aviso-bg: #fef3c7;
+  --aviso-txt: #92400e;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: #fff;
+  color: var(--texto);
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+/* ── Portada ── */
+.portada {
+  background: linear-gradient(135deg, var(--azul) 0%, var(--azul-osc) 100%);
+  color: #fff;
+  padding: 40px 20px 32px;
+  border-bottom: 6px solid var(--amarillo);
+}
+.portada-inner { max-width: 860px; margin: 0 auto; }
+.portada img.logo { height: 44px; width: auto; display: block; margin-bottom: 28px; }
+.portada .etiqueta {
+  display: inline-block;
+  background: var(--amarillo);
+  color: var(--azul-osc);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 4px;
+}
+.portada h1 { font-size: 30px; line-height: 1.15; margin: 14px 0 8px; }
+.portada p { margin: 0; opacity: .9; max-width: 620px; }
+.portada .meta { margin-top: 18px; font-size: 13px; opacity: .75; font-family: 'IBM Plex Mono', monospace; }
+
+/* ── Contenido ── */
+main { max-width: 860px; margin: 0 auto; padding: 8px 16px 48px; }
+h2 {
+  color: var(--azul);
+  font-size: 23px;
+  margin: 44px 0 12px;
+  padding-bottom: 8px;
+  border-bottom: 3px solid var(--amarillo);
+}
+h2 .num {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--azul); color: #fff;
+  width: 32px; height: 32px; border-radius: 50%;
+  font-size: 16px; margin-right: 8px; vertical-align: 2px;
+}
+h3 { color: var(--azul-osc); font-size: 18px; margin: 28px 0 8px; }
+p { margin: 8px 0; }
+code, .mono { font-family: 'IBM Plex Mono', monospace; font-size: .92em; background: var(--superficie); padding: 1px 5px; border-radius: 4px; }
+a { color: var(--azul); }
+
+/* Índice */
+.indice { background: var(--superficie); border: 1px solid var(--borde); border-radius: 10px; padding: 14px 18px; margin-top: 24px; }
+.indice strong { color: var(--azul); }
+.indice ol { margin: 8px 0 0; padding-left: 22px; }
+.indice li { margin: 4px 0; }
+
+/* Pasos */
+.pasos { list-style: none; counter-reset: paso; padding: 0; margin: 12px 0; }
+.pasos > li {
+  counter-increment: paso;
+  position: relative;
+  padding: 2px 0 14px 46px;
+}
+.pasos > li::before {
+  content: counter(paso);
+  position: absolute; left: 0; top: 0;
+  width: 32px; height: 32px; border-radius: 8px;
+  background: var(--amarillo); color: var(--azul-osc);
+  font-weight: 700; display: flex; align-items: center; justify-content: center;
+}
+
+/* Capturas */
+figure { margin: 16px 0 22px; text-align: center; }
+figure img {
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--borde);
+  border-radius: 14px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.10);
+}
+figure.cel img { width: 320px; }
+figure figcaption { font-size: 13px; color: var(--muted); margin-top: 8px; }
+.par { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; align-items: start; }
+.par figure { margin: 8px 0; }
+.par figure.cel img { width: 100%; max-width: 320px; }
+
+/* Avisos */
+.nota, .alerta, .ok, .tip {
+  border-radius: 10px; padding: 12px 14px; margin: 14px 0;
+  border-left: 5px solid; font-size: 15px;
+}
+.nota { background: #eef5ff; border-color: var(--azul); }
+.tip { background: var(--amarillo-claro); border-color: var(--amarillo); }
+.alerta { background: var(--peligro-bg); border-color: var(--peligro); }
+.ok { background: var(--exito-bg); border-color: var(--exito); }
+.nota strong:first-child, .tip strong:first-child, .alerta strong:first-child, .ok strong:first-child { display: block; margin-bottom: 2px; }
+
+/* Tablas */
+.tabla-wrap { overflow-x: auto; margin: 12px 0; }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+th { background: var(--azul); color: #fff; text-align: left; padding: 9px 10px; font-weight: 600; }
+td { border-bottom: 1px solid var(--borde); padding: 9px 10px; vertical-align: top; }
+tr:nth-child(even) td { background: var(--fila); }
+td:first-child { font-weight: 600; }
+
+/* Glosario */
+dl.glosario dt { font-weight: 700; color: var(--azul-osc); margin-top: 12px; }
+dl.glosario dd { margin: 2px 0 0 0; }
+
+.chip { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 13px; font-weight: 600; font-family: 'IBM Plex Mono', monospace; }
+.chip.verde { background: var(--exito-bg); color: #065f46; }
+.chip.ambar { background: var(--aviso-bg); color: var(--aviso-txt); }
+.chip.rojo { background: var(--peligro-bg); color: #b91c1c; }
+.chip.azul { background: #e0ecff; color: var(--azul); }
+
+footer.pie {
+  border-top: 6px solid var(--amarillo);
+  background: var(--azul);
+  color: #fff; text-align: center; font-size: 13px;
+  padding: 18px 16px;
+}
+footer.pie img { height: 22px; vertical-align: middle; margin-right: 8px; }
+
+@media (max-width: 600px) {
+  body { font-size: 17px; }
+  .portada h1 { font-size: 26px; }
+  h2 { font-size: 21px; }
+  figure.cel img { width: 88%; }
+}
+
+/* Impresión / PDF: diseño compacto. Las capturas de celular van a un lado del
+   texto o en filas de hasta 4, para no dejar hojas con una sola imagen. */
+@media print {
+  @page { size: A4; margin: 11mm 12mm 12mm; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { font-size: 9.6pt; line-height: 1.42; }
+
+  .portada { padding: 9mm 10mm 7mm; border-bottom-width: 4px; }
+  .portada img.logo { height: 30px; margin-bottom: 10px; }
+  .portada h1 { font-size: 22pt; margin: 8px 0 4px; }
+  .portada p { font-size: 10pt; max-width: none; }
+  .portada .meta { margin-top: 8px; }
+
+  main { max-width: none; padding: 0; }
+  .indice { margin-top: 5mm; padding: 8px 12px; }
+  .indice ol { columns: 2; column-gap: 10mm; margin-top: 4px; }
+  .indice li { margin: 1px 0; }
+
+  h2 { font-size: 14pt; margin: 7mm 0 3mm; padding-bottom: 4px; border-bottom-width: 2px; clear: both; break-after: avoid; }
+  h2 .num { width: 22px; height: 22px; font-size: 11pt; }
+  h3 { font-size: 11.5pt; margin: 4mm 0 2mm; break-after: avoid; }
+  p, ul, ol { margin: 3px 0; }
+  li { margin: 1px 0; }
+
+  .pasos { margin: 4px 0; }
+  .pasos > li { padding: 0 0 5px 30px; }
+  .pasos > li::before { width: 20px; height: 20px; border-radius: 5px; font-size: 9pt; }
+
+  /* flow-root: cajas y tablas se acomodan junto a una captura flotante sin encimarse */
+  .nota, .tip, .alerta, .ok { display: flow-root; padding: 6px 10px; margin: 6px 0; font-size: 9pt; border-left-width: 4px; }
+  .tabla-wrap { display: flow-root; overflow: visible; margin: 6px 0; }
+  table { font-size: 8.8pt; }
+  th, td { padding: 4px 7px; }
+  thead, tr { break-inside: avoid; }
+
+  figure { margin: 3mm 0; }
+  figure img { border-radius: 6px; box-shadow: none; }
+  figure figcaption { font-size: 7.8pt; margin-top: 3px; line-height: 1.3; }
+
+  /* Tira de capturas al final de cada subsección: 4 celulares o 2 pantallas de
+     computadora por fila; una fila puede pasar a la hoja siguiente sin arrastrar
+     a las demás */
+  .par { display: flex; flex-wrap: wrap; gap: 4mm 5mm; justify-content: center; margin: 3mm 0 4mm; }
+  .par figure { margin: 0; }
+  .par figure.cel { width: 34mm; }
+  .par figure.cel img { width: 100%; max-width: none; }
+  .par figure:not(.cel) { width: calc(50% - 2.5mm); }
+  .par figure:not(.cel):only-child { width: 110mm; }
+
+  figure, .nota, .tip, .alerta, .ok, .pasos > li { break-inside: avoid; }
+  dl.glosario { columns: 2; column-gap: 10mm; }
+  dl.glosario dt { margin-top: 5px; break-after: avoid; }
+  dl.glosario dd { break-inside: avoid; }
+  footer.pie { padding: 8px; font-size: 8pt; clear: both; }
+}
+
+/* Subsección con 1–2 capturas de celular: en el PDF van junto al texto */
+@media print {
+  .lado { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 6mm; align-items: start; }
+  .lado > .par { margin: 1mm 0 3mm; flex-wrap: nowrap; }
+  .lado > .par figure.cel { width: 32mm; }
+}
