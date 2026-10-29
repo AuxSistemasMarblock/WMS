@@ -182,6 +182,13 @@ function moverPlaca(idx, tranid) {
   renderTableMulti();
 }
 
+// Chip de línea: verde si está completa, rojo si se escanearon placas de más
+function lineChipClase(l) {
+  if (l.esperado > 0 && l.escaneado > l.esperado) return ' line-over';
+  if (l.esperado > 0 && l.escaneado === l.esperado) return ' line-ok';
+  return '';
+}
+
 /**
  * Render completo de la tabla agrupada por IF + "Pendientes de asignar".
  */
@@ -221,7 +228,7 @@ function renderTableMulti() {
     const placas = conIdx.filter(r => r.ifTranid === ifGrupo.tranid);
     const cont = contadores[ifGrupo.tranid] || { total: { escaneado: 0, esperado: 0 }, lineas: [] };
     const chips = cont.lineas.map(l =>
-      `<span class="line-chip${l.escaneado >= l.esperado && l.esperado > 0 ? ' line-ok' : ''}" title="${esc(l.sku)} · ${esc(l.lote)}">${esc(l.sku)}/${esc(l.lote)} ${l.escaneado}/${l.esperado}</span>`
+      `<span class="line-chip${lineChipClase(l)}" title="${esc(l.sku)} · ${esc(l.lote)}">${esc(l.sku)}/${esc(l.lote)} ${l.escaneado}/${l.esperado}</span>`
     ).join('');
     html += `
       <tr class="multi-group-row">

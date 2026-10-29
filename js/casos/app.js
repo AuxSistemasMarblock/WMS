@@ -1037,6 +1037,7 @@ async function cargarCasosJefe() {
     const data = await apiFetch('/api/casos?' + paramsCasos(f).toString());
     state.casos = data.casos || [];
     state.pagina.caso = 1;
+    const count = $('countCasos'); if (count) count.textContent = String(state.casos.length);
     renderCasosTable('tbodyCasos', state.casos);
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state">Error: ${escapeHTML(e.message)}</div></td></tr>`;
@@ -1050,6 +1051,7 @@ async function refrescarMisCasos() {
   try {
     const data = await apiFetch('/api/casos?' + paramsCasos(f).toString());
     state.casos = data.casos || [];
+    const count = $('countCasos'); if (count) count.textContent = String(state.casos.length);
     if ($('tbodyCasos')) {
       renderCasosTable('tbodyCasos', state.casos);
     }
