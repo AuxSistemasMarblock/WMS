@@ -1,13 +1,9 @@
 /**
  * WMS · Webhook
- * Envío de datos a n8n (fallback) o NetSuite (principal)
+ * Respaldo de escaneos en Google Sheets tras el envío a NetSuite
  *
- * Nota: El flujo principal ahora es:
- * Escaneo → Firmas → submitToNetSuite (netsuite-client.js)
- * Fallback: exportJSON → backend /webhook/scan → n8n
- *
- * La URL del webhook de n8n vive SOLO en el backend (env N8N_WEBHOOK_URL);
- * el frontend la desconoce para no exponerla en el JS público.
+ * Flujo: Escaneo → Firmas → submitToNetSuite (netsuite-client.js)
+ *        → exportJSON → backend /webhook/scan → Google Sheets (Service Account)
  *
  * Nota: BACKEND_URL ya está declarado como global en js/auth.js (se carga
  * antes que este script), por eso NO se redeclara aquí.
@@ -120,8 +116,7 @@ function downloadJSONFallback(payload) {
 }
 
 /**
- * Envía los datos al webhook de n8n (FALLBACK LEGACY)
- * Ahora vía el backend (/webhook/scan) para no exponer la URL de n8n.
+ * Registra los escaneos en Google Sheets vía el backend (/webhook/scan).
  * Esta función se mantiene para compatibilidad hacia atrás.
  * El flujo principal es submitToNetSuite()
  */

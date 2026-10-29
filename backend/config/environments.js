@@ -165,11 +165,6 @@ module.exports = {
     logLevel: process.env.LOG_LEVEL || 'info'
   },
 
-  // ===== N8N (proxy de webhook) =====
-  n8n: {
-    webhookUrl: process.env.N8N_WEBHOOK_URL
-  },
-
   // ===== HELPERS =====
   isProduction: () => process.env.NODE_ENV === 'production',
   isSandbox: () => process.env.NETSUITE_REALM === 'sandbox',

@@ -138,7 +138,6 @@ graph TB
         Supabase["Supabase (PostgreSQL Database)"]
         NetSuite["Oracle NetSuite ERP (RESTlets & Saved Searches)"]
         GoogleCloud["Google Cloud Platform (Sheets API v4 / Service Account)"]
-        N8N["n8n Workflow Engine (Webhook de Respaldo)"]
     end
 
     ScannerGun -->|Keystrokes HID| Operador
@@ -154,13 +153,12 @@ graph TB
     NodeServer -->|PostgreSQL Service Role| Supabase
     NodeServer -->|OAuth 1.0a TBA / HTTPS| NetSuite
     NodeServer -->|gRPC / REST JWT SA| GoogleCloud
-    NodeServer -->|POST Proxy / HTTPS| N8N
     Operador -->|WebUSB API / 0x0a5f| ZebraPrinter
 ```
 
 ### 1.4 Flujo de Datos Transversal
 
-1. **Escaneo y Despacho**: El operador escanea placas en `index.html`. Al completar, el backend sube las firmas PNG al File Cabinet de NetSuite vía RESTlet 2860/2976 y actualiza el `shipstatus` de la IF a `'C'` (Shipped). Paralelamente, vía proxy `/webhook/scan`, los ítems escaneados se registran en una hoja de Google Sheets (vía n8n).
+1. **Escaneo y Despacho**: El operador escanea placas en `index.html`. Al completar, el backend sube las firmas PNG al File Cabinet de NetSuite vía RESTlet 2860/2976 y actualiza el `shipstatus` de la IF a `'C'` (Shipped). Después, vía `/webhook/scan`, el backend agrega los ítems escaneados a la hoja de Google Sheets con la Service Account (una llamada por IF; en Multi-IF, una por cada IF enviada).
 2. **Confronta y Auditoría**: El `dashboardController` consulta de forma periódica o a demanda las IFs enviadas en NetSuite (`customsearch3679`/`3675`) y lee las filas registradas en Google Sheets vía Service Account. El motor de confronta cruza ambos conjuntos por `(if_tranid, sku, lote)`, detecta discrepancias de cantidad o ubicación, y expone los resultados a `dashboard.html`.
 3. **Impresión de Identificación**: Desde `etiquetas.html`, el jefe de almacén consulta existencias o recepciones (IRs). El backend localiza el lote, extrae el pedimento aduanal de `customsearch3677` y construye el script ZPL, enviándolo directamente a la impresora mediante WebUSB.
 
@@ -397,7 +395,7 @@ sequenceDiagram
     participant UI as Frontend (index.html)
     participant Back as Backend (/netsuite/submit)
     participant NS as NetSuite RESTlet (2860/2976)
-    participant N8N as Proxy (/webhook/scan -> n8n)
+    participant GS as Google Sheets
 
     Operador->>UI: Clic en "Completar registro"
     UI->>UI: Muestra ConfirmExitModal & Captura Firmas
@@ -410,8 +408,8 @@ sequenceDiagram
     NS-->>Back: 200 OK (status='C')
     Back-->>UI: 200 OK (ifStatusUpdated: true)
     UI->>Back: POST /webhook/scan (Payload JSON de respaldo)
-    Back->>N8N: Reenvío a n8n privado
-    N8N-->>Back: 200 OK
+    Back->>GS: values.append (una fila por placa)
+    GS-->>Back: 200 OK
     Back-->>UI: 200 OK
     UI->>Operador: Toast de éxito & Limpieza de tabla
 ```
@@ -651,7 +649,7 @@ WebUSB de Chrome/Edge en **Windows** solo expone dispositivos cuyo driver sea **
 | **Firmas** | `POST` | `/firmas/upload` | JWT | Todos | Subida de firmas agrupadas (Legacy) |
 | | `POST` | `/firmas/upload/single` | JWT | Todos | Subida de firma individual a folder directo |
 | **Validate** | `GET` | `/validate` | No | Solo Dev | Validación integral de configuración y carpetas |
-| **Webhook** | `POST` | `/webhook/scan` | JWT | Todos | Proxy seguro hacia el webhook de n8n |
+| **Webhook** | `POST` | `/webhook/scan` | JWT | Todos | Agrega los escaneos a Google Sheets (Service Account) |
 | **Dashboard**| `GET` | `/api/dashboard/health` | No | Público | Healthcheck del subsistema de confronta |
 | | `GET` | `/api/dashboard/resumen` | JWT | `gerente`, `admin` | KPIs consolidados y tasa de exactitud |
 | | `GET` | `/api/dashboard/sucursales` | JWT | `gerente`, `admin` | Lista de sucursales restringidas para filtros |
@@ -846,7 +844,7 @@ curl -X POST https://api.marblock.shop/auth/register \
 ```
 backend/services/
 ├── confrontaService.js       # Motor central de matching y auditoría NetSuite vs Sheets
-├── googleSheetsService.js    # Cliente GCP Service Account, lectura y caché de escaneos
+├── googleSheetsService.js    # Cliente GCP Service Account, lectura/escritura y caché de escaneos
 ├── netsuiteSearchService.js  # Paginador y normalizador de IFs enviadas desde RESTlet 2217
 ├── existenciasService.js     # Consulta y normalización de existencias de stock NetSuite
 ├── irSearchService.js        # Búsqueda, agrupación y placas estimadas de Recepciones (IRs)
@@ -863,7 +861,7 @@ backend/services/
 - **IFs Sintéticas**: Si una IF fue escaneada pero no existe en la búsqueda de NetSuite, genera un registro sintético clasificado como `if_no_encontrada`.
 
 ### 7.2 `googleSheetsService.js`
-- **Autenticación Service Account**: Emplea `google.auth.GoogleAuth` con scope `spreadsheets.readonly`.
+- **Autenticación Service Account**: Emplea `google.auth.GoogleAuth` con scope `spreadsheets` (lectura y escritura de escaneos).
 - **Normalización de Fechas**: Transforma fechas en formatos latinoamericanos (`DD/MM/YYYY`, `D/M/YYYY`) o ISO a cadenas comparables `YYYY-MM-DD`.
 
 ### 7.3 `netsuiteSearchService.js`
@@ -967,7 +965,7 @@ Authorization: OAuth realm="9080139_SB1",
 
 ### 9.1 Arquitectura Service Account vs OAuth Humano
 
-El backend accede a la hoja de cálculo corporativa de forma autónoma y no interactiva mediante una **Service Account de Google Cloud Platform (GCP)** con permisos `https://www.googleapis.com/auth/spreadsheets.readonly`.
+El backend accede a la hoja de cálculo corporativa de forma autónoma y no interactiva mediante una **Service Account de Google Cloud Platform (GCP)** con permisos `https://www.googleapis.com/auth/spreadsheets`. La Service Account debe estar compartida como **Editor** de la hoja: lee los escaneos para la confronta y los agrega al completar cada salida.
 
 - **Credencial**: Archivo JSON de clave privada (`spry-spanner-452018-s7-2e21e9a0fb5d.json` en `backend/secrets/`).
 - **Seguridad**: El archivo vive fuera del control de versiones (incluido en `.gitignore`) y se monta en modo solo lectura (`:ro`) en el contenedor Docker.
@@ -1086,9 +1084,8 @@ window.APP_CONFIG = {
 | `NETSUITE_FOLDER_GERENTE` | **Sí** | `12851` | Folder ID en File Cabinet para firmas de Gerente |
 | `GOOGLE_SHEETS_SPREADSHEET_ID` | **Sí** | `11Ue3N37Ha3IGWEY...` | ID de la hoja de Google Sheets de escaneos |
 | `GOOGLE_SHEETS_SA_PATH` | No | `/app/backend/secrets/...json` | Ruta absoluta al archivo JSON de la Service Account |
-| `GOOGLE_SHEETS_RANGE` | No | `Hoja 1!A:I` | Rango A1 notation para lectura de escaneos |
+| `GOOGLE_SHEETS_RANGE` | No | `Hoja 1!A:I` | Rango A1 notation de la hoja de escaneos (lectura y escritura) |
 | `GOOGLE_SHEETS_CACHE_TTL` | No | `60` | TTL en segundos para caché de lectura de Google Sheets |
-| `N8N_WEBHOOK_URL` | **Sí** | `https://n8nmrb.marblock.shop/webhook/...` | Endpoint de n8n para el proxy `/webhook/scan` |
 | `ALLOWED_ORIGINS` | **Sí** | `https://wms.marblock.shop` | Orígenes permitidos en CORS (separados por coma) |
 | `ZPL_PW` | No | `807` | Ancho de etiqueta en dots ($101\text{ mm}$ a $203\text{ dpi}$) |
 | `ZPL_LL` | No | `152` | Alto de etiqueta en dots ($19\text{ mm}$ a $203\text{ dpi}$) |
