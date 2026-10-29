@@ -1,7 +1,7 @@
 /**
  * Servicio de Google Sheets (Service Account)
  *
- * Lee la hoja donde n8n deposita los escaneos de placas.
+ * Lee y agrega los escaneos de placas en la hoja.
  * Headers esperados (primera fila):
  *   Fecha | Ubicacion | Creado desde | IF | Responsable | SKU |
  *   Lote | Ubicacion lote | Hora de salida
@@ -119,7 +119,7 @@ function combinarTimestamp(obj) {
 }
 
 // Caché en memoria de los escaneos normalizados (sin filtrar).
-// La API de Sheets no cambia salvo que n8n escriba; con TTL (default 60s)
+// La API de Sheets no cambia salvo que se agreguen escaneos; con TTL (default 60s)
 // evitamos releer toda la hoja en cada cambio de filtro del dashboard.
 let cacheEscaneos = null; // { ts, data }
 let fetchEscaneosPromise = null; // single-flight: evita doble lectura concurrente
@@ -280,9 +280,51 @@ async function getHeaders() {
   return (res.data.values && res.data.values[0]) || [];
 }
 
+/**
+ * Agrega los escaneos de una salida al final de la hoja, una fila por placa,
+ * en el orden de los headers.
+ * values.append es atómico: envíos simultáneos no se pisan entre sí.
+ *
+ * @param {Object} payload - Body de POST /webhook/scan (js/webhook.js buildPayload)
+ * @returns {number} filas agregadas
+ */
+async function appendEscaneos(payload) {
+  const items = Array.isArray(payload?.items) ? payload.items : [];
+  if (!items.length) return 0;
+
+  // USER_ENTERED para que la fecha (dd/mm/aaaa) quede como fecha de Sheets;
+  // el apóstrofo fuerza texto en el resto (un lote "12345" no se vuelve número)
+  const texto = v => "'" + String(v ?? '');
+  const filas = items.map(item => [
+    payload.fecha || '',
+    texto(payload.ubicacion),
+    texto(payload.ifDocOrigen),
+    texto(payload.ifTranid),
+    texto(payload.usuario),
+    texto(item.sku),
+    texto(item.lote),
+    texto(item.ubicacion),
+    texto(item.hora)
+  ]);
+
+  const sheets = await getClient();
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: config.spreadsheetId,
+    range: config.range.split('!')[0] + '!A:I',
+    valueInputOption: 'USER_ENTERED',
+    insertDataOption: 'INSERT_ROWS',
+    requestBody: { values: filas }
+  });
+
+  // La próxima lectura del dashboard debe ver las filas nuevas
+  cacheEscaneos = null;
+  return filas.length;
+}
+
 module.exports = {
   getEscaneos,
   getHeaders,
+  appendEscaneos,
   normalizarHeader,
   // exportados para tests
   _filasAObjetos: filasAObjetos,

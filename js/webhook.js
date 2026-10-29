@@ -1,13 +1,9 @@
 /**
  * WMS · Webhook
- * Envío de datos a n8n (fallback) o NetSuite (principal)
+ * Respaldo de escaneos en Google Sheets tras el envío a NetSuite
  *
- * Nota: El flujo principal ahora es:
- * Escaneo → Firmas → submitToNetSuite (netsuite-client.js)
- * Fallback: exportJSON → backend /webhook/scan → n8n
- *
- * La URL del webhook de n8n vive SOLO en el backend (env N8N_WEBHOOK_URL);
- * el frontend la desconoce para no exponerla en el JS público.
+ * Flujo: Escaneo → Firmas → submitToNetSuite (netsuite-client.js)
+ *        → exportJSON → backend /webhook/scan → Google Sheets (Service Account)
  *
  * Nota: BACKEND_URL ya está declarado como global en js/auth.js (se carga
  * antes que este script), por eso NO se redeclara aquí.
@@ -46,13 +42,11 @@ function unlockForResend() {
  * Versión compatible con token JWT del usuario logeado
  * @returns {Object|null} Objeto payload o null si hay error
  */
-function buildPayload() {
-    const active = getActiveRecords();
+function buildPayload(IF = selectedIF, active = getActiveRecords()) {
     if (!active.length) return null;
 
     // En la nueva versión, usamos información de sesión del usuario
     const user = currentUser;
-    const IF = selectedIF;
 
     if (!IF || !user) {
         showToast('Selecciona una IF e inicia sesión', 'error');
@@ -75,6 +69,37 @@ function buildPayload() {
 }
 
 /**
+ * WMS 2.0 · U3 · Multi-IF: respaldo en Sheets de UNA IF del grupo (sin IF
+ * seleccionada en el escáner). La confronta del dashboard lee los escaneos de
+ * Sheets, así que cada IF enviada necesita su propio respaldo.
+ * @param {Object} IF    - Entrada de multiState.grupo ({ tranid, so })
+ * @param {Array} items  - Registros asignados a esa IF
+ * @returns {boolean} true si el respaldo llegó
+ */
+async function respaldarIFEnSheets(IF, items) {
+    const limpios = items.map(({ ifTranid, motivoMatch, ...r }) => r);
+    const payload = buildPayload({ tranid: IF.tranid, sourceDoc: IF.so || '' }, limpios);
+    if (!payload) return false;
+    try {
+        const res = await fetch(`${BACKEND_URL}/webhook/scan`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`
+            },
+            body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return true;
+    } catch (err) {
+        console.error(`Webhook error (${IF.tranid}):`, err);
+        showToast(`Error al respaldar ${IF.tranid} — descargando local`, 'error');
+        downloadJSONFallback(payload);
+        return false;
+    }
+}
+
+/**
  * Descarga el JSON como archivo local (fallback)
  * @param {Object} payload - Datos a descargar
  */
@@ -91,8 +116,7 @@ function downloadJSONFallback(payload) {
 }
 
 /**
- * Envía los datos al webhook de n8n (FALLBACK LEGACY)
- * Ahora vía el backend (/webhook/scan) para no exponer la URL de n8n.
+ * Registra los escaneos en Google Sheets vía el backend (/webhook/scan).
  * Esta función se mantiene para compatibilidad hacia atrás.
  * El flujo principal es submitToNetSuite()
  */

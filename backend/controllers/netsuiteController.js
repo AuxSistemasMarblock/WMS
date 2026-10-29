@@ -106,6 +106,92 @@ const getIFs = async (req, res) => {
 };
 
 /**
+ * Líneas esperadas de un grupo de IFs (WMS 2.0 · U3 · MultiIfs).
+ * POST /netsuite/ifs/lineas
+ * Body: { ifs: [{ tranid, internalId? }] } (1..20)
+ *
+ * Devuelve por IF sus líneas con `placas_esperadas` y `area_placa_m2`
+ * calculadas con la MISMA matemática de la confronta (evaluarLinea con
+ * escaneos vacíos). El frontend las usa para el matching en tiempo real.
+ */
+const getIFsLineas = async (req, res) => {
+  try {
+    const { ifs } = req.body || {};
+    if (!Array.isArray(ifs) || ifs.length === 0 || ifs.length > 20) {
+      return res.status(400).json({ error: 'ifs debe ser un arreglo de 1 a 20 elementos' });
+    }
+
+    const resultado = [];
+    for (const entrada of ifs) {
+      const tranid = String(entrada?.tranid || '').trim();
+      if (!tranid) continue;
+
+      let internalId = entrada.internalId || null;
+      let ifEncontrada = null;
+
+      // 1) SuiteTalk REST (mismo criterio que validarConfronta)
+      try {
+        if (!internalId) {
+          internalId = await netsuiteFulfillmentService.resolverInternalIdPorTranid(tranid);
+        }
+        if (internalId) {
+          ifEncontrada = await netsuiteFulfillmentService.getIFEsperadaPorId(internalId, tranid);
+        }
+      } catch (stErr) {
+        console.warn(`[ifs/lineas] SuiteTalk falló para ${tranid}:`, stErr.message);
+      }
+
+      // 2) Respaldo a Saved Search
+      if (!ifEncontrada || !ifEncontrada.lineas || ifEncontrada.lineas.length === 0) {
+        try {
+          const ifsEsperadas = await netsuiteSearchService.getIFsEsperadasAgrupadas({
+            tranidsRelevantes: [tranid],
+            limit: 2000
+          });
+          ifEncontrada = ifsEsperadas.find(i => String(i.tranid).trim() === tranid) || null;
+        } catch (nsErr) {
+          console.warn(`[ifs/lineas] Saved Search falló para ${tranid}:`, nsErr.message);
+        }
+      }
+
+      if (!ifEncontrada || !ifEncontrada.lineas || ifEncontrada.lineas.length === 0) {
+        resultado.push({ tranid, encontrada: false, lineas: [] });
+        continue;
+      }
+
+      const lineas = ifEncontrada.lineas.map(l => {
+        const ev = confrontaService._evaluarLinea(
+          ifEncontrada.tranid, ifEncontrada.so, ifEncontrada.location, ifEncontrada.fecha, l, []
+        );
+        return {
+          sku: l.sku,
+          lote: l.lote,
+          ubicacion: l.expectedLocation || l.location || ifEncontrada.location || '',
+          quantity_m2: l.quantity != null ? Number(l.quantity) : null,
+          area_placa_m2: ev.evaluacion_cantidad?.area_placa_m2 ?? 0,
+          placas_esperadas: ev.evaluacion_cantidad?.placas_esperadas ?? 1
+        };
+      });
+
+      resultado.push({
+        tranid: ifEncontrada.tranid || tranid,
+        internalId,
+        so: ifEncontrada.so || null,
+        location: ifEncontrada.location || '',
+        fecha: ifEncontrada.fecha || null,
+        encontrada: true,
+        lineas
+      });
+    }
+
+    res.json({ ifs: resultado });
+  } catch (error) {
+    console.error('getIFsLineas error:', error);
+    res.status(500).json({ error: 'Error al obtener líneas de las IFs', details: error.message });
+  }
+};
+
+/**
  * Convertir base64 a Buffer
  */
 function base64ToBuffer(base64String) {
@@ -698,6 +784,7 @@ const autorizarConfrontaPin = async (req, res) => {
 
 module.exports = {
   getIFs,
+  getIFsLineas,
   submitData,
   diagnosticTest,
   validarConfronta,

@@ -31,6 +31,15 @@ function addRecord(item) {
     records.push(item);
     const idx = records.length;
 
+    // WMS 2.0 · U3: en modo Multi-IF la tabla se repinta agrupada y la placa
+    // se asigna automáticamente por SKU+lote (js/match.js)
+    if (typeof esModoMulti === 'function' && esModoMulti()) {
+        if (typeof addRecordMulti === 'function') addRecordMulti(item);
+        showToast('✓ ' + item.sku + ' · ' + item.lote, 'success');
+        setStatus('placa registrada: ' + item.sku, 'active');
+        return;
+    }
+
     document.getElementById('emptyRow')?.remove();
     const tr = document.createElement('tr');
     tr.className = 'new-row';
@@ -50,17 +59,38 @@ function addRecord(item) {
 }
 
 /**
+ * WMS 2.0 · U3: repinta la tabla en formato simple (una fila por placa),
+ * usado al salir del modo Multi-IF.
+ */
+function renderTableSimple() {
+    const activos = records.map((r, i) => r ? { r, i } : null).filter(Boolean);
+    if (!activos.length) { renderEmpty(); return; }
+    document.getElementById('tableBody').innerHTML = activos.map(({ r, i }) => `
+    <tr>
+      <td class="td-idx">${i + 1}</td>
+      <td class="td-sku">${esc(r.sku)}</td>
+      <td class="td-lote">${esc(r.lote)}</td>
+      <td>${esc(r.ubicacion || '')}</td>
+      <td class="td-time">${esc(r.hora || '')}</td>
+      <td class="td-del"><button onclick="deleteRow(this,${i})">✕</button></td>
+    </tr>`).join('');
+}
+
+/**
  * Elimina un registro de la tabla
  * @param {HTMLElement} btn - Botón que se clickeó
  * @param {number} idx - Índice del registro
  */
 function deleteRow(btn, idx) {
     records[idx] = null;
-    btn.closest('tr').remove();
-    updateRowCount();
-
-    const n = records.filter((r) => r).length;
-    if (n === 0) renderEmpty();
+    if (typeof esModoMulti === 'function' && esModoMulti()) {
+        renderTableMulti();
+    } else {
+        btn.closest('tr').remove();
+        updateRowCount();
+        const n = records.filter((r) => r).length;
+        if (n === 0) renderEmpty();
+    }
 }
 
 /**
@@ -73,6 +103,11 @@ function clearTable() {
     records = [];
     updateRowCount();
     renderEmpty();
+
+    // WMS 2.0 · U3: limpiar también el grupo del modo Multi-IF
+    if (typeof resetearMulti === 'function' && typeof esModoMulti === 'function' && esModoMulti()) {
+        resetearMulti();
+    }
 
     // Resetear el preview "Última placa leída" del card del escáner
     if (typeof updateLastScanPreview === 'function') {

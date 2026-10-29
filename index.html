@@ -28,7 +28,7 @@
   <!-- Estilos -->
   <link rel="stylesheet" href="css/variables.css?v=150" />
   <link rel="stylesheet" href="css/styles.css?v=150" />
-  <link rel="stylesheet" href="css/scanner.css?v=150" />
+  <link rel="stylesheet" href="css/scanner.css?v=151" />
 </head>
 <body>
 
@@ -134,7 +134,12 @@
             <option value="">Todas las ubicaciones</option>
           </select>
         </div>
-        <label>Instrucción de Fabricación (IF)</label>
+        <div class="multi-if-row">
+          <label>Instrucción de Fabricación (IF)</label>
+          <!-- WMS 2.0 · U3: modo Multi-IF (grupo de IFs con firma única) -->
+          <button type="button" class="mode-btn" id="btnMultiIF" onclick="toggleMultiIF()"
+            title="Agrupa varias IFs en una sola salida: escaneo libre, auto-match por SKU+Lote y una única ronda de firmas">🔀 Multi-IF</button>
+        </div>
         <div class="folio-input-wrap">
           <select id="ifSelect" onchange="handleIFSelect(event)" style="width: 100%;">
             <option value="">-- Selecciona una IF --</option>
@@ -150,6 +155,8 @@
           <span id="ifBadgeText">–</span>
           <button onclick="clearIF()" title="Limpiar">✕</button>
         </div>
+        <!-- WMS 2.0 · U3: lista de checkboxes del grupo Multi-IF -->
+        <div id="multiIFList" class="multi-if-list" style="display:none;"></div>
       </div>
 
       <!-- SCANNER -->
@@ -453,6 +460,20 @@
   </div>
 </div>
 
+<!-- MODAL: resumen de envío Multi-IF con reintento individual (WMS 2.0 · U3) -->
+<div class="confirm-modal" id="multiSubmitModal">
+  <div class="confirm-card" style="max-width: 460px; text-align: left;">
+    <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+      <div style="font-size:24px;">📤</div>
+      <h3 class="confirm-title" style="margin:0;">Resumen de envío</h3>
+    </div>
+    <div id="multiSubmitList" style="display:flex; flex-direction:column; gap:8px; margin-bottom:16px; max-height:50vh; overflow-y:auto;"></div>
+    <div class="confirm-actions" style="justify-content: flex-end; gap:8px;">
+      <button type="button" class="btn btn-primary" onclick="cerrarResumenEnvioMulti()">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <!-- Configuración de la aplicación (inyectada en build) -->
 <script src="js/config.js?v=7"></script>
 
@@ -462,13 +483,15 @@
   <script src="js/footer.js?v=8"></script>
   <script src="js/auth.js?v=12"></script>
   <script src="js/2fa.js?v=150"></script>
-  <script src="js/netsuite-client.js?v=8"></script>
-  <script src="js/signatures.js?v=7"></script>
+  <script src="js/netsuite-client.js?v=9"></script>
+  <script src="js/signatures.js?v=9"></script>
   <script src="js/qr-parser.js?v=7"></script>
-  <script src="js/webhook.js?v=7"></script>
-  <script src="js/table.js?v=7"></script>
+  <script src="js/webhook.js?v=8"></script>
+  <script src="js/table.js?v=8"></script>
+  <script src="js/match.js?v=151"></script>
+  <script src="js/multiifs.js?v=151"></script>
   <script src="js/scanner.js?v=7"></script>
-  <script src="js/confronta.js?v=1"></script>
+  <script src="js/confronta.js?v=2"></script>
   <script src="js/app.js?v=7"></script>
 </body>
 </html>

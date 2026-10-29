@@ -1,8 +1,8 @@
 /**
  * Configuración del cliente de Google Sheets (Service Account)
  *
- * Lee la hoja donde n8n (vía webhook) deposita los escaneos de placas
- * y la expone al dashboard para la confronta contra NetSuite.
+ * Hoja de escaneos de placas: el backend agrega las filas al completar una
+ * salida (POST /webhook/scan) y el dashboard las lee para la confronta.
  *
  * Ver DOCUMENTATION.md §6.14 para el setup completo de la SA.
  */
@@ -24,8 +24,8 @@ module.exports = {
   // no hace falta poner un número de fila explícito.
   range: process.env.GOOGLE_SHEETS_RANGE || 'Hoja 1!A1:I',
 
-  // Scope de OAuth: solo lectura. No se puede modificar el Sheet.
-  scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+  // Scope de OAuth: lectura y escritura (la SA debe ser Editor del Sheet).
+  scopes: ['https://www.googleapis.com/auth/spreadsheets'],
 
   // TTL de caché en memoria (segundos)
   cacheTTL: parseInt(process.env.GOOGLE_SHEETS_CACHE_TTL || '60', 10)

@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Manual Auxiliar de Almacén</title>
+<link rel="icon" href="img/logo.png">
+<link rel="stylesheet" href="marblock.css">
+</head>
+<body>
+
+<header class="portada">
+  <div class="portada-inner">
+    <img class="logo" src="img/logo.png" alt="Marblock">
+    <span class="etiqueta">Manual de usuario · WMS 2.0</span>
+    <h1>Auxiliar de Almacén</h1>
+    <p>Cómo registrar la salida de placas con el Escáner: una IF, varias IFs a la vez (Multi-IF), firmas, diferencias de confronta y qué hacer ante cada error.</p>
+    <div class="meta">Versión: octubre 2026 · Uso en celular</div>
+  </div>
+</header>
+
+<main>
+
+<nav class="indice">
+  <strong>Contenido</strong>
+  <ol>
+    <li><a href="#antes">Antes de empezar</a></li>
+    <li><a href="#entrar">Entrar al sistema</a></li>
+    <li><a href="#pantalla">La pantalla del Escáner</a></li>
+    <li><a href="#una-if">Salida de una sola IF (paso a paso)</a></li>
+    <li><a href="#firmas">Firmas</a></li>
+    <li><a href="#confronta">Cuando la confronta encuentra diferencias</a></li>
+    <li><a href="#multi">Modo Multi-IF (varias IFs con una sola firma)</a></li>
+    <li><a href="#camara">Usar la cámara en lugar de la pistola</a></li>
+    <li><a href="#errores">Mensajes y errores: qué significan y qué hacer</a></li>
+    <li><a href="#glosario">Glosario</a></li>
+  </ol>
+</nav>
+
+<!-- ───────────────────────────── -->
+<h2 id="antes"><span class="num">1</span>Antes de empezar</h2>
+<p>Tu trabajo en el sistema es <strong>registrar qué placas salen del almacén</strong> para cada Instrucción de Fabricación (IF) y recoger las firmas. El sistema compara automáticamente lo que escaneas contra lo que pide NetSuite (eso se llama <strong>confronta</strong>).</p>
+<p>Necesitas:</p>
+<ul>
+  <li>Un <strong>celular</strong> con Chrome y conexión a internet.</li>
+  <li>La <strong>pistola lectora de QR</strong> conectada al celular (es la forma recomendada). Si no hay pistola, se puede usar la cámara (ver sección 8).</li>
+  <li>Tu <strong>correo y contraseña</strong> del WMS.</li>
+  <li>Que estén presentes las personas que deben firmar: tú, el cliente (o quien recoge) y, si son muchas placas, el jefe de almacén y el gerente.</li>
+</ul>
+<div class="tip"><strong>Regla de oro</strong>Escanea <em>cada placa física</em> que sale, una por una. Si una placa no se escanea, el sistema la cuenta como faltante; si escaneas una placa que no va, la cuenta como sobrante.</div>
+
+<!-- ───────────────────────────── -->
+<h2 id="entrar"><span class="num">2</span>Entrar al sistema</h2>
+<ol class="pasos">
+  <li>Abre Chrome en el celular y entra a la dirección del WMS que te dio sistemas.</li>
+  <li>Escribe tu <strong>Email</strong> y tu <strong>Contraseña</strong>.</li>
+  <li>Toca <strong>Iniciar sesión</strong>.</li>
+</ol>
+<p>Al entrar verás el Escáner. Abajo aparece el aviso <strong>“Se cargaron N IFs disponibles”</strong>: son las IFs de tu sucursal que están listas para surtir.</p>
+
+<div class="nota"><strong>Errores al entrar</strong>
+<b>Invalid credentials</b>: correo o contraseña incorrectos; revisa mayúsculas y vuelve a intentar.<br>
+<b>User is inactive</b>: tu usuario está desactivado; avisa a tu jefe o a sistemas.<br>
+<b>User has no assigned role</b>: tu usuario no tiene rol; avisa a sistemas.<br>
+<b>Demasiados intentos de inicio de sesión…</b>: fallaste 10 veces; espera 15 minutos.<br>
+<b>Completa la verificación de seguridad</b>: marca la casilla de verificación que aparece arriba del botón.</div>
+
+<div class="par">
+  <figure class="cel"><img src="img/aux/01-login.png" alt="Pantalla de inicio de sesión"><figcaption>Pantalla de inicio de sesión.</figcaption></figure>
+  <figure class="cel"><img src="img/aux/02-login-error.png" alt="Error de credenciales"><figcaption>Si el correo o la contraseña están mal aparece <b>Invalid credentials</b>.</figcaption></figure>
+  <figure class="cel"><img src="img/aux/03-inicio.png" alt="Pantalla principal del escáner"><figcaption>Pantalla principal después de entrar.</figcaption></figure>
+</div>
+<!-- ───────────────────────────── -->
+<h2 id="pantalla"><span class="num">3</span>La pantalla del Escáner</h2>
+<div class="tabla-wrap"><table>
+<tr><th>Parte</th><th>Para qué sirve</th></tr>
+<tr><td>Encabezado azul</td><td>Tu nombre, el botón de tema claro/oscuro y <b>Logout</b> (cerrar sesión). Cierra sesión al terminar tu turno.</td></tr>
+<tr><td>Instrucción de Fabricación (IF)</td><td>La lista para elegir la IF que vas a surtir. El botón ⟳ vuelve a consultar las IFs en NetSuite.</td></tr>
+<tr><td>🔀 Multi-IF</td><td>Activa el modo para sacar <b>varias IFs juntas</b> con una sola ronda de firmas (sección 7).</td></tr>
+<tr><td>Lector de placas</td><td>Elige <b>Pistola</b> (recomendado) o <b>Cámara</b>. El foco verde “Pistola activa” indica que el sistema está escuchando la pistola.</td></tr>
+<tr><td>Última placa leída</td><td>Muestra en verde la última placa que entró bien (SKU · lote · ubicación) o en rojo si el código no sirvió.</td></tr>
+<tr><td>Registros capturados</td><td>La lista de placas escaneadas, con un contador amarillo. Aquí están <b>Completar registro</b> (enviar) y <b>Limpiar</b> (borrar todo).</td></tr>
+</table></div>
+<div class="tip"><strong>La tabla se desliza</strong>En el celular la tabla de registros es más ancha que la pantalla: <b>desliza con el dedo hacia la izquierda</b> sobre la tabla para ver la hora y el botón <b>✕</b> que borra una placa.</div>
+
+<!-- ───────────────────────────── -->
+<h2 id="una-if" class="salto"><span class="num">4</span>Salida de una sola IF (paso a paso)</h2>
+
+<h3>4.1 Elegir la IF</h3>
+<div class="lado">
+<div class="lado-txt">
+<ol class="pasos">
+  <li>Toca la lista <strong>-- Selecciona una IF --</strong>.</li>
+  <li>Elige la IF que te indicaron. Cada opción muestra la IF y su documento de origen, por ejemplo <code>IF20101 (SO15501)</code>.</li>
+  <li>Debajo aparece una etiqueta amarilla con la IF elegida. La <b>✕</b> de esa etiqueta quita la selección.</li>
+</ol>
+<div class="nota"><strong>¿No aparece tu IF?</strong>Toca ⟳ para recargar. Solo se muestran las IFs de tu sucursal (incluye sus outlets y las ubicaciones compartidas como TEMPORAL o PROYECTOS). Si sigue sin aparecer, puede que aún no esté liberada en NetSuite: avisa a tu jefe.</div>
+
+</div>
+<div class="par">
+  <figure class="cel"><img src="img/aux/04-if-seleccionada.png" alt="IF seleccionada"><figcaption>IF seleccionada: aparece la etiqueta amarilla “✓ IF20101”.</figcaption></figure>
+</div>
+</div>
+<h3>4.2 Escanear las placas</h3>
+<ol class="pasos">
+  <li>Verifica que esté seleccionado <strong>Pistola</strong> y que el foco diga <strong>Pistola activa</strong>.</li>
+  <li>Apunta la pistola al QR de la etiqueta de la placa y dispara. No necesitas tocar ningún campo antes.</li>
+  <li>Escucharás/verás la confirmación: aviso verde abajo y la placa en <strong>Última placa leída</strong>.</li>
+  <li>Repite con cada placa. El contador de <strong>Registros capturados</strong> sube con cada lectura.</li>
+</ol>
+<p>El QR de cada placa trae tres datos separados por espacio: <code>SKU LOTE UBICACIÓN</code>, por ejemplo <code>030LTH 12572-3.16X1.96 GDL</code>. El lote incluye las medidas de la placa (3.16 × 1.96 m).</p>
+
+<div class="alerta"><strong>“QR no reconocido (formato inválido)”</strong>El código leído no tiene los tres datos. Pasa cuando se lee un código que no es de placa, una etiqueta dañada o a medias. Vuelve a escanear; si sigue fallando, la etiqueta debe reimprimirse (avisa a tu jefe).</div>
+
+<div class="nota"><strong>Si escaneas la misma placa dos veces seguidas</strong>Durante 3 segundos el sistema ignora la misma lectura repetida (evita dobles disparos). Si de verdad son dos placas iguales (mismo SKU y lote), espera un par de segundos entre una y otra.</div>
+
+<div class="par">
+  <figure class="cel"><img src="img/aux/06-primera-placa.png" alt="Primera placa leída"><figcaption>Placa leída correctamente (aviso verde).</figcaption></figure>
+  <figure class="cel"><img src="img/aux/07-tabla-5-placas.png" alt="Tabla con 5 placas"><figcaption>Cinco placas capturadas. La más reciente queda arriba.</figcaption></figure>
+  <figure class="cel"><img src="img/aux/05-qr-invalido.png" alt="QR inválido"><figcaption>Código no válido: la última lectura sale en rojo y no se agrega a la tabla.</figcaption></figure>
+</div>
+<h3>4.3 Corregir: borrar una placa</h3>
+<div class="lado">
+<div class="lado-txt">
+<ol class="pasos">
+  <li>Desliza la tabla hacia la izquierda hasta ver la columna con <b>✕</b>.</li>
+  <li>Toca la <b>✕</b> de la placa equivocada. Se quita de la lista.</li>
+</ol>
+<p>El botón <strong>Limpiar</strong> borra <em>todas</em> las placas (pide confirmación). Úsalo solo si vas a empezar de cero.</p>
+
+</div>
+<div class="par">
+  <figure class="cel"><img src="img/aux/07b-tabla-deslizada.png" alt="Tabla deslizada mostrando el botón borrar"><figcaption>Tabla deslizada: a la derecha está la ✕ para borrar cada placa.</figcaption></figure>
+</div>
+</div>
+<h3>4.4 Completar el registro</h3>
+<div class="lado">
+<div class="lado-txt">
+<ol class="pasos">
+  <li>Cuando hayas escaneado todas las placas, toca <strong>Completar registro</strong>.</li>
+  <li>El botón cambia a <em>“Validando confronta…”</em>: el sistema compara tus placas contra lo que pide la IF en NetSuite.</li>
+  <li>Si todo coincide verás <strong>“✓ Confronta validada correctamente”</strong> y la ventana <strong>Confirmar salida de placas</strong> con el número de placas y la IF.</li>
+  <li>Toca <strong>Confirmar</strong> para pasar a las firmas (o <strong>Cancelar</strong> para regresar y seguir escaneando).</li>
+</ol>
+<p>Si la confronta encuentra diferencias, en lugar de esta ventana aparece <strong>Diferencias en Confronta</strong>: ve a la <a href="#confronta">sección 6</a>.</p>
+
+</div>
+<div class="par">
+  <figure class="cel"><img src="img/aux/08-confirmar-salida.png" alt="Confirmar salida de placas"><figcaption>Confirmación: “Se registrarán 5 placas para la IF20101 (SO15501)”.</figcaption></figure>
+</div>
+</div>
+<!-- ───────────────────────────── -->
+<h2 id="firmas"><span class="num">5</span>Firmas</h2>
+<p>Las firmas se piden una tras otra en la misma ventana. Cuántas se piden depende del <strong>número de placas</strong> de la salida:</p>
+<div class="tabla-wrap"><table>
+<tr><th>Placas en la salida</th><th>Firmas que se piden (en este orden)</th></tr>
+<tr><td>1 a 3</td><td>👤 Auxiliar de Almacén → 🏢 Cliente</td></tr>
+<tr><td>4 a 10</td><td>👤 Auxiliar → 🏢 Cliente → 👔 Jefe de Almacén</td></tr>
+<tr><td>11 o más</td><td>👤 Auxiliar → 🏢 Cliente → 👔 Jefe de Almacén → 📊 Gerente</td></tr>
+</table></div>
+<p>Estas firmas son de las personas presentes en la salida; no importa quién inició sesión en el celular.</p>
+<ol class="pasos">
+  <li>Lee el título de la ventana: dice <strong>de quién</strong> es la firma (ej. “Firma de Auxiliar de Almacén”).</li>
+  <li>Entrega el celular a esa persona para que firme con el dedo dentro del recuadro blanco.</li>
+  <li>Si se equivoca, toca <strong>Limpiar</strong> y vuelve a firmar.</li>
+  <li>Toca <strong>Confirmar firma</strong>. La ventana pasa sola a la siguiente firma.</li>
+  <li>Al confirmar la última firma, el sistema envía todo automáticamente.</li>
+</ol>
+<div class="alerta"><strong>“Por favor traza tu firma”</strong>Se tocó <b>Confirmar firma</b> con el recuadro vacío. Firma dentro del recuadro y vuelve a confirmar.</div>
+<p><strong>Cancelar</strong> en la ventana de firma detiene todo (“Captura de firmas cancelada”). Tus placas <b>no se pierden</b>: vuelve a tocar <strong>Completar registro</strong> cuando estén las personas para firmar; se piden todas las firmas de nuevo.</p>
+
+<div class="par">
+  <figure class="cel"><img src="img/aux/09-firma-vacia.png" alt="Firma del auxiliar vacía"><figcaption>Primera firma: Auxiliar de Almacén.</figcaption></figure>
+  <figure class="cel"><img src="img/aux/12-firma-cliente.png" alt="Firma del cliente"><figcaption>Firma del cliente trazada.</figcaption></figure>
+  <figure class="cel"><img src="img/aux/13-firma-jefe.png" alt="Firma del jefe"><figcaption>Con más de 3 placas se pide la firma del Jefe de Almacén.</figcaption></figure>
+  <figure class="cel"><img src="img/aux/10-firma-sin-trazo.png" alt="Error firma vacía"><figcaption>Intento de confirmar sin firmar.</figcaption></figure>
+</div>
+<h3>5.1 Envío terminado</h3>
+<div class="lado">
+<div class="lado-txt">
+<p>Al terminar verás <strong>“✓ Se guardaron N registros en NetSuite”</strong> y después <strong>“✓ Enviado al sistema (N items)”</strong>. La tabla queda vacía, la IF se desmarca y en NetSuite la IF queda como <em>enviada</em> con las firmas adjuntas.</p>
+<div class="nota"><strong>Botón “Completar registro” en gris después de enviar</strong>Es normal: evita que se envíe dos veces lo mismo. Se vuelve a activar en cuanto escaneas la siguiente placa.</div>
+
+</div>
+<div class="par">
+  <figure class="cel"><img src="img/aux/14-enviado-ok.png" alt="Envío exitoso"><figcaption>Envío correcto: tabla vacía y aviso verde.</figcaption></figure>
+</div>
+</div>
+<!-- ───────────────────────────── -->
+<h2 id="confronta" class="salto"><span class="num">6</span>Cuando la confronta encuentra diferencias</h2>
+<div class="lado">
+<div class="lado-txt">
+<p>Si lo escaneado no coincide con la IF, aparece la ventana <strong>⚠️ Diferencias en Confronta</strong> con una tarjeta roja por cada problema (lote, SKU y qué pasa).</p>
+
+</div>
+<div class="par">
+  <figure class="cel"><img src="img/aux/15-confronta-diferencias.png" alt="Diferencias en confronta"><figcaption>Ejemplo: falta 1 placa del lote 88120 y se escaneó un lote que no pertenece a la IF.</figcaption></figure>
+</div>
+</div>
+<h3>6.1 Qué significa cada mensaje</h3>
+<div class="tabla-wrap"><table>
+<tr><th>Mensaje en la tarjeta</th><th>Qué significa</th><th>Qué hacer normalmente</th></tr>
+<tr><td>Placas faltantes: escaneadas X, esperadas Y (-N)</td><td>De ese lote la IF pide más placas de las que escaneaste.</td><td>Busca la(s) placa(s) que faltan en rack/andén y escanéalas. Si de verdad no hay, pide autorización.</td></tr>
+<tr><td>Placas sobrantes: escaneadas X, esperadas Y (+N)</td><td>Escaneaste más placas de ese lote de las que pide la IF.</td><td>Retira la placa extra de la tarima y bórrala con ✕ (o revisa si la escaneaste dos veces).</td></tr>
+<tr><td>Lote NO pertenece a esta IF</td><td>Ese SKU/lote no está en la IF (placa “huérfana”). Si es el mismo SKU con otro lote, es un <b>lote cruzado</b>.</td><td>Revisa la etiqueta: probablemente tomaste otra placa. Retírala y borra la lectura; escanea la placa correcta.</td></tr>
+<tr><td>Línea requerida sin escanear (esperadas: N)</td><td>Hay un artículo de la IF del que no escaneaste ninguna placa.</td><td>Surte y escanea esa línea completa.</td></tr>
+<tr><td>Otro texto (ej. ubicación, media placa)</td><td>Placa escaneada en una ubicación distinta a la esperada, o la IF pide media placa y se escaneó completa.</td><td>Consulta a tu jefe antes de continuar.</td></tr>
+</table></div>
+
+<h3>6.2 Opción A: Cancelar y corregir (lo recomendado)</h3>
+<div class="lado">
+<div class="lado-txt">
+<ol class="pasos">
+  <li>Toca <strong>Cancelar</strong>.</li>
+  <li>Las placas con problema quedan <strong>marcadas en rojo</strong> en la tabla.</li>
+  <li>Corrige: retira/borra las equivocadas y escanea las que faltan.</li>
+  <li>Vuelve a tocar <strong>Completar registro</strong>.</li>
+</ol>
+<div class="nota"><strong>Las líneas que faltan no se ven en rojo</strong>Si el problema es una placa o línea que <em>no</em> escaneaste, no hay fila que marcar: revisa la tarjeta “Placas faltantes” o “Línea requerida sin escanear”.</div>
+
+</div>
+<div class="par">
+  <figure class="cel"><img src="img/aux/16-filas-en-rojo.png" alt="Filas en rojo"><figcaption>Placas con error resaltadas en rojo para corregirlas.</figcaption></figure>
+</div>
+</div>
+<h3>6.3 Opción B: Solicitar autorización con PIN</h3>
+<p>Si la diferencia es correcta (por ejemplo, el cliente acepta menos placas), el <strong>Jefe de Almacén de tu sucursal</strong> (o un Líder) puede autorizar la salida tal como está:</p>
+<ol class="pasos">
+  <li>Toca <strong>Solicitar autorización</strong>.</li>
+  <li>Entrega el celular al jefe para que escriba su <strong>PIN</strong> (4 a 6 números). Tú no debes conocerlo.</li>
+  <li>El jefe toca <strong>Autorizar y continuar</strong>.</li>
+  <li>Si el PIN es correcto verás “✓ IF… autorizado por (nombre)” y continúa la confirmación y las firmas como en la sección 5.</li>
+</ol>
+<div class="alerta"><strong>La autorización queda registrada</strong>Cada autorización guarda quién la dio, para qué IF y las diferencias. Esos errores le aparecen después al jefe en el Gestor de Casos para justificarlos. Autorizar no borra el error.</div>
+<p><strong>Volver</strong> regresa a los botones Solicitar autorización / Cancelar sin autorizar.</p>
+
+<div class="par">
+  <figure class="cel"><img src="img/aux/17-pin.png" alt="Campo de PIN"><figcaption>El jefe escribe su PIN.</figcaption></figure>
+  <figure class="cel"><img src="img/aux/19-pin-ok.png" alt="PIN autorizado"><figcaption>Autorizado: sigue la confirmación de salida.</figcaption></figure>
+  <figure class="cel"><img src="img/aux/18-pin-incorrecto.png" alt="PIN incorrecto"><figcaption>PIN incorrecto o de alguien sin permiso para tu sucursal.</figcaption></figure>
+  <figure class="cel"><img src="img/aux/18b-pin-corto.png" alt="PIN corto"><figcaption>PIN con menos de 4 dígitos.</figcaption></figure>
+</div>
+<!-- ───────────────────────────── -->
+<h2 id="multi" class="salto"><span class="num">7</span>Modo Multi-IF (varias IFs con una sola firma)</h2>
+<p>Úsalo cuando <strong>un mismo cliente o camión se lleva varias IFs</strong>. En lugar de hacer una salida (y una ronda de firmas) por cada IF, escaneas todas las placas juntas y el sistema decide a qué IF va cada una. Al final se firma <strong>una sola vez</strong> para todo el grupo.</p>
+
+<h3>7.1 Activar el modo y elegir las IFs</h3>
+<div class="lado">
+<div class="lado-txt">
+<ol class="pasos">
+  <li>Con la tabla vacía, toca <strong>🔀 Multi-IF</strong> (queda resaltado en amarillo). La lista de IFs cambia a casillas.</li>
+  <li>Marca las IFs que forman el grupo. <strong>El orden en que las marcas importa</strong>: cuando una placa sirve para varias IFs, se llena primero la que marcaste primero.</li>
+  <li>Puedes agregar o quitar IFs del grupo en cualquier momento antes de completar.</li>
+</ol>
+
+</div>
+<div class="par">
+  <figure class="cel"><img src="img/aux/21-multi-activar.png" alt="Multi-IF activo"><figcaption>Modo Multi-IF activo: lista con casillas.</figcaption></figure>
+  <figure class="cel"><img src="img/aux/22-multi-seleccion.png" alt="IFs seleccionadas"><figcaption>Grupo de 3 IFs seleccionado.</figcaption></figure>
+</div>
+</div>
+<h3>7.2 Escanear libremente</h3>
+<p>Escanea las placas en cualquier orden. Cada placa se asigna sola a una IF del grupo con estas reglas:</p>
+<ol>
+  <li>Se busca qué IFs piden ese <b>SKU + lote</b>. Si solo una lo pide, va a esa.</li>
+  <li>Si varias lo piden, se desempata por la <b>ubicación</b> del QR (la que coincide exactamente gana).</li>
+  <li>Si sigue empatado, va a la primera IF (en orden de selección) a la que <b>todavía le falten</b> placas de ese lote.</li>
+  <li>Si ninguna IF la pide, o todas ya están completas, queda en <b>⚠️ Pendientes de asignar</b>.</li>
+</ol>
+<p>Una placa ya asignada <strong>no se mueve sola</strong> después; solo cambia si tú la mueves.</p>
+<p>La tabla se agrupa por IF. Cada grupo muestra:</p>
+<ul>
+  <li>📦 la IF, su ubicación y el total <b>escaneadas/esperadas</b> (ej. <span class="chip azul">3/5 placas</span>).</li>
+  <li>Un chip por línea con <b>SKU/lote escaneadas/esperadas</b>: <span class="chip verde">030LTH/12572… 3/3</span> en verde = línea completa; <span class="chip ambar">087XPB/60033… 0/2</span> en ámbar = faltan placas; <span class="chip rojo">030LTH/12572… 4/3</span> en rojo = sobran placas (revisa y mueve o borra la de más).</li>
+</ul>
+
+<div class="par">
+  <figure class="cel"><img src="img/aux/23-multi-autofill.png" alt="Asignación automática"><figcaption>5 placas del mismo lote: 3 llenaron la IF20101 (la primera marcada) y las 2 siguientes pasaron a la IF20102.</figcaption></figure>
+  <figure class="cel"><img src="img/aux/24-multi-grupo-if1.png" alt="Grupo IF1"><figcaption>Grupo IF20101 completo: 5/5 y chips en verde.</figcaption></figure>
+  <figure class="cel"><img src="img/aux/25-multi-grupo-if2.png" alt="Grupo IF2"><figcaption>Grupo IF20102.</figcaption></figure>
+</div>
+<h3>7.3 Pendientes de asignar</h3>
+<p>Al final de la tabla está el grupo <strong>⚠️ Pendientes de asignar</strong>. Ahí caen:</p>
+<ul>
+  <li>Placas cuyo SKU/lote <b>no está en ninguna IF</b> del grupo (huérfanas).</li>
+  <li>Placas <b>de más</b> (todas las IFs que piden ese lote ya están completas).</li>
+  <li>Placas de una IF que <b>quitaste del grupo</b>.</li>
+</ul>
+<p>Para resolver cada pendiente desliza la tabla a la izquierda y:</p>
+<ul>
+  <li><b>Moverla a una IF</b>: en el selector de la fila elige la IF correcta. (También sirve para corregir una placa mal asignada; elegir <em>Pendiente</em> la regresa a pendientes.)</li>
+  <li><b>Borrarla</b> con <b>✕</b> si no debe salir (y regresa la placa física a su lugar).</li>
+</ul>
+<div class="alerta"><strong>“Hay N placa(s) pendientes de asignar a una IF”</strong>No puedes completar mientras haya pendientes. Asigna o borra cada una y vuelve a tocar Completar registro.</div>
+<div class="nota"><strong>Quitar una IF del grupo</strong>Si desmarcas una IF que ya tiene placas, el sistema pregunta: <i>“Quitar IF… dejará N placa(s) como Pendientes de asignar. ¿Continuar?”</i>. Si aceptas, esas placas pasan a Pendientes. Salir del modo Multi-IF con placas escaneadas conserva las placas pero pierde la agrupación.</div>
+
+<div class="par">
+  <figure class="cel"><img src="img/aux/26-multi-pendientes.png" alt="Pendientes de asignar"><figcaption>2 placas pendientes: una huérfana (330BLM) y una excedente (030LTH).</figcaption></figure>
+  <figure class="cel"><img src="img/aux/27-multi-pendientes-acciones.png" alt="Acciones por placa"><figcaption>Deslizando la tabla: selector de IF y ✕ en cada placa.</figcaption></figure>
+  <figure class="cel"><img src="img/aux/29-multi-tras-mover.png" alt="Placa movida a una IF completa"><figcaption>La placa de más se movió a IF20101: su chip queda en rojo (4/3) para avisar que esa IF lleva una placa de más.</figcaption></figure>
+  <figure class="cel"><img src="img/aux/28-multi-bloqueo-pendientes.png" alt="Bloqueo por pendientes"><figcaption>Intento de completar con pendientes.</figcaption></figure>
+  <figure class="cel"><img src="img/aux/30-multi-sin-pendientes.png" alt="Sin pendientes"><figcaption>Resuelto: “Sin pendientes 👍”.</figcaption></figure>
+</div>
+<h3>7.4 Completar el grupo: confronta IF por IF</h3>
+<ol class="pasos">
+  <li>Toca <strong>Completar registro</strong>. El botón muestra “Validando confronta (3 IFs)…”.</li>
+  <li>El sistema revisa <strong>cada IF por separado</strong>. Las que coinciden pasan solas.</li>
+  <li>Si alguna IF tiene diferencias, aparece su ventana de <strong>Diferencias en Confronta</strong> indicando cuál es: <b>“IF20101 (IF 1 de 2)”</b>.</li>
+  <li>Para cada IF con diferencias: <b>Cancelar</b> (se marcan en rojo solo las placas de esa IF para corregir) o <b>Solicitar autorización</b> con el PIN del jefe. El PIN autoriza <b>solo esa IF</b>; luego aparece la siguiente de la lista.</li>
+  <li>Cuando todas estén validadas o autorizadas, aparece la confirmación del grupo: <i>“Se registrarán 12 placas para la grupo: IF20101, IF20102, IF20103 (3 IFs)”</i>.</li>
+</ol>
+
+<div class="par">
+  <figure class="cel"><img src="img/aux/31-multi-pin-if1.png" alt="Diferencias IF 1 de 2"><figcaption>Primera IF con diferencias (IF 1 de 2).</figcaption></figure>
+  <figure class="cel"><img src="img/aux/32-multi-pin-if2.png" alt="Diferencias IF 2 de 2"><figcaption>Tras autorizar la primera, sigue la IF 2 de 2.</figcaption></figure>
+  <figure class="cel"><img src="img/aux/33-multi-confirmar-grupo.png" alt="Confirmar grupo"><figcaption>Confirmación del grupo completo.</figcaption></figure>
+</div>
+<h3>7.5 Una sola ronda de firmas</h3>
+<div class="lado">
+<div class="lado-txt">
+<p>Las firmas se piden <strong>una sola vez para todo el grupo</strong>, y la cantidad de firmas se calcula con el <strong>total de placas del grupo</strong> (no por IF). En el ejemplo son 12 placas, así que se piden 4 firmas: auxiliar, cliente, jefe y gerente. Esas mismas firmas se adjuntan a cada IF del grupo en NetSuite.</p>
+
+</div>
+<div class="par">
+  <figure class="cel"><img src="img/aux/34-multi-firma-jefe.png" alt="Firma jefe grupo"><figcaption>Firma del jefe (+12 placas).</figcaption></figure>
+  <figure class="cel"><img src="img/aux/35-multi-firma-gerente.png" alt="Firma gerente grupo"><figcaption>Más de 10 placas: también firma el gerente.</figcaption></figure>
+</div>
+</div>
+<h3>7.6 Resultado del envío y reintento</h3>
+<p>El grupo se envía <strong>IF por IF</strong>. Si todas salen bien verás “✓ Grupo enviado: N IF(s) en NetSuite” y todo se limpia.</p>
+<p>Si alguna falla (por ejemplo, NetSuite no respondió), aparece el <strong>📤 Resumen de envío</strong>:</p>
+<ul>
+  <li>✅ las IFs enviadas (sus placas ya salieron de la tabla);</li>
+  <li>❌ las que fallaron, con el motivo y el botón <strong>Reintentar</strong>.</li>
+</ul>
+<ol class="pasos">
+  <li>Toca <strong>Reintentar</strong> en la IF fallida. Se reenvía solo esa IF con las mismas firmas; <b>no hay que volver a firmar</b>.</li>
+  <li>Si funciona verás “✓ IF… enviada”. Cuando ya no quedan fallidas, la pantalla se limpia sola.</li>
+  <li>Si cierras el resumen, las placas de la IF fallida siguen en la tabla. <b>No las borres</b>: avisa a tu jefe.</li>
+</ol>
+<div class="alerta"><strong>Importante</strong>Mientras el resumen tenga una IF con ❌, esa IF <b>no</b> salió en NetSuite. No salgas de la pantalla ni cierres sesión hasta reintentarla con éxito o avisar a tu jefe.</div>
+
+<div class="par">
+  <figure class="cel"><img src="img/aux/36-multi-resumen-envio.png" alt="Resumen de envío"><figcaption>2 IFs enviadas, 1 con error y botón Reintentar.</figcaption></figure>
+  <figure class="cel"><img src="img/aux/38-multi-reintento-ok.png" alt="Reintento exitoso"><figcaption>Reintento correcto: “✓ IF20102 enviada”.</figcaption></figure>
+  <figure class="cel"><img src="img/aux/37-multi-fallida-en-tabla.png" alt="Fallida en tabla"><figcaption>Tras cerrar el resumen: la IF que falló conserva sus placas; las enviadas quedan en 0.</figcaption></figure>
+</div>
+<!-- ───────────────────────────── -->
+<h2 id="camara"><span class="num">8</span>Usar la cámara en lugar de la pistola</h2>
+<div class="lado">
+<div class="lado-txt">
+<p>Solo si la pistola no funciona:</p>
+<ol class="pasos">
+  <li>Toca <strong>Cámara</strong> en el lector de placas.</li>
+  <li>Acepta el permiso de cámara que pide Chrome.</li>
+  <li>Apunta la cámara trasera al QR de la placa hasta que se lea.</li>
+  <li>Al terminar, regresa a <strong>Pistola</strong>.</li>
+</ol>
+<div class="alerta"><strong>“No se pudo acceder a la cámara”</strong>Chrome no tiene permiso o la cámara está ocupada por otra app. Da permiso de cámara al sitio (candado junto a la dirección → Permisos → Cámara) y vuelve a tocar Cámara. “No se pudo cargar la librería de cámara” indica falta de internet.</div>
+
+</div>
+<div class="par">
+  <figure class="cel"><img src="img/aux/20-modo-camara.png" alt="Modo cámara"><figcaption>Modo cámara. El aviso amarillo recuerda que la pistola NO funciona en este modo.</figcaption></figure>
+</div>
+</div>
+<!-- ───────────────────────────── -->
+<h2 id="errores" class="salto"><span class="num">9</span>Mensajes y errores: qué significan y qué hacer</h2>
+<div class="tabla-wrap"><table>
+<tr><th>Mensaje</th><th>Significa</th><th>Qué hacer</th></tr>
+<tr><td>Se cargaron N IFs disponibles</td><td>Todo bien: lista de IFs actualizada.</td><td>Nada.</td></tr>
+<tr><td>Error al cargar IFs…</td><td>No se pudo consultar NetSuite.</td><td>Revisa internet y toca ⟳. Si persiste, avisa a sistemas.</td></tr>
+<tr><td>QR no reconocido (formato inválido)</td><td>El código no es de placa o está incompleto.</td><td>Reescanea; si falla, reimprimir etiqueta.</td></tr>
+<tr><td>Escanea al menos una placa antes de completar el registro</td><td>Tabla vacía.</td><td>Escanea las placas.</td></tr>
+<tr><td>Selecciona una IF antes de completar el registro</td><td>No elegiste IF (modo normal).</td><td>Elige la IF en la lista.</td></tr>
+<tr><td>Selecciona al menos una IF del grupo</td><td>Multi-IF sin IFs marcadas.</td><td>Marca las IFs del grupo.</td></tr>
+<tr><td>Hay N placa(s) pendientes de asignar a una IF</td><td>Multi-IF con placas sin IF.</td><td>Muévelas a una IF o bórralas (7.3).</td></tr>
+<tr><td>Error cargando líneas esperadas…</td><td>No se pudo leer qué pide cada IF del grupo.</td><td>Desmarca y vuelve a marcar la IF; revisa internet.</td></tr>
+<tr><td>Placas con error resaltadas en rojo…</td><td>Cancelaste la ventana de diferencias.</td><td>Corrige y vuelve a completar.</td></tr>
+<tr><td>⚠️ No se encontraron líneas esperadas para la IF… en NetSuite</td><td>La IF no existe, se canceló o cambió en NetSuite.</td><td>No continúes. Avisa a tu jefe.</td></tr>
+<tr><td>Error de conexión al validar confronta…</td><td>Se perdió internet a medio proceso.</td><td>Revisa la señal y toca Completar registro otra vez. Tus placas siguen en la tabla.</td></tr>
+<tr><td>Ingresa un PIN numérico de 4 a 6 dígitos</td><td>PIN muy corto o largo.</td><td>Que el jefe lo escriba completo.</td></tr>
+<tr><td>PIN incorrecto o no pertenece a un autorizador válido…</td><td>PIN mal escrito o de alguien sin permiso en tu sucursal.</td><td>Que el jefe de tu sucursal o un líder lo intente de nuevo.</td></tr>
+<tr><td>Error de conexión al validar PIN</td><td>Sin internet.</td><td>Reintenta con señal.</td></tr>
+<tr><td>Por favor traza tu firma</td><td>Firma vacía.</td><td>Firmar en el recuadro.</td></tr>
+<tr><td>Captura de firmas cancelada</td><td>Se tocó Cancelar en las firmas.</td><td>Completar registro de nuevo cuando estén los firmantes.</td></tr>
+<tr><td>Error al enviar: …</td><td>NetSuite no recibió la salida (una IF).</td><td>Las placas siguen en la tabla. Reintenta con Completar registro; si vuelve a fallar, avisa a sistemas.</td></tr>
+<tr><td>N IF(s) enviadas · M fallaron</td><td>Multi-IF: envío parcial.</td><td>Usa Reintentar en el resumen (7.6).</td></tr>
+<tr><td>Error al enviar — descargando local</td><td>El respaldo no llegó; el celular descargó un archivo .json.</td><td>No borres el archivo; avisa a sistemas.</td></tr>
+<tr><td>Ya fue enviado. Limpia la tabla para nuevos registros.</td><td>Intento de reenviar lo mismo.</td><td>Escanea la siguiente salida.</td></tr>
+<tr><td>Sesión expirada. Por favor inicia sesión nuevamente.</td><td>La sesión dura 24 horas.</td><td>Vuelve a entrar.</td></tr>
+</table></div>
+<div class="nota"><strong>Ventanas de “¿Continuar?”</strong>El sistema pregunta antes de acciones que afectan tus placas: cambiar de IF con placas escaneadas (esas placas no se enviarán con la nueva IF), recargar IFs, limpiar la tabla, quitar una IF del grupo o salir de Multi-IF. Lee el mensaje antes de aceptar.</div>
+
+<!-- ───────────────────────────── -->
+<h2 id="glosario"><span class="num">10</span>Glosario</h2>
+<dl class="glosario">
+  <dt>IF (Instrucción de Fabricación / Item Fulfillment)</dt><dd>La orden de NetSuite que dice qué placas deben salir. Ej. <code>IF20101</code>.</dd>
+  <dt>SO / TO</dt><dd>Documento de origen de la IF: orden de venta (SO) u orden de transferencia (TO).</dd>
+  <dt>SKU</dt><dd>Código del material (ej. <code>030LTH</code>).</dd>
+  <dt>Lote</dt><dd>Número de lote con las medidas de la placa en metros (ej. <code>12572-3.16X1.96</code> = 3.16 × 1.96 m).</dd>
+  <dt>Ubicación</dt><dd>Almacén donde está la placa (GDL, MEX, MTY, OUTLET GDL, TEMPORAL…).</dd>
+  <dt>Confronta</dt><dd>Comparación automática entre lo escaneado y lo que pide la IF.</dd>
+  <dt>Placa huérfana</dt><dd>Placa escaneada que no pertenece a la IF.</dd>
+  <dt>Lote cruzado</dt><dd>Se entregó el mismo material (mismo SKU) pero de otro lote.</dd>
+  <dt>Media placa</dt><dd>La IF pide una fracción de placa y se escaneó una placa completa (falta re-etiquetar).</dd>
+  <dt>PIN</dt><dd>Clave numérica personal del jefe/líder para autorizar diferencias.</dd>
+  <dt>Multi-IF</dt><dd>Modo para sacar varias IFs juntas con una sola ronda de firmas.</dd>
+  <dt>Pendientes de asignar</dt><dd>Placas del modo Multi-IF que todavía no tienen IF.</dd>
+</dl>
+
+</main>
+
+<footer class="pie"><img src="img/logo.png" alt="Marblock">Sistema WMS · Manual del Auxiliar de Almacén · Uso interno</footer>
+</body>
+</html>
